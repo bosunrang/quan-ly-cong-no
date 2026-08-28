@@ -1,0 +1,77 @@
+{
+  "name": "mkt-discount-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ứng dụng quản lý và đối soát chi phí chiết khấu marketing",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b && tsc -p tsconfig.test.json",
+    "lint": "biome lint src tests vite.config.ts vitest.config.ts --error-on-warnings",
+    "check:electron": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/database.cjs",
+    "test": "vitest run",
+    "test:sqlite": "node --test tests/sqlite-database.test.cjs",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "check": "pnpm lint && pnpm typecheck && pnpm check:electron && pnpm test && pnpm test:sqlite",
+    "preview": "vite preview",
+    "start": "electron .",
+    "desktop": "pnpm build && electron .",
+    "dist": "pnpm build && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "vn.mkt.chietkhau",
+    "productName": "Quản lý Chiết khấu MKT",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "MKT-Chiet-Khau-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerLanguages": [
+        "vi_VN",
+        "en_US"
+      ]
+    }
+  },
+  "dependencies": {
+    "lucide-react": "^1.33.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "read-excel-file": "^9.3.10"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.10",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
+    "jsdom": "^30.0.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

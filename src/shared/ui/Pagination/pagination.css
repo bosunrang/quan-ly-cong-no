@@ -1,0 +1,6 @@
+.pagination-controls{display:flex;align-items:center;gap:7px}
+.pagination-controls>span{min-width:58px;text-align:center;white-space:nowrap}
+.pagination-controls button{width:32px;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--muted);display:grid;place-items:center;cursor:pointer}
+.pagination-controls button:hover:not(:disabled){border-color:var(--teal-border);color:var(--teal)}
+.pagination-controls button:disabled{opacity:.42;cursor:not-allowed}
+.pagination-controls strong{color:var(--ink)}

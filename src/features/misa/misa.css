@@ -1,0 +1,615 @@
+.misa-import-card {
+	min-height: 84px;
+	padding: 14px 16px;
+	display: flex;
+	align-items: center;
+	gap: 13px;
+}
+
+.misa-import-icon {
+	width: 44px;
+	height: 44px;
+	border-radius: 9px;
+	background: var(--teal-soft);
+	color: var(--teal);
+	display: grid;
+	place-items: center;
+	flex: none;
+}
+
+.misa-import-copy {
+	min-width: 0;
+	flex: 1;
+}
+
+.misa-import-copy h2 {
+	margin: 0;
+	color: var(--ink);
+	font-size: var(--type-subhead);
+}
+
+.misa-import-copy p {
+	margin: 5px 0 0;
+	color: var(--muted);
+	font-size: var(--type-caption);
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	flex-wrap: wrap;
+}
+
+.misa-import-copy p strong {
+	max-width: 360px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-body);
+}
+
+.misa-import-card .button:disabled {
+	opacity: 0.65;
+	cursor: wait;
+}
+
+.misa-error {
+	padding: 10px 13px;
+	border: 1px solid var(--status-danger-border);
+	border-radius: 8px;
+	background: var(--status-danger-bg);
+	color: var(--status-danger-text);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--type-caption);
+}
+
+.misa-overview {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 11px;
+}
+
+.misa-overview article {
+	min-height: 72px;
+	padding: 12px 14px;
+	border: 1px solid var(--line);
+	border-radius: 9px;
+	background: var(--panel);
+	display: grid;
+	grid-template-columns: 34px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 3px 10px;
+}
+
+.misa-stat-icon {
+	grid-row: 1 / 3;
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	display: grid;
+	place-items: center;
+}
+
+.misa-stat-icon.neutral {
+	background: var(--surface-muted);
+	color: var(--muted);
+}
+
+.misa-stat-icon.success {
+	background: var(--status-success-bg);
+	color: var(--status-success-text);
+}
+
+.misa-stat-icon.warning {
+	background: var(--status-warning-bg);
+	color: var(--status-warning-text);
+}
+
+.misa-stat-icon.info {
+	background: var(--status-info-bg);
+	color: var(--status-info-text);
+}
+
+.misa-overview article span {
+	align-self: end;
+	color: var(--muted);
+	font-size: var(--stat-label-font-size);
+}
+
+.misa-overview article strong {
+	grid-column: 3;
+	grid-row: 1 / 3;
+	color: var(--ink);
+	font-size: var(--stat-value-font-size);
+	font-variant-numeric: tabular-nums;
+}
+
+.misa-detail-panel {
+	overflow: hidden;
+}
+
+.misa-unit-toolbar {
+	min-height: 78px;
+	padding: 10px 13px 12px;
+	border-bottom: 1px solid var(--line);
+	display: grid;
+	grid-template-columns: 280px 180px minmax(320px, 1fr) 180px auto;
+	align-items: end;
+	gap: 10px;
+}
+
+.misa-filter-field {
+	min-width: 0;
+	display: grid;
+	gap: 5px;
+	color: var(--muted);
+	font-size: var(--type-caption);
+	font-weight: 650;
+}
+
+.misa-filter-field > span {
+	padding-left: 2px;
+}
+
+.misa-filter-control {
+	width: 100%;
+	min-width: 0;
+	height: var(--control-height);
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: var(--panel);
+}
+
+.misa-filter-control {
+	padding: 0 10px;
+	display: flex;
+	align-items: center;
+	color: var(--muted);
+}
+
+.misa-filter-control svg {
+	margin-right: 8px;
+	flex: none;
+}
+
+.misa-filter-control input,
+.misa-filter-control select {
+	width: 100%;
+	min-width: 0;
+	height: 38px;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--ink);
+	font: inherit;
+	font-size: var(--type-body);
+	font-weight: 400;
+}
+
+.misa-filter-field > select {
+	width: 100%;
+	min-width: 0;
+	height: var(--control-height);
+	padding: 0 30px 0 10px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: var(--panel);
+	color: var(--ink);
+	font: inherit;
+	font-size: var(--type-body);
+	font-weight: 400;
+	outline: 0;
+}
+
+.misa-filter-field:focus-within .misa-filter-control,
+.misa-filter-field > select:focus {
+	border-color: var(--teal);
+}
+
+.misa-unit-select select {
+	cursor: pointer;
+}
+
+.misa-filter-result {
+	justify-self: end;
+	min-width: 112px;
+	display: grid;
+	gap: 5px;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.misa-filter-result > span {
+	padding-left: 2px;
+	font-size: var(--type-caption);
+	font-weight: 650;
+}
+
+.misa-filter-result strong {
+	height: var(--control-height);
+	padding: 0 10px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: var(--panel);
+	color: var(--ink);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	font-size: var(--type-body-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+.misa-filter-result strong small {
+	color: var(--muted);
+	font-size: var(--type-caption);
+	font-weight: 600;
+}
+
+.misa-selected-summary {
+	min-height: 84px;
+	padding: 9px 12px 11px;
+	border-bottom: 1px solid var(--line);
+	background: var(--surface-subtle);
+	display: grid;
+	grid-template-columns: 0.72fr 1fr 1fr 1fr 1.05fr;
+	gap: 8px;
+}
+
+.misa-summary-card {
+	min-width: 0;
+	padding: 9px 10px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--panel);
+	display: grid;
+	grid-template-columns: 34px minmax(0, 1fr);
+	align-items: center;
+	gap: 9px;
+}
+
+.misa-summary-icon {
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	background: var(--surface-muted);
+	color: var(--muted);
+	display: grid;
+	place-items: center;
+}
+
+.misa-summary-card > div {
+	min-width: 0;
+	display: flex;
+	justify-content: center;
+	flex-direction: column;
+}
+
+.misa-summary-card span:not(.status-pill),
+.misa-selected-summary small {
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.misa-selected-summary strong {
+	margin-top: 2px;
+	overflow: hidden;
+	color: var(--ink);
+	font-size: var(--type-body-sm);
+	font-variant-numeric: tabular-nums;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.misa-selected-summary small {
+	margin-top: 2px;
+	color: var(--text-faint);
+}
+
+.misa-selected-match {
+	align-items: flex-start;
+	gap: 5px;
+}
+
+.misa-summary-card.sales .misa-summary-icon {
+	background: var(--blue-soft);
+	color: var(--blue);
+}
+
+.misa-summary-card.receipts .misa-summary-icon,
+.misa-summary-card.is-balanced .misa-summary-icon,
+.misa-summary-card.is-eligible .misa-summary-icon {
+	background: var(--teal-soft);
+	color: var(--teal);
+}
+
+.misa-summary-card.is-warning {
+	border-color: var(--status-warning-border);
+	background: color-mix(in srgb, var(--amber-soft) 45%, var(--panel));
+}
+
+.misa-summary-card.is-warning .misa-summary-icon {
+	background: var(--amber-soft);
+	color: var(--amber);
+}
+
+.misa-selected-match .status-pill {
+	margin-top: 1px;
+}
+
+.misa-reimport-note {
+	margin: 14px;
+	padding: 12px 13px;
+	border: 1px solid var(--status-warning-border);
+	border-radius: 8px;
+	background: var(--status-warning-bg);
+	color: var(--status-warning-text);
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.misa-reimport-note > div {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.misa-reimport-note strong {
+	font-size: var(--type-body-sm);
+}
+
+.misa-reimport-note span {
+	margin-top: 3px;
+	font-size: var(--type-caption);
+}
+
+.misa-detail-table {
+	min-height: 260px;
+	max-height: calc(100vh - 430px);
+}
+
+.misa-detail-table table {
+	min-width: 1275px;
+	table-layout: fixed;
+	font-size: var(--type-body-sm);
+}
+
+.misa-detail-table th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	font-size: var(--type-caption);
+}
+
+.misa-detail-table th:nth-child(1) {
+	width: 90px;
+}
+
+.misa-detail-table th:nth-child(2) {
+	width: 120px;
+}
+
+.misa-detail-table th:nth-child(3) {
+	width: 300px;
+}
+
+.misa-detail-table th:nth-child(4) {
+	width: 60px;
+}
+
+.misa-detail-table th:nth-child(5) {
+	width: 80px;
+}
+
+.misa-detail-table th:nth-child(n + 6) {
+	width: 125px;
+}
+
+.misa-detail-table th:nth-child(4),
+.misa-detail-table td:nth-child(4) {
+	text-align: center;
+}
+
+.misa-detail-table th:nth-child(n + 5),
+.misa-detail-table td:nth-child(n + 5) {
+	padding-right: 16px;
+}
+
+.misa-detail-table th:nth-child(n + 5) {
+	text-align: right;
+}
+
+.misa-detail-table td {
+	height: 60px;
+	white-space: normal;
+}
+
+.misa-detail-table td.numeric {
+	white-space: nowrap;
+}
+
+.misa-document-cell strong,
+.misa-description-cell strong {
+	font-size: var(--type-body-sm) !important;
+	white-space: normal;
+}
+
+.misa-document-cell .status-pill {
+	min-height: 24px;
+	margin-top: 5px;
+	padding: 3px 8px;
+	font-size: var(--type-caption);
+}
+
+.misa-description-cell .cell-meta {
+	max-width: 230px;
+	white-space: normal;
+	font-size: var(--type-caption);
+	line-height: var(--line-compact);
+}
+
+.misa-table-state {
+	padding: 48px 20px;
+	text-align: center;
+	color: var(--muted);
+	font-size: var(--type-body-sm);
+}
+
+.misa-table-footer {
+	min-height: 52px;
+	padding: 8px 13px;
+	border-top: 1px solid var(--line);
+	background: var(--table-footer-bg);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.misa-table-footer > div,
+.misa-table-footer label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.misa-table-footer select {
+	height: 32px;
+	border: 1px solid var(--line);
+	border-radius: 7px;
+	background: var(--panel);
+	color: var(--text-body);
+	padding: 0 25px 0 8px;
+	font: inherit;
+	font-size: var(--type-caption);
+	outline: 0;
+}
+
+.misa-table-footer select:focus {
+	border-color: var(--teal);
+}
+
+.misa-empty-state {
+	min-height: 300px;
+	padding: 48px 20px;
+	display: flex;
+	align-items: center;
+	flex-direction: column;
+	text-align: center;
+}
+
+.misa-empty-state > div {
+	width: 50px;
+	height: 50px;
+	border-radius: 11px;
+	background: var(--teal-soft);
+	color: var(--teal);
+	display: grid;
+	place-items: center;
+}
+
+.misa-empty-state h2 {
+	margin: 14px 0 0;
+	font-size: var(--type-heading-sm);
+}
+
+.misa-empty-state p {
+	max-width: 540px;
+	margin: 7px 0 18px;
+	color: var(--muted);
+	font-size: var(--type-body-sm);
+	line-height: var(--line-body);
+}
+
+@media (max-width: 1100px) {
+	.misa-overview {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.misa-unit-toolbar {
+		grid-template-columns: 240px 180px minmax(260px, 1fr) 170px;
+	}
+
+	.misa-filter-result {
+		display: none;
+	}
+
+	.misa-selected-summary {
+		grid-template-columns: repeat(3, 1fr);
+	}
+
+	.misa-detail-table {
+		max-height: calc(100vh - 520px);
+	}
+}
+
+@media (max-width: 700px) {
+	.misa-import-card {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.misa-import-copy {
+		width: calc(100% - 58px);
+		flex: none;
+	}
+
+	.misa-import-card .button {
+		width: 100%;
+	}
+
+	.misa-overview {
+		grid-template-columns: 1fr;
+	}
+
+	.misa-unit-toolbar {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.misa-unit-search {
+		order: 1;
+		grid-column: 1 / 3;
+	}
+
+	.misa-province-select {
+		order: 2;
+	}
+
+	.misa-kind-select {
+		order: 3;
+	}
+
+	.misa-unit-select {
+		order: 4;
+		grid-column: 1 / 3;
+	}
+
+	.misa-filter-result {
+		order: 5;
+		grid-column: 1 / 3;
+		display: grid;
+		justify-self: start;
+	}
+
+	.misa-selected-summary {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.misa-reimport-note,
+	.misa-table-footer {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.misa-reimport-note .button {
+		width: 100%;
+	}
+
+	.misa-table-footer > div {
+		width: 100%;
+		justify-content: space-between;
+	}
+}
