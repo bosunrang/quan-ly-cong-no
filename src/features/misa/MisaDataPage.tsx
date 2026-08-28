@@ -18,6 +18,7 @@ import {
 	type MisaDataset,
 	type MisaDetailPage,
 	type MisaDocumentKind,
+	type MisaImportResult,
 	type MisaUnitSummary,
 } from "../../domain/misa/misa.model";
 import {
@@ -28,6 +29,7 @@ import {
 import { formatDateOnly, formatTimestamp } from "../../shared/lib/date";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { StatusPill, type StatusTone } from "../../shared/ui/StatusPill";
+import { MisaImportPreviewDialog } from "./MisaImportPreviewDialog";
 import { parseMisaWorkbook } from "./misa.import";
 
 type DetailFilter = MisaDocumentKind | "all";
@@ -203,6 +205,8 @@ export function MisaDataPage() {
 	const [detailPage, setDetailPage] = useState<MisaDetailPage>(emptyPage);
 	const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 	const [isImporting, setIsImporting] = useState(false);
+	const [isSavingImport, setIsSavingImport] = useState(false);
+	const [importPreview, setImportPreview] = useState<MisaImportResult>();
 	const [error, setError] = useState("");
 	const customerById = useMemo(
 		() => new Map(customers.map((customer) => [customer.id, customer])),
@@ -299,16 +303,7 @@ export function MisaDataPage() {
 		setIsImporting(true);
 		setError("");
 		try {
-			const parsed = await parseMisaWorkbook(file, readCustomers());
-			if (!(await writeMisaDataset(parsed)))
-				throw new Error("Không thể lưu dữ liệu MISA vào bộ nhớ của ứng dụng.");
-			const { rows: _rows, ...summary } = parsed;
-			setDataset(summary);
-			setSelectedUnitId(defaultUnitId(summary));
-			setDocumentFilter("all");
-			setUnitQuery("");
-			setUnitProvince("all");
-			setPage(1);
+			setImportPreview(await parseMisaWorkbook(file, readCustomers()));
 		} catch (reason) {
 			setError(
 				reason instanceof Error
@@ -318,6 +313,32 @@ export function MisaDataPage() {
 		} finally {
 			setIsImporting(false);
 			event.target.value = "";
+		}
+	}
+
+	async function confirmImport() {
+		if (!importPreview) return;
+		setIsSavingImport(true);
+		try {
+			if (!(await writeMisaDataset(importPreview)))
+				throw new Error("Không thể lưu dữ liệu MISA vào bộ nhớ của ứng dụng.");
+			const { rows: _rows, ...summary } = importPreview;
+			setDataset(summary);
+			setSelectedUnitId(defaultUnitId(summary));
+			setDocumentFilter("all");
+			setUnitQuery("");
+			setUnitProvince("all");
+			setPage(1);
+			setError("");
+		} catch (reason) {
+			setError(
+				reason instanceof Error
+					? reason.message
+					: "Không thể lưu dữ liệu MISA đã chọn.",
+			);
+		} finally {
+			setIsSavingImport(false);
+			setImportPreview(undefined);
 		}
 	}
 
@@ -596,6 +617,15 @@ export function MisaDataPage() {
 						<Upload size={16} /> Chọn file Excel
 					</button>
 				</section>
+			)}
+			{importPreview && (
+				<MisaImportPreviewDialog
+					preview={importPreview}
+					existingDataset={dataset}
+					isSaving={isSavingImport}
+					onClose={() => setImportPreview(undefined)}
+					onConfirm={() => void confirmImport()}
+				/>
 			)}
 		</div>
 	);

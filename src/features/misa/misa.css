@@ -524,6 +524,106 @@
 	line-height: var(--line-body);
 }
 
+.misa-import-preview-dialog {
+	width: min(900px, 100%);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.misa-import-preview-body {
+	flex: 1;
+	min-height: 0;
+	padding: 14px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.misa-import-preview-file {
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--surface-subtle);
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.misa-import-preview-file > svg {
+	color: var(--teal);
+	flex: none;
+}
+
+.misa-import-preview-file > div {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.misa-import-preview-file strong {
+	color: var(--ink);
+	font-size: var(--type-body-sm);
+}
+
+.misa-import-preview-file span {
+	margin-top: 3px;
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.misa-import-preview-table-wrap {
+	min-height: 220px;
+	max-height: 410px;
+	overflow: auto;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+}
+
+.misa-import-preview-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--type-body-sm);
+	line-height: var(--line-compact);
+}
+
+.misa-import-preview-table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 9px 10px;
+	border-bottom: 1px solid var(--line);
+	background: var(--table-head-bg);
+	color: var(--muted);
+	font-size: var(--type-body-sm);
+	font-weight: 750;
+	text-align: left;
+}
+
+.misa-import-preview-table td {
+	padding: 9px 10px;
+	border-bottom: 1px solid var(--line);
+	color: var(--ink);
+	vertical-align: middle;
+}
+
+.misa-import-preview-table tr:last-child td {
+	border-bottom: 0;
+}
+
+.misa-import-preview-table th.numeric,
+.misa-import-preview-table td.numeric {
+	text-align: right;
+}
+
+.misa-import-preview-empty {
+	min-height: 160px;
+	color: var(--muted);
+	display: grid;
+	place-items: center;
+	font-size: var(--type-caption);
+}
+
 @media (max-width: 1100px) {
 	.misa-overview {
 		grid-template-columns: repeat(2, minmax(0, 1fr));

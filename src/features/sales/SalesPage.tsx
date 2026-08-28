@@ -55,15 +55,20 @@ export function SalesPage() {
 			),
 		[customers],
 	);
-	const visibleEmployees = [...employees]
-		.sort(
-			(a, b) => Number(b.status === "active") - Number(a.status === "active"),
-		)
-		.filter((employee) =>
-			`${employee.code} ${employee.name}`
-				.toLowerCase()
-				.includes(employeeQuery.trim().toLowerCase()),
-		);
+	const visibleEmployees = useMemo(
+		() =>
+			[...employees]
+				.sort(
+					(a, b) =>
+						Number(b.status === "active") - Number(a.status === "active"),
+				)
+				.filter((employee) =>
+					`${employee.code} ${employee.name}`
+						.toLowerCase()
+						.includes(employeeQuery.trim().toLowerCase()),
+				),
+		[employees, employeeQuery],
+	);
 	const assignmentCountByEmployee = useMemo(() => {
 		const counts: Record<string, number> = {};
 		for (const customer of customers) {
@@ -72,22 +77,26 @@ export function SalesPage() {
 		}
 		return counts;
 	}, [customers]);
-	const visibleCustomers = customers.filter((customer) => {
-		const assignment = activeSalesAssignment(customer);
-		const searchable =
-			`${customer.misaCode} ${customer.name} ${customer.taxCode} ${customer.address}`.toLowerCase();
-		return (
-			(province === "all" || customer.province === province) &&
-			searchable.includes(customerQuery.trim().toLowerCase()) &&
-			(scope === "all" ||
-				(scope === "unassigned" && !assignment) ||
-				(scope === "owned" &&
-					assignment?.employeeId === selectedEmployeeId) ||
-				(scope === "other" &&
-					assignment &&
-					assignment.employeeId !== selectedEmployeeId))
-		);
-	});
+	const visibleCustomers = useMemo(
+		() =>
+			customers.filter((customer) => {
+				const assignment = activeSalesAssignment(customer);
+				const searchable =
+					`${customer.misaCode} ${customer.name} ${customer.taxCode} ${customer.address}`.toLowerCase();
+				return (
+					(province === "all" || customer.province === province) &&
+					searchable.includes(customerQuery.trim().toLowerCase()) &&
+					(scope === "all" ||
+						(scope === "unassigned" && !assignment) ||
+						(scope === "owned" &&
+							assignment?.employeeId === selectedEmployeeId) ||
+						(scope === "other" &&
+							assignment &&
+							assignment.employeeId !== selectedEmployeeId))
+				);
+			}),
+		[customers, province, customerQuery, scope, selectedEmployeeId],
+	);
 	const {
 		currentPage: customerPage,
 		pageCount: customerPageCount,
@@ -96,70 +105,106 @@ export function SalesPage() {
 		setCurrentPage: setCustomerPage,
 		resetPage: resetCustomerPage,
 	} = usePagination(visibleCustomers);
-	const ownedCustomers = selectedEmployee
-		? customers.filter(
-				(customer) =>
-					activeSalesAssignment(customer)?.employeeId === selectedEmployee.id,
-			)
-		: [];
+	const ownedCustomers = useMemo(
+		() =>
+			selectedEmployee
+				? customers.filter(
+						(customer) =>
+							activeSalesAssignment(customer)?.employeeId ===
+							selectedEmployee.id,
+					)
+				: [],
+		[customers, selectedEmployee],
+	);
 	const employeeToDeactivate = employeeDeactivateId
 		? employees.find((employee) => employee.id === employeeDeactivateId)
 		: undefined;
-	const employeeToDeactivateOwnedCustomers = employeeToDeactivate
-		? customers.filter(
-				(customer) =>
-					activeSalesAssignment(customer)?.employeeId ===
-					employeeToDeactivate.id,
-			)
-		: [];
-	const latestEmployeeAssignmentStart = employeeToDeactivateOwnedCustomers
-		.map((customer) => activeSalesAssignment(customer)?.effectiveFrom)
-		.filter((value): value is string => Boolean(value))
-		.sort()
-		.at(-1);
-	const employeeToDeactivateHistoryCount = employeeToDeactivate
-		? customers.reduce(
-				(count, customer) =>
-					count +
-					customer.assignments.filter(
-						(assignment) => assignment.employeeId === employeeToDeactivate.id,
-					).length,
-				0,
-			)
-		: 0;
+	const {
+		employeeToDeactivateOwnedCustomers,
+		latestEmployeeAssignmentStart,
+		employeeToDeactivateHistoryCount,
+	} = useMemo(() => {
+		if (!employeeToDeactivate)
+			return {
+				employeeToDeactivateOwnedCustomers: [] as Customer[],
+				latestEmployeeAssignmentStart: undefined as string | undefined,
+				employeeToDeactivateHistoryCount: 0,
+			};
+		const owned = customers.filter(
+			(customer) =>
+				activeSalesAssignment(customer)?.employeeId ===
+				employeeToDeactivate.id,
+		);
+		const latestStart = owned
+			.map((customer) => activeSalesAssignment(customer)?.effectiveFrom)
+			.filter((value): value is string => Boolean(value))
+			.sort()
+			.at(-1);
+		const historyCount = customers.reduce(
+			(count, customer) =>
+				count +
+				customer.assignments.filter(
+					(assignment) => assignment.employeeId === employeeToDeactivate.id,
+				).length,
+			0,
+		);
+		return {
+			employeeToDeactivateOwnedCustomers: owned,
+			latestEmployeeAssignmentStart: latestStart,
+			employeeToDeactivateHistoryCount: historyCount,
+		};
+	}, [customers, employeeToDeactivate]);
 	const employeeToDelete = employeeDeleteId
 		? employees.find((employee) => employee.id === employeeDeleteId)
 		: undefined;
-	const employeeToDeleteOwnedCustomers = employeeToDelete
-		? customers.filter(
-				(customer) =>
-					activeSalesAssignment(customer)?.employeeId === employeeToDelete.id,
-			)
-		: [];
-	const latestEmployeeToDeleteAssignmentStart = employeeToDeleteOwnedCustomers
-		.map((customer) => activeSalesAssignment(customer)?.effectiveFrom)
-		.filter((value): value is string => Boolean(value))
-		.sort()
-		.at(-1);
-	const employeeToDeleteHistoryCount = employeeToDelete
-		? customers.reduce(
-				(count, customer) =>
-					count +
-					customer.assignments.filter(
-						(assignment) => assignment.employeeId === employeeToDelete.id,
-					).length,
-				0,
-			)
-		: 0;
-	const employeeEditorAssignedCount =
-		employeeEditorId && employeeEditorId !== "new"
-			? customers.filter(
-					(customer) =>
-						activeSalesAssignment(customer)?.employeeId === employeeEditorId,
-				).length
-			: 0;
-	const selectedCustomers = customers.filter((customer) =>
-		selectedCustomerIds.includes(customer.id),
+	const {
+		employeeToDeleteOwnedCustomers,
+		latestEmployeeToDeleteAssignmentStart,
+		employeeToDeleteHistoryCount,
+	} = useMemo(() => {
+		if (!employeeToDelete)
+			return {
+				employeeToDeleteOwnedCustomers: [] as Customer[],
+				latestEmployeeToDeleteAssignmentStart: undefined as string | undefined,
+				employeeToDeleteHistoryCount: 0,
+			};
+		const owned = customers.filter(
+			(customer) =>
+				activeSalesAssignment(customer)?.employeeId === employeeToDelete.id,
+		);
+		const latestStart = owned
+			.map((customer) => activeSalesAssignment(customer)?.effectiveFrom)
+			.filter((value): value is string => Boolean(value))
+			.sort()
+			.at(-1);
+		const historyCount = customers.reduce(
+			(count, customer) =>
+				count +
+				customer.assignments.filter(
+					(assignment) => assignment.employeeId === employeeToDelete.id,
+				).length,
+			0,
+		);
+		return {
+			employeeToDeleteOwnedCustomers: owned,
+			latestEmployeeToDeleteAssignmentStart: latestStart,
+			employeeToDeleteHistoryCount: historyCount,
+		};
+	}, [customers, employeeToDelete]);
+	const employeeEditorAssignedCount = useMemo(
+		() =>
+			employeeEditorId && employeeEditorId !== "new"
+				? customers.filter(
+						(customer) =>
+							activeSalesAssignment(customer)?.employeeId === employeeEditorId,
+					).length
+				: 0,
+		[customers, employeeEditorId],
+	);
+	const selectedCustomers = useMemo(
+		() =>
+			customers.filter((customer) => selectedCustomerIds.includes(customer.id)),
+		[customers, selectedCustomerIds],
 	);
 	const customerToUnassign = unassignCustomerId
 		? customers.find((customer) => customer.id === unassignCustomerId)
@@ -167,9 +212,12 @@ export function SalesPage() {
 	const assignmentToEnd = customerToUnassign
 		? activeSalesAssignment(customerToUnassign)
 		: undefined;
-	const transferCount = selectedCustomers.filter((customer) =>
-		Boolean(activeSalesAssignment(customer)),
-	).length;
+	const transferCount = useMemo(
+		() =>
+			selectedCustomers.filter((customer) => Boolean(activeSalesAssignment(customer)))
+				.length,
+		[selectedCustomers],
+	);
 	const customerFilterKey = `${customerQuery}|${province}|${scope}|${selectedEmployeeId}`;
 
 	useEffect(() => {
