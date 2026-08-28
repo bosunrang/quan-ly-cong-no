@@ -220,15 +220,27 @@ function writeCustomers(database, version, customers) {
   });
 }
 
+function groupByCustomer(rows) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const values = grouped.get(row.customer_id) ?? [];
+    values.push(row);
+    grouped.set(row.customer_id, values);
+  }
+  return grouped;
+}
+
 function readCustomers(database, version) {
   const customers = database.prepare('SELECT * FROM customers ORDER BY sort_order').all();
   const assignments = database.prepare('SELECT * FROM customer_assignments ORDER BY customer_id, sort_order').all();
   const recipients = database.prepare('SELECT * FROM customer_recipients ORDER BY customer_id, sort_order').all();
+  const assignmentsByCustomer = groupByCustomer(assignments);
+  const recipientsByCustomer = groupByCustomer(recipients);
   return { version, data: customers.map((customer) => ({
     id: customer.id, misaCode: customer.misa_code, name: customer.name, group: customer.customer_group,
     taxCode: customer.tax_code, province: customer.province, address: customer.address, status: customer.status,
-    assignments: assignments.filter((item) => item.customer_id === customer.id).map((item) => ({ id: item.id, employeeId: item.employee_id, employeeName: item.employee_name, province: item.province, source: item.source, effectiveFrom: item.effective_from, effectiveTo: item.effective_to })),
-    recipients: recipients.filter((item) => item.customer_id === customer.id).map((item) => ({ id: item.id, fullName: item.full_name, position: item.position, phone: item.phone, effectiveFrom: item.effective_from, effectiveTo: item.effective_to, isPrimary: Boolean(item.is_primary), active: Boolean(item.active) })),
+    assignments: (assignmentsByCustomer.get(customer.id) ?? []).map((item) => ({ id: item.id, employeeId: item.employee_id, employeeName: item.employee_name, province: item.province, source: item.source, effectiveFrom: item.effective_from, effectiveTo: item.effective_to })),
+    recipients: (recipientsByCustomer.get(customer.id) ?? []).map((item) => ({ id: item.id, fullName: item.full_name, position: item.position, phone: item.phone, effectiveFrom: item.effective_from, effectiveTo: item.effective_to, isPrimary: Boolean(item.is_primary), active: Boolean(item.active) })),
     createdAt: customer.created_at, updatedAt: customer.updated_at,
   })) };
 }
@@ -348,17 +360,18 @@ function queryProducts(database, options) {
     FROM product_policies
     WHERE status = 'active' AND effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)`)
     .get(normalized.today, normalized.soonDate, normalized.today, normalized.today);
-  const coverageRows = database.prepare(`SELECT products.id, COUNT(DISTINCT product_policies.customer_id) AS coverage
-    FROM products
-    LEFT JOIN product_policies ON product_policies.product_id = products.id
-      AND product_policies.status = 'active'
-      AND product_policies.effective_from <= ?
-      AND (product_policies.effective_to IS NULL OR product_policies.effective_to >= ?)
-    WHERE products.status = 'active'
-    GROUP BY products.id`).all(normalized.today, normalized.today);
-  const missingAssignments = coverageRows.reduce(
-    (sum, row) => sum + Math.max(0, normalized.activeCustomerCount - Number(row.coverage)), 0,
-  );
+  const missingAssignmentsRow = database.prepare(`SELECT COALESCE(SUM(MAX(0, ? - coverage)), 0) AS missing
+    FROM (
+      SELECT products.id, COUNT(DISTINCT product_policies.customer_id) AS coverage
+      FROM products
+      LEFT JOIN product_policies ON product_policies.product_id = products.id
+        AND product_policies.status = 'active'
+        AND product_policies.effective_from <= ?
+        AND (product_policies.effective_to IS NULL OR product_policies.effective_to >= ?)
+      WHERE products.status = 'active'
+      GROUP BY products.id
+    )`).get(normalized.activeCustomerCount, normalized.today, normalized.today);
+  const missingAssignments = Number(missingAssignmentsRow.missing ?? 0);
   const groups = database.prepare(`SELECT DISTINCT product_group FROM products
     WHERE product_group <> '' ORDER BY product_group COLLATE NOCASE`).all().map((row) => row.product_group);
 

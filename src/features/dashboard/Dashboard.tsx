@@ -11,7 +11,7 @@ import {
 	RefreshCcw,
 	TrendingUp,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { readDashboardData } from "../../domain/dashboard/dashboard.service";
 import type { PageId } from "../../types";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
@@ -37,16 +37,23 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 			updatedThrough,
 		},
 	] = useState(readDashboardData);
-	const revenue = reconcileRows.reduce((sum, row) => sum + row.revenue, 0);
-	const collected = reconcileRows.reduce((sum, row) => sum + row.collected, 0);
-	const expected = reconcileRows.reduce(
-		(sum, row) => sum + row.expectedDiscount,
-		0,
-	);
-	const eligible = reconcileRows
-		.filter((row) => row.status === "eligible")
-		.reduce((sum, row) => sum + row.expectedDiscount, 0);
-	const collectedRate = Math.round((collected / revenue) * 100);
+	const { revenue, collected, expected, eligible, collectedRate } = useMemo(() => {
+		const revenue = reconcileRows.reduce((sum, row) => sum + row.revenue, 0);
+		const collected = reconcileRows.reduce(
+			(sum, row) => sum + row.collected,
+			0,
+		);
+		const expected = reconcileRows.reduce(
+			(sum, row) => sum + row.expectedDiscount,
+			0,
+		);
+		const eligible = reconcileRows
+			.filter((row) => row.status === "eligible")
+			.reduce((sum, row) => sum + row.expectedDiscount, 0);
+		const collectedRate =
+			revenue > 0 ? Math.round((collected / revenue) * 100) : 0;
+		return { revenue, collected, expected, eligible, collectedRate };
+	}, [reconcileRows]);
 
 	return (
 		<div className="dashboard-page page-stack">

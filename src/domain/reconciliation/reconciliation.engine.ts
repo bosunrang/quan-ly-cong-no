@@ -7,11 +7,17 @@ import {
 	isMisaReturnRecord,
 	misaNetSalesAmount,
 } from "../misa/misa.sales";
-import type { Product, ProductCatalog } from "../products/product.model";
+import type {
+	CustomerProductPolicy,
+	Product,
+	ProductCatalog,
+} from "../products/product.model";
 import {
-	findProductByExternalCode,
+	buildPolicyIndex,
+	buildProductCodeIndex,
+	findProductByExternalCodeIndexed,
 	policyRetainedValue,
-	resolvePolicy,
+	resolvePolicyIndexed,
 } from "../products/product-policy.service";
 import type {
 	CalculatedReconciliation,
@@ -22,36 +28,51 @@ import type {
 } from "./reconciliation.model";
 import { allocateReconciliationReceipts } from "./reconciliation.allocation";
 
-function findProduct(
+interface ProductMatchEntry {
+	product: Product;
+	normalizedName: string;
+	normalizedCode: string;
+}
+
+function buildProductMatchEntries(
 	catalog: ProductCatalog,
+): ProductMatchEntry[] {
+	return catalog.products.map((product) => ({
+		product,
+		normalizedName: normalizeVietnamese(product.name),
+		normalizedCode: normalizeVietnamese(product.code),
+	}));
+}
+
+function findProduct(
+	codeIndex: Map<string, Product>,
+	matchEntries: ProductMatchEntry[],
 	row: MisaDetailRecord,
 ): Product | undefined {
 	if (row.productCode) {
-		const direct = findProductByExternalCode(catalog, row.productCode);
+		const direct = findProductByExternalCodeIndexed(codeIndex, row.productCode);
 		if (direct) return direct;
 	}
 
 	const description = normalizeVietnamese(row.description);
 	if (!description) return undefined;
-	const candidates = catalog.products.filter((product) => {
-		const name = normalizeVietnamese(product.name);
-		const code = normalizeVietnamese(product.code);
-		return (
-			description === name ||
-			(name.length >= 8 && description.includes(name)) ||
-			(description.length >= 8 && name.includes(description)) ||
-			(code.length >= 4 && description.includes(code))
-		);
-	});
-	return candidates.length === 1 ? candidates[0] : undefined;
+	const candidates = matchEntries.filter(({ normalizedName: name, normalizedCode: code }) => (
+		description === name ||
+		(name.length >= 8 && description.includes(name)) ||
+		(description.length >= 8 && name.includes(description)) ||
+		(code.length >= 4 && description.includes(code))
+	));
+	return candidates.length === 1 ? candidates[0].product : undefined;
 }
 
 function calculateProductLine(
 	row: MisaDetailRecord,
 	customer: Customer | undefined,
-	catalog: ProductCatalog,
+	codeIndex: Map<string, Product>,
+	matchEntries: ProductMatchEntry[],
+	policyIndex: Map<string, CustomerProductPolicy[]>,
 ): ReconciliationProductLine {
-	const product = findProduct(catalog, row);
+	const product = findProduct(codeIndex, matchEntries, row);
 	const quantity = row.quantity;
 	let issue: ReconciliationIssue | null = null;
 	if (!product) issue = "unmatched_product";
@@ -60,7 +81,7 @@ function calculateProductLine(
 
 	const policy =
 		product && customer && row.date
-			? resolvePolicy(catalog, product, customer.id, row.date)
+			? resolvePolicyIndexed(policyIndex, product.id, customer.id, row.date)
 			: undefined;
 	const individualRetention =
 		policy?.policy.recipientAllocations.reduce(
@@ -169,6 +190,9 @@ export function calculateReconciliation(
 	const customerById = new Map(
 		customers.map((customer) => [customer.id, customer]),
 	);
+	const codeIndex = buildProductCodeIndex(catalog);
+	const matchEntries = buildProductMatchEntries(catalog);
+	const policyIndex = buildPolicyIndex(catalog);
 	const rowsByUnit = new Map<string, MisaDetailRecord[]>();
 	for (const detail of details) {
 		const rows = rowsByUnit.get(detail.unitId) ?? [];
@@ -188,7 +212,7 @@ export function calculateReconciliation(
 			const salesRows = periodRows.filter(isMisaProductMovement);
 			if (!salesRows.length) return [];
 			const productLines = salesRows.map((row) =>
-				calculateProductLine(row, customer, catalog),
+				calculateProductLine(row, customer, codeIndex, matchEntries, policyIndex),
 			);
 			const productSummaries = summarizeProductLines(productLines);
 			const revenue = productLines.reduce((sum, line) => sum + line.revenue, 0);

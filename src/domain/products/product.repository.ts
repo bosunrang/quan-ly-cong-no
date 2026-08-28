@@ -4,6 +4,7 @@ import { normalizeDateOnly } from "../../shared/lib/date";
 import { getDatabaseBridge } from "../../shared/storage/databaseBridge";
 import {
 	readVersionedLocalStorage,
+	reportStorageIssue,
 	writeVersionedLocalStorage,
 } from "../../shared/storage/localStorage";
 import {
@@ -361,7 +362,10 @@ export function queryProductCatalogPage(
 		}
 		if (response.ok && isProductPageResult(response.value))
 			return response.value;
-		console.error("Không thể phân trang sản phẩm bằng SQLite.", response.error);
+		reportStorageIssue(
+			"Không thể phân trang sản phẩm bằng SQLite. App đang dùng bản dự phòng trên trình duyệt.",
+			response.error,
+		);
 	}
 	return queryInMemory(readProductCatalog(), options);
 }
@@ -374,7 +378,10 @@ export function readProductCatalogDetail(
 		const response = bridge.readProductDetail(productId);
 		if (response.ok && response.value === null) return undefined;
 		if (response.ok && isProductCatalog(response.value)) return response.value;
-		console.error("Không thể đọc chi tiết sản phẩm từ SQLite.", response.error);
+		reportStorageIssue(
+			"Không thể đọc chi tiết sản phẩm từ SQLite. App đang dùng bản dự phòng trên trình duyệt.",
+			response.error,
+		);
 	}
 	const catalog = readProductCatalog();
 	const product = catalog.products.find((item) => item.id === productId);

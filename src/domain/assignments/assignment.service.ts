@@ -21,6 +21,7 @@ export function assignCustomers(
 		if (!selectedIds.has(customer.id)) return customer;
 		const active = currentAssignment(customer);
 		if (active?.employeeId === employee.id) return customer;
+		if (active && effectiveFrom <= active.effectiveFrom) return customer;
 
 		const assignments = customer.assignments.map((assignment) =>
 			assignment.id === active?.id

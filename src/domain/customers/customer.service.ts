@@ -75,6 +75,21 @@ export function createCustomerFromImport(draft: CustomerImportDraft): Customer {
 	};
 }
 
+export function recipientTransitionError(
+	customer: Customer,
+	draft: CustomerDraft,
+): string | undefined {
+	const activeRecipient = currentRecipient(customer);
+	if (!activeRecipient) return undefined;
+	const recipientChanged =
+		activeRecipient.fullName !== draft.recipientName.trim() ||
+		activeRecipient.position !== draft.recipientPosition.trim() ||
+		activeRecipient.phone !== draft.recipientPhone.trim();
+	if (recipientChanged && draft.recipientFrom <= activeRecipient.effectiveFrom)
+		return `Ngày hiệu lực người nhận mới phải sau ngày ${activeRecipient.effectiveFrom}, là ngày người nhận hiện tại bắt đầu.`;
+	return undefined;
+}
+
 export function updateCustomerFromDraft(
 	customer: Customer,
 	draft: CustomerDraft,
@@ -85,7 +100,9 @@ export function updateCustomerFromDraft(
 		(activeRecipient?.fullName ?? "") !== draft.recipientName.trim() ||
 		(activeRecipient?.position ?? "") !== draft.recipientPosition.trim() ||
 		(activeRecipient?.phone ?? "") !== draft.recipientPhone.trim();
-	if (recipientChanged) {
+	const canTransitionRecipient =
+		!activeRecipient || draft.recipientFrom > activeRecipient.effectiveFrom;
+	if (recipientChanged && canTransitionRecipient) {
 		const recipientIndex = recipients.findIndex(
 			(item) => item.id === activeRecipient?.id,
 		);

@@ -47,8 +47,8 @@ export function validatePolicyDraft(
 		return "Vui lòng chọn ít nhất một đơn vị.";
 	if (!Number.isFinite(draft.value) || draft.value < 0)
 		return "Mức chiết khấu không hợp lệ.";
-	if (draft.calculationType === "percent" && draft.value > 100)
-		return "Tỷ lệ chiết khấu không được vượt quá 100%.";
+	if (draft.calculationType === "percent")
+		return "Chính sách hiện chỉ nhận số tiền trực tiếp, chưa hỗ trợ tính theo phần trăm.";
 	if (draft.recipientAllocationsByCustomer) {
 		for (const customerId of draft.customerIds) {
 			const allocations =
@@ -210,22 +210,61 @@ export function replacePolicyVersion(
 	return addPolicies(closedCatalog, draft);
 }
 
+function pickActivePolicy(
+	policies: CustomerProductPolicy[],
+	date: string,
+): CustomerProductPolicy | undefined {
+	return policies
+		.filter(
+			(item) =>
+				item.status === "active" &&
+				item.effectiveFrom <= date &&
+				(!item.effectiveTo || item.effectiveTo >= date),
+		)
+		.sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+}
+
 export function resolvePolicy(
 	catalog: ProductCatalog,
 	product: Product,
 	customerId: string,
 	date: string,
 ): PolicyResolution | undefined {
-	const policy = catalog.policies
-		.filter(
-			(item) =>
-				item.productId === product.id &&
-				item.customerId === customerId &&
-				item.status === "active" &&
-				item.effectiveFrom <= date &&
-				(!item.effectiveTo || item.effectiveTo >= date),
-		)
-		.sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+	const candidates = catalog.policies.filter(
+		(item) => item.productId === product.id && item.customerId === customerId,
+	);
+	const policy = pickActivePolicy(candidates, date);
+	if (!policy) return undefined;
+	return { policy, discountPerUnit: netPolicyValue(policy) };
+}
+
+/**
+ * Index sẵn policy theo cặp sản phẩm/đơn vị để tra cứu O(1) thay vì quét
+ * toàn bộ policy mỗi dòng khi đối soát hàng nghìn dòng MISA.
+ */
+export function buildPolicyIndex(
+	catalog: ProductCatalog,
+): Map<string, CustomerProductPolicy[]> {
+	const index = new Map<string, CustomerProductPolicy[]>();
+	for (const policy of catalog.policies) {
+		const key = `${policy.productId}::${policy.customerId}`;
+		const values = index.get(key) ?? [];
+		values.push(policy);
+		index.set(key, values);
+	}
+	return index;
+}
+
+export function resolvePolicyIndexed(
+	index: Map<string, CustomerProductPolicy[]>,
+	productId: string,
+	customerId: string,
+	date: string,
+): PolicyResolution | undefined {
+	const policy = pickActivePolicy(
+		index.get(`${productId}::${customerId}`) ?? [],
+		date,
+	);
 	if (!policy) return undefined;
 	return { policy, discountPerUnit: netPolicyValue(policy) };
 }
@@ -257,6 +296,30 @@ export function findProductByExternalCode(
 		const code = product.code.toLocaleUpperCase("vi-VN");
 		return code === normalized || code.replace(/^SP-/, "") === normalized;
 	});
+}
+
+/**
+ * Index sẵn mã sản phẩm (có và không có tiền tố "SP-") để tra cứu O(1)
+ * khi cần khớp hàng nghìn dòng MISA với danh mục sản phẩm.
+ */
+export function buildProductCodeIndex(
+	catalog: ProductCatalog,
+): Map<string, Product> {
+	const index = new Map<string, Product>();
+	for (const product of catalog.products) {
+		const code = product.code.toLocaleUpperCase("vi-VN");
+		if (!index.has(code)) index.set(code, product);
+		const withoutPrefix = code.replace(/^SP-/, "");
+		if (!index.has(withoutPrefix)) index.set(withoutPrefix, product);
+	}
+	return index;
+}
+
+export function findProductByExternalCodeIndexed(
+	index: Map<string, Product>,
+	externalCode: string,
+): Product | undefined {
+	return index.get(externalCode.trim().toLocaleUpperCase("vi-VN"));
 }
 
 export function removeProduct(

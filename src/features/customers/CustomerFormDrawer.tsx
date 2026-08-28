@@ -2,7 +2,10 @@ import { AlertCircle, BadgeDollarSign, Building2, Save, X } from "lucide-react";
 import { useState } from "react";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { provinces } from "../../domain/customers/customer.province";
-import { customerToDraft } from "../../domain/customers/customer.service";
+import {
+	customerToDraft,
+	recipientTransitionError,
+} from "../../domain/customers/customer.service";
 import type {
 	Customer,
 	CustomerDraft,
@@ -58,6 +61,13 @@ export function CustomerFormDrawer({
 		if (duplicateTaxCode) {
 			setError("Mã số thuế đã được sử dụng bởi một khách hàng khác.");
 			return;
+		}
+		if (customer) {
+			const transitionError = recipientTransitionError(customer, draft);
+			if (transitionError) {
+				setError(transitionError);
+				return;
+			}
 		}
 		if (onSave(draft, customer?.id)) onClose();
 	};

@@ -98,24 +98,42 @@ export function ProductsPage() {
 		return selectedId ? loadProductDetail(selectedId) : undefined;
 	}, [loadProductDetail, revision, selectedId]);
 	const selected = selectedCatalog?.products[0];
+	const formCatalog = useMemo(() => {
+		void revision;
+		return formProductId && formProductId !== selectedId
+			? loadProductDetail(formProductId)
+			: undefined;
+	}, [formProductId, loadProductDetail, revision, selectedId]);
 	const formProduct = formProductId
 		? formProductId === selectedId
 			? selected
-			: loadProductDetail(formProductId)?.products[0]
+			: formCatalog?.products[0]
 		: undefined;
+	const otherPolicyCatalog = useMemo(() => {
+		void revision;
+		return policyProductId && policyProductId !== selectedId
+			? loadProductDetail(policyProductId)
+			: undefined;
+	}, [loadProductDetail, policyProductId, revision, selectedId]);
 	const policyCatalog = policyProductId
 		? policyProductId === selectedId
 			? selectedCatalog
-			: loadProductDetail(policyProductId)
+			: otherPolicyCatalog
 		: undefined;
 	const policyProduct = policyCatalog?.products[0];
 	const editingPolicy = policyCatalog?.policies.find(
 		(item) => item.id === editingPolicyId,
 	);
+	const otherDeleteCatalog = useMemo(() => {
+		void revision;
+		return deleteProductId && deleteProductId !== selectedId
+			? loadProductDetail(deleteProductId)
+			: undefined;
+	}, [deleteProductId, loadProductDetail, revision, selectedId]);
 	const productToDelete = deleteProductId
 		? deleteProductId === selectedId
 			? selected
-			: loadProductDetail(deleteProductId)?.products[0]
+			: otherDeleteCatalog?.products[0]
 		: undefined;
 	const policyToDelete = deletePolicyId
 		? selectedCatalog?.policies.find((item) => item.id === deletePolicyId)
