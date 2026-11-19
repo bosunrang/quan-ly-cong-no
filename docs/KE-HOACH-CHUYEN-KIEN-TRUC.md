@@ -26,16 +26,18 @@ Hệ quả hiện tại: kiểm tra dữ liệu bị lặp ở hai nơi, phải 
 
 ## Giai đoạn 0. Dọn nền (nhỏ)
 
-Đã xong:
+Đã xong toàn bộ:
 - [x] Xóa module của app chiết khấu cũ (sản phẩm, chính sách, đơn hàng, đối soát cũ) và test của chúng.
 - [x] Gỡ lệnh SQLite cũ, bỏ trường người nhận, xóa bảng cũ và đổi khóa `mkt-cost.*` → `cong-no.*` (migration v12).
 - [x] Đổi tên định danh app, cầu nối `congNoDatabase`, header `X-Cong-No-*`, biến môi trường `CONG_NO_LAN_*`.
 - [x] Viết lại `ARCHITECTURE.md`.
 
-Còn lại:
-- [ ] Commit trạng thái hiện tại.
-- [ ] Viết **test số tiền chuẩn**: từ một bản sao lưu thật, ghi lại công nợ từng khách tại vài ngày chốt,
-  biên bản đối chiếu của vài khách và các số trên Dashboard.
+- [x] Commit trạng thái hiện tại (nhánh `chuyen-kien-truc`).
+- [x] **Test số tiền chuẩn** (`tests/golden-numbers.test.ts`): bản sao lưu mẫu
+  `tests/fixtures/golden-backup.json` gồm 6 khách, 16 chứng từ 2025–2026, 10 khoản thu; các số chuẩn
+  trong `golden-numbers.json` (Dashboard tại 6 ngày chốt, công nợ từng hóa đơn, 18 biên bản đối chiếu)
+  đã đối chiếu tính tay. Test chạy cả đường đi qua SQLite (khôi phục rồi xuất lại).
+  Chưa có dữ liệu thật; khi có bản sao lưu thật nên bổ sung thêm một bộ số chuẩn từ đó.
 
 ## Giai đoạn 1. Một đường dữ liệu (vừa)
 

@@ -1,0 +1,905 @@
+{
+	"format": "cong-no-backup",
+	"version": 1,
+	"companyId": null,
+	"createdAt": "2026-12-11T02:00:00.000Z",
+	"data": {
+		"customers": [
+			{
+				"id": "CUS-1",
+				"misaCode": "KH001",
+				"name": "Trung tâm Y tế Ba Đình",
+				"group": "state",
+				"taxCode": "",
+				"province": "Hà Nội",
+				"address": "",
+				"status": "active",
+				"assignments": [
+					{
+						"id": "ASN-CUS-1",
+						"employeeId": "EMP-A",
+						"employeeName": "Nguyễn Thu Hà",
+						"province": "Hà Nội",
+						"source": "direct",
+						"effectiveFrom": "2025-01-01",
+						"effectiveTo": null
+					}
+				],
+				"createdAt": "2025-01-02T01:00:00.000Z",
+				"updatedAt": "2025-01-02T01:00:00.000Z"
+			},
+			{
+				"id": "CUS-2",
+				"misaCode": "KH002",
+				"name": "Bệnh viện Đa khoa Thanh Hóa",
+				"group": "state",
+				"taxCode": "",
+				"province": "Thanh Hóa",
+				"address": "",
+				"status": "active",
+				"assignments": [
+					{
+						"id": "ASN-CUS-2",
+						"employeeId": "EMP-A",
+						"employeeName": "Nguyễn Thu Hà",
+						"province": "Thanh Hóa",
+						"source": "direct",
+						"effectiveFrom": "2025-01-01",
+						"effectiveTo": null
+					}
+				],
+				"createdAt": "2025-01-02T01:00:00.000Z",
+				"updatedAt": "2025-01-02T01:00:00.000Z"
+			},
+			{
+				"id": "CUS-3",
+				"misaCode": "KH003",
+				"name": "Phòng khám Minh An",
+				"group": "state",
+				"taxCode": "",
+				"province": "Hải Phòng",
+				"address": "",
+				"status": "active",
+				"assignments": [
+					{
+						"id": "ASN-CUS-3",
+						"employeeId": "EMP-B",
+						"employeeName": "Trần Minh Đức",
+						"province": "Hải Phòng",
+						"source": "direct",
+						"effectiveFrom": "2025-01-01",
+						"effectiveTo": null
+					}
+				],
+				"createdAt": "2025-01-02T01:00:00.000Z",
+				"updatedAt": "2025-01-02T01:00:00.000Z"
+			},
+			{
+				"id": "CUS-4",
+				"misaCode": "KH004",
+				"name": "CDC Nghệ An",
+				"group": "state",
+				"taxCode": "",
+				"province": "Nghệ An",
+				"address": "",
+				"status": "active",
+				"assignments": [
+					{
+						"id": "ASN-CUS-4",
+						"employeeId": "EMP-B",
+						"employeeName": "Trần Minh Đức",
+						"province": "Nghệ An",
+						"source": "direct",
+						"effectiveFrom": "2025-01-01",
+						"effectiveTo": null
+					}
+				],
+				"createdAt": "2025-01-02T01:00:00.000Z",
+				"updatedAt": "2025-01-02T01:00:00.000Z"
+			},
+			{
+				"id": "CUS-5",
+				"misaCode": "KH005",
+				"name": "Nhà thuốc Hồng Phúc",
+				"group": "state",
+				"taxCode": "",
+				"province": "Hà Nội",
+				"address": "",
+				"status": "active",
+				"assignments": [],
+				"createdAt": "2025-01-02T01:00:00.000Z",
+				"updatedAt": "2025-01-02T01:00:00.000Z"
+			},
+			{
+				"id": "CUS-6",
+				"misaCode": "KH006",
+				"name": "Công ty TNHH Dược Sao Mai",
+				"group": "state",
+				"taxCode": "",
+				"province": "Đà Nẵng",
+				"address": "",
+				"status": "active",
+				"assignments": [
+					{
+						"id": "ASN-CUS-6",
+						"employeeId": "EMP-B",
+						"employeeName": "Trần Minh Đức",
+						"province": "Đà Nẵng",
+						"source": "direct",
+						"effectiveFrom": "2025-01-01",
+						"effectiveTo": null
+					}
+				],
+				"createdAt": "2025-01-02T01:00:00.000Z",
+				"updatedAt": "2025-01-02T01:00:00.000Z"
+			}
+		],
+		"employees": [
+			{
+				"id": "EMP-A",
+				"code": "NV01",
+				"name": "Nguyễn Thu Hà",
+				"phone": "",
+				"email": "",
+				"status": "active",
+				"createdAt": "2025-01-02T01:00:00.000Z"
+			},
+			{
+				"id": "EMP-B",
+				"code": "NV02",
+				"name": "Trần Minh Đức",
+				"phone": "",
+				"email": "",
+				"status": "active",
+				"createdAt": "2025-01-02T01:00:00.000Z"
+			}
+		],
+		"salesBook": {
+			"fileName": "So-chi-tiet-ban-hang-2025-2026.xlsx",
+			"importedAt": "2026-12-11T02:00:00.000Z",
+			"rows": [
+				{
+					"rowNumber": 2,
+					"date": "2025-03-10",
+					"documentNumber": "BH00001",
+					"invoiceNumber": "0000001",
+					"customerName": "Trung tâm Y tế Ba Đình",
+					"productName": "Vắc xin cúm",
+					"unit": "Hộp",
+					"quantity": 100,
+					"unitPrice": 52000,
+					"salesAmount": 5200000,
+					"paymentTotal": 5460000,
+					"source": {
+						"customerCode": "KH001",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2025-03-10",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 3,
+					"date": "2025-03-10",
+					"documentNumber": "BH00001",
+					"invoiceNumber": "0000001",
+					"customerName": "Trung tâm Y tế Ba Đình",
+					"productName": "Vắc xin viêm gan B",
+					"unit": "Hộp",
+					"quantity": 50,
+					"unitPrice": 120000,
+					"salesAmount": 6000000,
+					"paymentTotal": 6300000,
+					"source": {
+						"customerCode": "KH001",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2025-03-10",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 4,
+					"date": "2025-06-15",
+					"documentNumber": "BH00002",
+					"invoiceNumber": "0000003",
+					"customerName": "Bệnh viện Đa khoa Thanh Hóa",
+					"productName": "Vắc xin dại",
+					"unit": "Hộp",
+					"quantity": 200,
+					"unitPrice": 85000,
+					"salesAmount": 17000000,
+					"paymentTotal": 17850000,
+					"source": {
+						"customerCode": "KH002",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2025-06-15",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 5,
+					"date": "2025-11-20",
+					"documentNumber": "BH00003",
+					"invoiceNumber": "0000004",
+					"customerName": "Phòng khám Minh An",
+					"productName": "Vắc xin thủy đậu",
+					"unit": "Hộp",
+					"quantity": 30,
+					"unitPrice": 610000,
+					"salesAmount": 18300000,
+					"paymentTotal": 19215000,
+					"source": {
+						"customerCode": "KH003",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2025-11-20",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 6,
+					"date": "2025-11-20",
+					"documentNumber": "BH00003",
+					"invoiceNumber": "0000004",
+					"customerName": "Phòng khám Minh An",
+					"productName": "Bơm tiêm",
+					"unit": "Hộp",
+					"quantity": 300,
+					"unitPrice": 1200,
+					"salesAmount": 360000,
+					"paymentTotal": 378000,
+					"source": {
+						"customerCode": "KH003",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2025-11-20",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 7,
+					"date": "2025-11-20",
+					"documentNumber": "BH00003",
+					"invoiceNumber": "0000004",
+					"customerName": "Phòng khám Minh An",
+					"productName": "Chiết khấu thương mại",
+					"unit": "Hộp",
+					"quantity": 1,
+					"unitPrice": -500000,
+					"salesAmount": -500000,
+					"paymentTotal": -525000,
+					"source": {
+						"customerCode": "KH003",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2025-11-20",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 8,
+					"date": "2025-12-28",
+					"documentNumber": "BH00004",
+					"invoiceNumber": "0000007",
+					"customerName": "CDC Nghệ An",
+					"productName": "Vắc xin uốn ván",
+					"unit": "Hộp",
+					"quantity": 400,
+					"unitPrice": 18500,
+					"salesAmount": 7400000,
+					"paymentTotal": 7770000,
+					"source": {
+						"customerCode": "KH004",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2025-12-28",
+						"debitAccount": "131",
+						"postingDate": "2026-01-05"
+					}
+				},
+				{
+					"rowNumber": 9,
+					"date": "2026-01-15",
+					"documentNumber": "BH00001",
+					"invoiceNumber": "0000008",
+					"customerName": "Trung tâm Y tế Ba Đình",
+					"productName": "Vắc xin cúm",
+					"unit": "Hộp",
+					"quantity": 120,
+					"unitPrice": 53000,
+					"salesAmount": 6360000,
+					"paymentTotal": 6678000,
+					"source": {
+						"customerCode": "KH001",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-01-15",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 10,
+					"date": "2026-02-10",
+					"documentNumber": "BH00005",
+					"invoiceNumber": "0000009",
+					"customerName": "Bệnh viện Đa khoa Thanh Hóa",
+					"productName": "Vắc xin dại",
+					"unit": "Hộp",
+					"quantity": 150,
+					"unitPrice": 85000,
+					"salesAmount": 12750000,
+					"paymentTotal": 13387500,
+					"source": {
+						"customerCode": "KH002",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-02-10",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 11,
+					"date": "2026-02-10",
+					"documentNumber": "BH00005",
+					"invoiceNumber": "0000009",
+					"customerName": "Bệnh viện Đa khoa Thanh Hóa",
+					"productName": "Huyết thanh kháng dại",
+					"unit": "Hộp",
+					"quantity": 40,
+					"unitPrice": 230000,
+					"salesAmount": 9200000,
+					"paymentTotal": 9660000,
+					"source": {
+						"customerCode": "KH002",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-02-10",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 12,
+					"date": "2026-03-05",
+					"documentNumber": "TL00001",
+					"invoiceNumber": "0000011",
+					"customerName": "Bệnh viện Đa khoa Thanh Hóa",
+					"productName": "Vắc xin dại",
+					"unit": "Hộp",
+					"quantity": -20,
+					"unitPrice": 85000,
+					"salesAmount": -1700000,
+					"paymentTotal": -1785000,
+					"source": {
+						"customerCode": "KH002",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-03-05",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 13,
+					"date": "2026-04-18",
+					"documentNumber": "BH00006",
+					"invoiceNumber": "0000012",
+					"customerName": "Nhà thuốc Hồng Phúc",
+					"productName": "Vắc xin phế cầu",
+					"unit": "Hộp",
+					"quantity": 10,
+					"unitPrice": 1150000,
+					"salesAmount": 11500000,
+					"paymentTotal": 12075000,
+					"source": {
+						"customerCode": "KH005",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-04-18",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 14,
+					"date": "2026-05-22",
+					"documentNumber": "BH00007",
+					"invoiceNumber": "0000013",
+					"customerName": "Công ty TNHH Dược Sao Mai",
+					"productName": "Vắc xin não mô cầu",
+					"unit": "Hộp",
+					"quantity": 60,
+					"unitPrice": 290000,
+					"salesAmount": 17400000,
+					"paymentTotal": 18270000,
+					"source": {
+						"customerCode": "",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-05-22",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 15,
+					"date": "2026-06-30",
+					"documentNumber": "BH00008",
+					"invoiceNumber": "0000014",
+					"customerName": "Khách lẻ chưa có hồ sơ",
+					"productName": "Vắc xin cúm",
+					"unit": "Hộp",
+					"quantity": 20,
+					"unitPrice": 53000,
+					"salesAmount": 1060000,
+					"paymentTotal": 1113000,
+					"source": {
+						"customerCode": "KH999",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-06-30",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 16,
+					"date": "2026-07-15",
+					"documentNumber": "BH00014",
+					"invoiceNumber": "0000015",
+					"customerName": "Công ty TNHH Dược Sao Mai",
+					"productName": "Vắc xin não mô cầu",
+					"unit": "Hộp",
+					"quantity": 40,
+					"unitPrice": 290000,
+					"salesAmount": 11600000,
+					"paymentTotal": 12180000,
+					"source": {
+						"customerCode": "KH006",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-07-15",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 17,
+					"date": "2026-08-12",
+					"documentNumber": "BH00009",
+					"invoiceNumber": "0000016",
+					"customerName": "Phòng khám Minh An",
+					"productName": "Vắc xin thủy đậu",
+					"unit": "Hộp",
+					"quantity": 25,
+					"unitPrice": 620000,
+					"salesAmount": 15500000,
+					"paymentTotal": 16275000,
+					"source": {
+						"customerCode": "KH003",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-08-12",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 18,
+					"date": "2026-08-12",
+					"documentNumber": "BH00009",
+					"invoiceNumber": "0000016",
+					"customerName": "Phòng khám Minh An",
+					"productName": "Bơm tiêm",
+					"unit": "Hộp",
+					"quantity": 250,
+					"unitPrice": 1200,
+					"salesAmount": 300000,
+					"paymentTotal": 315000,
+					"source": {
+						"customerCode": "KH003",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-08-12",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 19,
+					"date": "2026-09-25",
+					"documentNumber": "BH00010",
+					"invoiceNumber": "0000018",
+					"customerName": "CDC Nghệ An",
+					"productName": "Vắc xin uốn ván",
+					"unit": "Hộp",
+					"quantity": 500,
+					"unitPrice": 18500,
+					"salesAmount": 9250000,
+					"paymentTotal": 9712500,
+					"source": {
+						"customerCode": "KH004",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-09-25",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 20,
+					"date": "2026-10-30",
+					"documentNumber": "BH00011",
+					"invoiceNumber": "0000019",
+					"customerName": "Trung tâm Y tế Ba Đình",
+					"productName": "Vắc xin viêm gan B",
+					"unit": "Hộp",
+					"quantity": 80,
+					"unitPrice": 121000,
+					"salesAmount": 9680000,
+					"paymentTotal": 10164000,
+					"source": {
+						"customerCode": "KH001",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-10-30",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 21,
+					"date": "2026-10-30",
+					"documentNumber": "BH00011",
+					"invoiceNumber": "0000019",
+					"customerName": "Trung tâm Y tế Ba Đình",
+					"productName": "Chiết khấu thương mại",
+					"unit": "Hộp",
+					"quantity": 1,
+					"unitPrice": -300000,
+					"salesAmount": -300000,
+					"paymentTotal": -315000,
+					"source": {
+						"customerCode": "KH001",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-10-30",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 22,
+					"date": "2026-11-25",
+					"documentNumber": "BH00012",
+					"invoiceNumber": "0000021",
+					"customerName": "Bệnh viện Đa khoa Thanh Hóa",
+					"productName": "Huyết thanh kháng dại",
+					"unit": "Hộp",
+					"quantity": 25,
+					"unitPrice": 230000,
+					"salesAmount": 5750000,
+					"paymentTotal": 6037500,
+					"source": {
+						"customerCode": "KH002",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-11-25",
+						"debitAccount": "131"
+					}
+				},
+				{
+					"rowNumber": 23,
+					"date": "2026-12-10",
+					"documentNumber": "BH00013",
+					"invoiceNumber": "0000022",
+					"customerName": "Trung tâm Y tế Ba Đình",
+					"productName": "Vắc xin cúm",
+					"unit": "Hộp",
+					"quantity": 90,
+					"unitPrice": 53000,
+					"salesAmount": 4770000,
+					"paymentTotal": 5008500,
+					"source": {
+						"customerCode": "KH001",
+						"invoiceSeries": "1C25TAA",
+						"invoiceDate": "2026-12-10",
+						"debitAccount": "131"
+					}
+				}
+			]
+		},
+		"ledger": {
+			"revision": "golden",
+			"receipts": [
+				{
+					"id": "id-0001",
+					"number": "PT-2025-0001",
+					"date": "2025-04-05",
+					"customerId": "CUS-1",
+					"customerName": "Trung tâm Y tế Ba Đình",
+					"customerCode": "KH001",
+					"amount": 11760000,
+					"reference": "UNC PT-2025-0001",
+					"createdAt": "2025-04-05T02:00:00.000Z"
+				},
+				{
+					"id": "id-0003",
+					"number": "PT-2025-0002",
+					"date": "2025-07-01",
+					"customerId": "CUS-2",
+					"customerName": "Bệnh viện Đa khoa Thanh Hóa",
+					"customerCode": "KH002",
+					"amount": 10000000,
+					"reference": "UNC PT-2025-0002",
+					"createdAt": "2025-07-01T02:00:00.000Z"
+				},
+				{
+					"id": "id-0005",
+					"number": "PT-2025-0003",
+					"date": "2025-12-15",
+					"customerId": "CUS-3",
+					"customerName": "Phòng khám Minh An",
+					"customerCode": "KH003",
+					"amount": 5000000,
+					"reference": "UNC PT-2025-0003",
+					"createdAt": "2025-12-15T02:00:00.000Z"
+				},
+				{
+					"id": "id-0007",
+					"number": "PT-2026-0001",
+					"date": "2026-02-20",
+					"customerId": "CUS-2",
+					"customerName": "Bệnh viện Đa khoa Thanh Hóa",
+					"customerCode": "KH002",
+					"amount": 8000000,
+					"reference": "UNC PT-2026-0001",
+					"createdAt": "2026-02-20T02:00:00.000Z"
+				},
+				{
+					"id": "id-0009",
+					"number": "PT-2026-0002",
+					"date": "2026-03-01",
+					"customerId": "CUS-4",
+					"customerName": "CDC Nghệ An",
+					"customerCode": "KH004",
+					"amount": 3000000,
+					"reference": "UNC PT-2026-0002",
+					"createdAt": "2026-03-01T02:00:00.000Z",
+					"reversal": {
+						"date": "2026-03-02",
+						"reason": "Ghi nhầm khách hàng",
+						"createdAt": "2026-03-02T02:00:00.000Z"
+					}
+				},
+				{
+					"id": "id-0010",
+					"number": "PT-2026-0003",
+					"date": "2026-03-03",
+					"customerId": "CUS-4",
+					"customerName": "CDC Nghệ An",
+					"customerCode": "KH004",
+					"amount": 7770000,
+					"reference": "UNC PT-2026-0003",
+					"createdAt": "2026-03-03T02:00:00.000Z"
+				},
+				{
+					"id": "id-0012",
+					"number": "PT-2026-0004",
+					"date": "2026-06-01",
+					"customerId": "CUS-6",
+					"customerName": "Công ty TNHH Dược Sao Mai",
+					"customerCode": "KH006",
+					"amount": 10000000,
+					"reference": "UNC PT-2026-0004",
+					"createdAt": "2026-06-01T02:00:00.000Z"
+				},
+				{
+					"id": "id-0014",
+					"number": "PT-2026-0005",
+					"date": "2026-09-01",
+					"customerId": "CUS-3",
+					"customerName": "Phòng khám Minh An",
+					"customerCode": "KH003",
+					"amount": 20000000,
+					"reference": "UNC PT-2026-0005",
+					"createdAt": "2026-09-01T02:00:00.000Z"
+				},
+				{
+					"id": "id-0016",
+					"number": "PT-2026-0006",
+					"date": "2026-11-05",
+					"customerId": "CUS-1",
+					"customerName": "Trung tâm Y tế Ba Đình",
+					"customerCode": "KH001",
+					"amount": 20000000,
+					"reference": "UNC PT-2026-0006",
+					"createdAt": "2026-11-05T02:00:00.000Z"
+				},
+				{
+					"id": "id-0018",
+					"number": "PT-2026-0007",
+					"date": "2026-11-28",
+					"customerId": "CUS-5",
+					"customerName": "Nhà thuốc Hồng Phúc",
+					"customerCode": "KH005",
+					"amount": 1000000,
+					"reference": "UNC PT-2026-0007",
+					"createdAt": "2026-11-28T02:00:00.000Z"
+				}
+			],
+			"allocations": [
+				{
+					"id": "id-0002",
+					"receiptId": "id-0001",
+					"date": "2025-04-05",
+					"lines": [
+						{
+							"invoice": {
+								"id": "[\"KH001\",\"BH00001\",\"2025\"]",
+								"customerId": "CUS-1",
+								"date": "2025-03-10",
+								"invoiceNumber": "0000001",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00001",
+								"amount": 11760000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 11760000
+						}
+					],
+					"createdAt": "2025-04-05T02:00:00.000Z"
+				},
+				{
+					"id": "id-0004",
+					"receiptId": "id-0003",
+					"date": "2025-07-01",
+					"lines": [
+						{
+							"invoice": {
+								"id": "[\"KH002\",\"BH00002\",\"2025\"]",
+								"customerId": "CUS-2",
+								"date": "2025-06-15",
+								"invoiceNumber": "0000003",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00002",
+								"amount": 17850000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 10000000
+						}
+					],
+					"createdAt": "2025-07-01T02:00:00.000Z"
+				},
+				{
+					"id": "id-0006",
+					"receiptId": "id-0005",
+					"date": "2025-12-15",
+					"lines": [
+						{
+							"invoice": {
+								"id": "[\"KH003\",\"BH00003\",\"2025\"]",
+								"customerId": "CUS-3",
+								"date": "2025-11-20",
+								"invoiceNumber": "0000004",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00003",
+								"amount": 19068000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 5000000
+						}
+					],
+					"createdAt": "2025-12-15T02:00:00.000Z",
+					"reversal": {
+						"date": "2026-01-10",
+						"reason": "Phân bổ nhầm hóa đơn",
+						"createdAt": "2026-01-10T02:00:00.000Z"
+					}
+				},
+				{
+					"id": "id-0008",
+					"receiptId": "id-0007",
+					"date": "2026-02-20",
+					"lines": [
+						{
+							"invoice": {
+								"id": "[\"KH002\",\"BH00002\",\"2025\"]",
+								"customerId": "CUS-2",
+								"date": "2025-06-15",
+								"invoiceNumber": "0000003",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00002",
+								"amount": 17850000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 7850000
+						}
+					],
+					"createdAt": "2026-02-20T02:00:00.000Z"
+				},
+				{
+					"id": "id-0011",
+					"receiptId": "id-0010",
+					"date": "2026-03-03",
+					"lines": [
+						{
+							"invoice": {
+								"id": "[\"KH004\",\"BH00004\",\"2026\"]",
+								"customerId": "CUS-4",
+								"date": "2026-01-05",
+								"invoiceNumber": "0000007",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00004",
+								"amount": 7770000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 7770000
+						}
+					],
+					"createdAt": "2026-03-03T02:00:00.000Z"
+				},
+				{
+					"id": "id-0013",
+					"receiptId": "id-0012",
+					"date": "2026-07-20",
+					"lines": [
+						{
+							"invoice": {
+								"id": "[\"KH006\",\"BH00014\",\"2026\"]",
+								"customerId": "CUS-6",
+								"date": "2026-07-15",
+								"invoiceNumber": "0000015",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00014",
+								"amount": 12180000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 10000000
+						}
+					],
+					"createdAt": "2026-07-20T02:00:00.000Z"
+				},
+				{
+					"id": "id-0015",
+					"receiptId": "id-0014",
+					"date": "2026-09-01",
+					"lines": [
+						{
+							"invoice": {
+								"id": "[\"KH003\",\"BH00003\",\"2025\"]",
+								"customerId": "CUS-3",
+								"date": "2025-11-20",
+								"invoiceNumber": "0000004",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00003",
+								"amount": 19068000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 10000000
+						},
+						{
+							"invoice": {
+								"id": "[\"KH003\",\"BH00009\",\"2026\"]",
+								"customerId": "CUS-3",
+								"date": "2026-08-12",
+								"invoiceNumber": "0000016",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00009",
+								"amount": 16590000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 9000000
+						}
+					],
+					"createdAt": "2026-09-01T02:00:00.000Z"
+				},
+				{
+					"id": "id-0017",
+					"receiptId": "id-0016",
+					"date": "2026-11-05",
+					"lines": [
+						{
+							"invoice": {
+								"id": "[\"KH001\",\"BH00001\",\"2026\"]",
+								"customerId": "CUS-1",
+								"date": "2026-01-15",
+								"invoiceNumber": "0000008",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00001",
+								"amount": 6678000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 6678000
+						},
+						{
+							"invoice": {
+								"id": "[\"KH001\",\"BH00011\",\"2026\"]",
+								"customerId": "CUS-1",
+								"date": "2026-10-30",
+								"invoiceNumber": "0000019",
+								"invoiceSeries": "1C25TAA",
+								"documentNumber": "BH00011",
+								"amount": 9849000,
+								"sourceFile": "So-chi-tiet-ban-hang-2025-2026.xlsx"
+							},
+							"amount": 5000000
+						}
+					],
+					"createdAt": "2026-11-05T02:00:00.000Z"
+				}
+			]
+		},
+		"settings": null
+	}
+}

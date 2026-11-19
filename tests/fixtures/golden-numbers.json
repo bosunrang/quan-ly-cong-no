@@ -1,0 +1,1145 @@
+{
+	"dashboard": [
+		{
+			"from": "2025-01-01",
+			"through": "2025-06-30",
+			"remaining": 17850000,
+			"periodReceived": 11760000,
+			"unallocated": 0,
+			"unverifiedCount": 0,
+			"receivables": [
+				{
+					"customerCode": "KH002",
+					"remaining": 17850000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2025\",\"0000003\",\"1C25TAA\",\"\"]",
+							"remaining": 17850000
+						}
+					]
+				}
+			],
+			"unallocatedReceipts": []
+		},
+		{
+			"from": "2025-01-01",
+			"through": "2025-12-31",
+			"remaining": 21918000,
+			"periodReceived": 26760000,
+			"unallocated": 0,
+			"unverifiedCount": 0,
+			"receivables": [
+				{
+					"customerCode": "KH003",
+					"remaining": 14068000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2025\",\"0000004\",\"1C25TAA\",\"\"]",
+							"remaining": 14068000
+						}
+					]
+				},
+				{
+					"customerCode": "KH002",
+					"remaining": 7850000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2025\",\"0000003\",\"1C25TAA\",\"\"]",
+							"remaining": 7850000
+						}
+					]
+				}
+			],
+			"unallocatedReceipts": []
+		},
+		{
+			"from": "2026-01-01",
+			"through": "2026-03-31",
+			"remaining": 48793500,
+			"periodReceived": 15770000,
+			"unallocated": 5150000,
+			"unverifiedCount": 1,
+			"receivables": [
+				{
+					"customerCode": "KH002",
+					"remaining": 23047500,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
+							"remaining": 23047500
+						}
+					]
+				},
+				{
+					"customerCode": "KH003",
+					"remaining": 19068000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2025\",\"0000004\",\"1C25TAA\",\"\"]",
+							"remaining": 19068000
+						}
+					]
+				},
+				{
+					"customerCode": "KH001",
+					"remaining": 6678000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000008\",\"1C25TAA\",\"\"]",
+							"remaining": 6678000
+						}
+					]
+				}
+			],
+			"unallocatedReceipts": [
+				{
+					"number": "PT-2026-0001",
+					"unallocated": 150000
+				},
+				{
+					"number": "PT-2025-0003",
+					"unallocated": 5000000
+				}
+			]
+		},
+		{
+			"from": "2026-01-01",
+			"through": "2026-06-30",
+			"remaining": 60868500,
+			"periodReceived": 25770000,
+			"unallocated": 15150000,
+			"unverifiedCount": 3,
+			"receivables": [
+				{
+					"customerCode": "KH002",
+					"remaining": 23047500,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
+							"remaining": 23047500
+						}
+					]
+				},
+				{
+					"customerCode": "KH003",
+					"remaining": 19068000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2025\",\"0000004\",\"1C25TAA\",\"\"]",
+							"remaining": 19068000
+						}
+					]
+				},
+				{
+					"customerCode": "KH005",
+					"remaining": 12075000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000012\",\"1C25TAA\",\"\"]",
+							"remaining": 12075000
+						}
+					]
+				},
+				{
+					"customerCode": "KH001",
+					"remaining": 6678000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000008\",\"1C25TAA\",\"\"]",
+							"remaining": 6678000
+						}
+					]
+				}
+			],
+			"unallocatedReceipts": [
+				{
+					"number": "PT-2026-0004",
+					"unallocated": 10000000
+				},
+				{
+					"number": "PT-2026-0001",
+					"unallocated": 150000
+				},
+				{
+					"number": "PT-2025-0003",
+					"unallocated": 5000000
+				}
+			]
+		},
+		{
+			"from": "2026-01-01",
+			"through": "2026-11-30",
+			"remaining": 74559500,
+			"periodReceived": 66770000,
+			"unallocated": 15472000,
+			"unverifiedCount": 3,
+			"receivables": [
+				{
+					"customerCode": "KH002",
+					"remaining": 29085000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000021\",\"1C25TAA\",\"\"]",
+							"remaining": 6037500
+						},
+						{
+							"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
+							"remaining": 23047500
+						}
+					]
+				},
+				{
+					"customerCode": "KH003",
+					"remaining": 16658000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000016\",\"1C25TAA\",\"\"]",
+							"remaining": 7590000
+						},
+						{
+							"id": "[\"invoice\",\"2025\",\"0000004\",\"1C25TAA\",\"\"]",
+							"remaining": 9068000
+						}
+					]
+				},
+				{
+					"customerCode": "KH005",
+					"remaining": 12075000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000012\",\"1C25TAA\",\"\"]",
+							"remaining": 12075000
+						}
+					]
+				},
+				{
+					"customerCode": "KH004",
+					"remaining": 9712500,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000018\",\"1C25TAA\",\"\"]",
+							"remaining": 9712500
+						}
+					]
+				},
+				{
+					"customerCode": "KH001",
+					"remaining": 4849000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000019\",\"1C25TAA\",\"\"]",
+							"remaining": 4849000
+						}
+					]
+				},
+				{
+					"customerCode": "KH006",
+					"remaining": 2180000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000015\",\"1C25TAA\",\"\"]",
+							"remaining": 2180000
+						}
+					]
+				}
+			],
+			"unallocatedReceipts": [
+				{
+					"number": "PT-2026-0007",
+					"unallocated": 1000000
+				},
+				{
+					"number": "PT-2026-0006",
+					"unallocated": 8322000
+				},
+				{
+					"number": "PT-2026-0005",
+					"unallocated": 1000000
+				},
+				{
+					"number": "PT-2026-0001",
+					"unallocated": 150000
+				},
+				{
+					"number": "PT-2025-0003",
+					"unallocated": 5000000
+				}
+			]
+		},
+		{
+			"from": "2026-01-01",
+			"through": "2026-12-31",
+			"remaining": 79568000,
+			"periodReceived": 66770000,
+			"unallocated": 15472000,
+			"unverifiedCount": 3,
+			"receivables": [
+				{
+					"customerCode": "KH002",
+					"remaining": 29085000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000021\",\"1C25TAA\",\"\"]",
+							"remaining": 6037500
+						},
+						{
+							"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
+							"remaining": 23047500
+						}
+					]
+				},
+				{
+					"customerCode": "KH003",
+					"remaining": 16658000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000016\",\"1C25TAA\",\"\"]",
+							"remaining": 7590000
+						},
+						{
+							"id": "[\"invoice\",\"2025\",\"0000004\",\"1C25TAA\",\"\"]",
+							"remaining": 9068000
+						}
+					]
+				},
+				{
+					"customerCode": "KH005",
+					"remaining": 12075000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000012\",\"1C25TAA\",\"\"]",
+							"remaining": 12075000
+						}
+					]
+				},
+				{
+					"customerCode": "KH001",
+					"remaining": 9857500,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000022\",\"1C25TAA\",\"\"]",
+							"remaining": 5008500
+						},
+						{
+							"id": "[\"invoice\",\"2026\",\"0000019\",\"1C25TAA\",\"\"]",
+							"remaining": 4849000
+						}
+					]
+				},
+				{
+					"customerCode": "KH004",
+					"remaining": 9712500,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000018\",\"1C25TAA\",\"\"]",
+							"remaining": 9712500
+						}
+					]
+				},
+				{
+					"customerCode": "KH006",
+					"remaining": 2180000,
+					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000015\",\"1C25TAA\",\"\"]",
+							"remaining": 2180000
+						}
+					]
+				}
+			],
+			"unallocatedReceipts": [
+				{
+					"number": "PT-2026-0007",
+					"unallocated": 1000000
+				},
+				{
+					"number": "PT-2026-0006",
+					"unallocated": 8322000
+				},
+				{
+					"number": "PT-2026-0005",
+					"unallocated": 1000000
+				},
+				{
+					"number": "PT-2026-0001",
+					"unallocated": 150000
+				},
+				{
+					"number": "PT-2025-0003",
+					"unallocated": 5000000
+				}
+			]
+		}
+	],
+	"receivables": {
+		"unmatchedCount": 0,
+		"customers": [
+			{
+				"customerCode": "KH002",
+				"name": "Bệnh viện Đa khoa Thanh Hóa",
+				"catalogMatch": true,
+				"employeeName": "Nguyễn Thu Hà",
+				"paymentTotal": 45150000,
+				"balance": {
+					"received": 17850000,
+					"remaining": 29085000
+				},
+				"unverifiedCount": 1,
+				"documents": [
+					{
+						"id": "[\"invoice\",\"2026\",\"0000021\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00012"
+						],
+						"invoiceNumber": "0000021",
+						"paymentTotal": 6037500,
+						"received": 0,
+						"remaining": 6037500,
+						"allocations": [],
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2026\",\"0000011\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"TL00001"
+						],
+						"invoiceNumber": "0000011",
+						"paymentTotal": -1785000,
+						"received": null,
+						"remaining": null,
+						"allocations": null,
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00005"
+						],
+						"invoiceNumber": "0000009",
+						"paymentTotal": 23047500,
+						"received": 0,
+						"remaining": 23047500,
+						"allocations": [],
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2025\",\"0000003\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00002"
+						],
+						"invoiceNumber": "0000003",
+						"paymentTotal": 17850000,
+						"received": 17850000,
+						"remaining": 0,
+						"allocations": [
+							{
+								"receiptNumber": "PT-2026-0001",
+								"allocationDate": "2026-02-20",
+								"amount": 7850000
+							},
+							{
+								"receiptNumber": "PT-2025-0002",
+								"allocationDate": "2025-07-01",
+								"amount": 10000000
+							}
+						],
+						"allocationMismatch": false
+					}
+				]
+			},
+			{
+				"customerCode": "KH003",
+				"name": "Phòng khám Minh An",
+				"catalogMatch": true,
+				"employeeName": "Trần Minh Đức",
+				"paymentTotal": 35658000,
+				"balance": {
+					"received": 19000000,
+					"remaining": 16658000
+				},
+				"unverifiedCount": 0,
+				"documents": [
+					{
+						"id": "[\"invoice\",\"2026\",\"0000016\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00009"
+						],
+						"invoiceNumber": "0000016",
+						"paymentTotal": 16590000,
+						"received": 9000000,
+						"remaining": 7590000,
+						"allocations": [
+							{
+								"receiptNumber": "PT-2026-0005",
+								"allocationDate": "2026-09-01",
+								"amount": 9000000
+							}
+						],
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2025\",\"0000004\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00003"
+						],
+						"invoiceNumber": "0000004",
+						"paymentTotal": 19068000,
+						"received": 10000000,
+						"remaining": 9068000,
+						"allocations": [
+							{
+								"receiptNumber": "PT-2026-0005",
+								"allocationDate": "2026-09-01",
+								"amount": 10000000
+							}
+						],
+						"allocationMismatch": false
+					}
+				]
+			},
+			{
+				"customerCode": "KH001",
+				"name": "Trung tâm Y tế Ba Đình",
+				"catalogMatch": true,
+				"employeeName": "Nguyễn Thu Hà",
+				"paymentTotal": 33295500,
+				"balance": {
+					"received": 23438000,
+					"remaining": 9857500
+				},
+				"unverifiedCount": 0,
+				"documents": [
+					{
+						"id": "[\"invoice\",\"2026\",\"0000022\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00013"
+						],
+						"invoiceNumber": "0000022",
+						"paymentTotal": 5008500,
+						"received": 0,
+						"remaining": 5008500,
+						"allocations": [],
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2026\",\"0000019\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00011"
+						],
+						"invoiceNumber": "0000019",
+						"paymentTotal": 9849000,
+						"received": 5000000,
+						"remaining": 4849000,
+						"allocations": [
+							{
+								"receiptNumber": "PT-2026-0006",
+								"allocationDate": "2026-11-05",
+								"amount": 5000000
+							}
+						],
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2026\",\"0000008\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00001"
+						],
+						"invoiceNumber": "0000008",
+						"paymentTotal": 6678000,
+						"received": 6678000,
+						"remaining": 0,
+						"allocations": [
+							{
+								"receiptNumber": "PT-2026-0006",
+								"allocationDate": "2026-11-05",
+								"amount": 6678000
+							}
+						],
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2025\",\"0000001\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00001"
+						],
+						"invoiceNumber": "0000001",
+						"paymentTotal": 11760000,
+						"received": 11760000,
+						"remaining": 0,
+						"allocations": [
+							{
+								"receiptNumber": "PT-2025-0001",
+								"allocationDate": "2025-04-05",
+								"amount": 11760000
+							}
+						],
+						"allocationMismatch": false
+					}
+				]
+			},
+			{
+				"customerCode": "KH006",
+				"name": "Công ty TNHH Dược Sao Mai",
+				"catalogMatch": true,
+				"employeeName": "Trần Minh Đức",
+				"paymentTotal": 30450000,
+				"balance": {
+					"received": 10000000,
+					"remaining": 2180000
+				},
+				"unverifiedCount": 1,
+				"documents": [
+					{
+						"id": "[\"invoice\",\"2026\",\"0000015\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00014"
+						],
+						"invoiceNumber": "0000015",
+						"paymentTotal": 12180000,
+						"received": 10000000,
+						"remaining": 2180000,
+						"allocations": [
+							{
+								"receiptNumber": "PT-2026-0004",
+								"allocationDate": "2026-07-20",
+								"amount": 10000000
+							}
+						],
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2026\",\"0000013\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00007"
+						],
+						"invoiceNumber": "0000013",
+						"paymentTotal": 18270000,
+						"received": null,
+						"remaining": null,
+						"allocations": null,
+						"allocationMismatch": false
+					}
+				]
+			},
+			{
+				"customerCode": "KH004",
+				"name": "CDC Nghệ An",
+				"catalogMatch": true,
+				"employeeName": "Trần Minh Đức",
+				"paymentTotal": 17482500,
+				"balance": {
+					"received": 7770000,
+					"remaining": 9712500
+				},
+				"unverifiedCount": 0,
+				"documents": [
+					{
+						"id": "[\"invoice\",\"2026\",\"0000018\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00010"
+						],
+						"invoiceNumber": "0000018",
+						"paymentTotal": 9712500,
+						"received": 0,
+						"remaining": 9712500,
+						"allocations": [],
+						"allocationMismatch": false
+					},
+					{
+						"id": "[\"invoice\",\"2025\",\"0000007\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00004"
+						],
+						"invoiceNumber": "0000007",
+						"paymentTotal": 7770000,
+						"received": 7770000,
+						"remaining": 0,
+						"allocations": [
+							{
+								"receiptNumber": "PT-2026-0003",
+								"allocationDate": "2026-03-03",
+								"amount": 7770000
+							}
+						],
+						"allocationMismatch": false
+					}
+				]
+			},
+			{
+				"customerCode": "KH005",
+				"name": "Nhà thuốc Hồng Phúc",
+				"catalogMatch": true,
+				"employeeName": "",
+				"paymentTotal": 12075000,
+				"balance": {
+					"received": 0,
+					"remaining": 12075000
+				},
+				"unverifiedCount": 0,
+				"documents": [
+					{
+						"id": "[\"invoice\",\"2026\",\"0000012\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00006"
+						],
+						"invoiceNumber": "0000012",
+						"paymentTotal": 12075000,
+						"received": 0,
+						"remaining": 12075000,
+						"allocations": [],
+						"allocationMismatch": false
+					}
+				]
+			},
+			{
+				"customerCode": "KH999",
+				"name": "Khách lẻ chưa có hồ sơ",
+				"catalogMatch": false,
+				"employeeName": "",
+				"paymentTotal": 1113000,
+				"balance": null,
+				"unverifiedCount": 1,
+				"documents": [
+					{
+						"id": "[\"invoice\",\"2026\",\"0000014\",\"1C25TAA\",\"\"]",
+						"documentNumbers": [
+							"BH00008"
+						],
+						"invoiceNumber": "0000014",
+						"paymentTotal": 1113000,
+						"received": null,
+						"remaining": null,
+						"allocations": null,
+						"allocationMismatch": false
+					}
+				]
+			}
+		]
+	},
+	"statements": [
+		{
+			"customerCode": "KH001",
+			"from": "2025-01-01",
+			"through": "2025-12-31",
+			"opening": 0,
+			"increase": 11760000,
+			"payment": 11760000,
+			"closing": 0,
+			"unallocated": 0,
+			"net": 0,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Không đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-03-10",
+					"invoiceNumber": "0000001",
+					"increase": 11760000,
+					"payment": 11760000,
+					"note": "Thu ngày 05/04/2025"
+				}
+			]
+		},
+		{
+			"customerCode": "KH001",
+			"from": "2026-01-01",
+			"through": "2026-06-30",
+			"opening": 0,
+			"increase": 6678000,
+			"payment": 0,
+			"closing": 6678000,
+			"unallocated": 0,
+			"net": 6678000,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Sáu triệu sáu trăm bảy mươi tám nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2026-01-15",
+					"invoiceNumber": "0000008",
+					"increase": 6678000,
+					"payment": 0,
+					"note": ""
+				}
+			]
+		},
+		{
+			"customerCode": "KH001",
+			"from": "2026-01-01",
+			"through": "2026-11-30",
+			"opening": 0,
+			"increase": 16527000,
+			"payment": 11678000,
+			"closing": 4849000,
+			"unallocated": 8322000,
+			"net": -3473000,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Khách hàng dư có ba triệu bốn trăm bảy mươi ba nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2026-01-15",
+					"invoiceNumber": "0000008",
+					"increase": 6678000,
+					"payment": 6678000,
+					"note": "Thu ngày 05/11/2026"
+				},
+				{
+					"date": "2026-10-30",
+					"invoiceNumber": "0000019",
+					"increase": 9849000,
+					"payment": 5000000,
+					"note": "Thu ngày 05/11/2026"
+				}
+			]
+		},
+		{
+			"customerCode": "KH002",
+			"from": "2025-01-01",
+			"through": "2025-12-31",
+			"opening": 0,
+			"increase": 17850000,
+			"payment": 10000000,
+			"closing": 7850000,
+			"unallocated": 0,
+			"net": 7850000,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Bảy triệu tám trăm năm mươi nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-06-15",
+					"invoiceNumber": "0000003",
+					"increase": 17850000,
+					"payment": 10000000,
+					"note": "Thu ngày 01/07/2025"
+				}
+			]
+		},
+		{
+			"customerCode": "KH002",
+			"from": "2026-01-01",
+			"through": "2026-06-30",
+			"opening": 7850000,
+			"increase": 23047500,
+			"payment": 7850000,
+			"closing": 23047500,
+			"unallocated": 150000,
+			"net": 22897500,
+			"omitted": 1,
+			"hasUnmatchedAllocations": false,
+			"words": "Hai mươi hai triệu tám trăm chín mươi bảy nghìn năm trăm đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-06-15",
+					"invoiceNumber": "0000003",
+					"increase": 0,
+					"payment": 7850000,
+					"note": "Hóa đơn trước kỳ · Thu ngày 20/02/2026"
+				},
+				{
+					"date": "2026-02-10",
+					"invoiceNumber": "0000009",
+					"increase": 23047500,
+					"payment": 0,
+					"note": ""
+				}
+			]
+		},
+		{
+			"customerCode": "KH002",
+			"from": "2026-01-01",
+			"through": "2026-11-30",
+			"opening": 7850000,
+			"increase": 29085000,
+			"payment": 7850000,
+			"closing": 29085000,
+			"unallocated": 150000,
+			"net": 28935000,
+			"omitted": 1,
+			"hasUnmatchedAllocations": false,
+			"words": "Hai mươi tám triệu chín trăm ba mươi lăm nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-06-15",
+					"invoiceNumber": "0000003",
+					"increase": 0,
+					"payment": 7850000,
+					"note": "Hóa đơn trước kỳ · Thu ngày 20/02/2026"
+				},
+				{
+					"date": "2026-02-10",
+					"invoiceNumber": "0000009",
+					"increase": 23047500,
+					"payment": 0,
+					"note": ""
+				},
+				{
+					"date": "2026-11-25",
+					"invoiceNumber": "0000021",
+					"increase": 6037500,
+					"payment": 0,
+					"note": ""
+				}
+			]
+		},
+		{
+			"customerCode": "KH003",
+			"from": "2025-01-01",
+			"through": "2025-12-31",
+			"opening": 0,
+			"increase": 19068000,
+			"payment": 5000000,
+			"closing": 14068000,
+			"unallocated": 0,
+			"net": 14068000,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Mười bốn triệu không trăm sáu mươi tám nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-11-20",
+					"invoiceNumber": "0000004",
+					"increase": 19068000,
+					"payment": 5000000,
+					"note": "Thu ngày 15/12/2025"
+				}
+			]
+		},
+		{
+			"customerCode": "KH003",
+			"from": "2026-01-01",
+			"through": "2026-06-30",
+			"opening": 14068000,
+			"increase": 0,
+			"payment": -5000000,
+			"closing": 19068000,
+			"unallocated": 5000000,
+			"net": 14068000,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Mười bốn triệu không trăm sáu mươi tám nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-11-20",
+					"invoiceNumber": "0000004",
+					"increase": 0,
+					"payment": -5000000,
+					"note": "Hóa đơn trước kỳ · Có hoàn tác phân bổ trong kỳ"
+				}
+			]
+		},
+		{
+			"customerCode": "KH003",
+			"from": "2026-01-01",
+			"through": "2026-11-30",
+			"opening": 14068000,
+			"increase": 16590000,
+			"payment": 14000000,
+			"closing": 16658000,
+			"unallocated": 6000000,
+			"net": 10658000,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Mười triệu sáu trăm năm mươi tám nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-11-20",
+					"invoiceNumber": "0000004",
+					"increase": 0,
+					"payment": 5000000,
+					"note": "Hóa đơn trước kỳ · Thu ngày 01/09/2026 · Có hoàn tác phân bổ trong kỳ"
+				},
+				{
+					"date": "2026-08-12",
+					"invoiceNumber": "0000016",
+					"increase": 16590000,
+					"payment": 9000000,
+					"note": "Thu ngày 01/09/2026"
+				}
+			]
+		},
+		{
+			"customerCode": "KH004",
+			"from": "2025-01-01",
+			"through": "2025-12-31",
+			"opening": 0,
+			"increase": 0,
+			"payment": 0,
+			"closing": 0,
+			"unallocated": 0,
+			"net": 0,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Không đồng chẵn.",
+			"rows": []
+		},
+		{
+			"customerCode": "KH004",
+			"from": "2026-01-01",
+			"through": "2026-06-30",
+			"opening": 0,
+			"increase": 7770000,
+			"payment": 7770000,
+			"closing": 0,
+			"unallocated": 0,
+			"net": 0,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Không đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-12-28",
+					"invoiceNumber": "0000007",
+					"increase": 7770000,
+					"payment": 7770000,
+					"note": "Thu ngày 03/03/2026"
+				}
+			]
+		},
+		{
+			"customerCode": "KH004",
+			"from": "2026-01-01",
+			"through": "2026-11-30",
+			"opening": 0,
+			"increase": 17482500,
+			"payment": 7770000,
+			"closing": 9712500,
+			"unallocated": 0,
+			"net": 9712500,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Chín triệu bảy trăm mười hai nghìn năm trăm đồng chẵn.",
+			"rows": [
+				{
+					"date": "2025-12-28",
+					"invoiceNumber": "0000007",
+					"increase": 7770000,
+					"payment": 7770000,
+					"note": "Thu ngày 03/03/2026"
+				},
+				{
+					"date": "2026-09-25",
+					"invoiceNumber": "0000018",
+					"increase": 9712500,
+					"payment": 0,
+					"note": ""
+				}
+			]
+		},
+		{
+			"customerCode": "KH005",
+			"from": "2025-01-01",
+			"through": "2025-12-31",
+			"opening": 0,
+			"increase": 0,
+			"payment": 0,
+			"closing": 0,
+			"unallocated": 0,
+			"net": 0,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Không đồng chẵn.",
+			"rows": []
+		},
+		{
+			"customerCode": "KH005",
+			"from": "2026-01-01",
+			"through": "2026-06-30",
+			"opening": 0,
+			"increase": 12075000,
+			"payment": 0,
+			"closing": 12075000,
+			"unallocated": 0,
+			"net": 12075000,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Mười hai triệu không trăm bảy mươi lăm nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2026-04-18",
+					"invoiceNumber": "0000012",
+					"increase": 12075000,
+					"payment": 0,
+					"note": ""
+				}
+			]
+		},
+		{
+			"customerCode": "KH005",
+			"from": "2026-01-01",
+			"through": "2026-11-30",
+			"opening": 0,
+			"increase": 12075000,
+			"payment": 0,
+			"closing": 12075000,
+			"unallocated": 1000000,
+			"net": 11075000,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Mười một triệu không trăm bảy mươi lăm nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2026-04-18",
+					"invoiceNumber": "0000012",
+					"increase": 12075000,
+					"payment": 0,
+					"note": ""
+				}
+			]
+		},
+		{
+			"customerCode": "KH006",
+			"from": "2025-01-01",
+			"through": "2025-12-31",
+			"opening": 0,
+			"increase": 0,
+			"payment": 0,
+			"closing": 0,
+			"unallocated": 0,
+			"net": 0,
+			"omitted": 0,
+			"hasUnmatchedAllocations": false,
+			"words": "Không đồng chẵn.",
+			"rows": []
+		},
+		{
+			"customerCode": "KH006",
+			"from": "2026-01-01",
+			"through": "2026-06-30",
+			"opening": 0,
+			"increase": 0,
+			"payment": 0,
+			"closing": 0,
+			"unallocated": 10000000,
+			"net": -10000000,
+			"omitted": 1,
+			"hasUnmatchedAllocations": false,
+			"words": "Khách hàng dư có mười triệu đồng chẵn.",
+			"rows": []
+		},
+		{
+			"customerCode": "KH006",
+			"from": "2026-01-01",
+			"through": "2026-11-30",
+			"opening": 0,
+			"increase": 12180000,
+			"payment": 10000000,
+			"closing": 2180000,
+			"unallocated": 0,
+			"net": 2180000,
+			"omitted": 1,
+			"hasUnmatchedAllocations": false,
+			"words": "Hai triệu một trăm tám mươi nghìn đồng chẵn.",
+			"rows": [
+				{
+					"date": "2026-07-15",
+					"invoiceNumber": "0000015",
+					"increase": 12180000,
+					"payment": 10000000,
+					"note": "Thu ngày 01/06/2026"
+				}
+			]
+		}
+	]
+}
