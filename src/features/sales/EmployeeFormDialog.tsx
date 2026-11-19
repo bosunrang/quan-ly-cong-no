@@ -14,7 +14,8 @@ interface EmployeeFormDialogProps {
 	employee?: SalesEmployee;
 	assignedCount?: number;
 	onClose: () => void;
-	onSave: (draft: EmployeeDraft) => boolean;
+	busy?: boolean;
+	onSave: (draft: EmployeeDraft) => Promise<boolean>;
 }
 
 export function EmployeeFormDialog({
@@ -23,6 +24,7 @@ export function EmployeeFormDialog({
 	employee,
 	assignedCount = 0,
 	onClose,
+	busy = false,
 	onSave,
 }: EmployeeFormDialogProps) {
 	const [draft, setDraft] = useState<EmployeeDraft>(() =>
@@ -55,8 +57,9 @@ export function EmployeeFormDialog({
 		setError("");
 	};
 
-	const submit = (event: React.FormEvent) => {
+	const submit = async (event: React.FormEvent) => {
 		event.preventDefault();
+		if (busy) return;
 		if (!draft.code.trim() || !draft.name.trim()) {
 			setError("Vui lòng nhập mã và tên nhân viên.");
 			return;
@@ -81,7 +84,7 @@ export function EmployeeFormDialog({
 				return;
 			}
 		}
-		if (onSave(draft)) onClose();
+		if (await onSave(draft)) onClose();
 		else setError("Không lưu được nhân viên. Kiểm tra dữ liệu rồi thử lại.");
 	};
 
@@ -99,13 +102,19 @@ export function EmployeeFormDialog({
 			}
 			className="employee-dialog"
 			onClose={onClose}
+			disableClose={busy}
 			onSubmit={submit}
 			footer={
 				<>
-					<button className="button secondary" type="button" onClick={onClose}>
+					<button
+						className="button secondary"
+						type="button"
+						disabled={busy}
+						onClick={onClose}
+					>
 						Hủy
 					</button>
-					<button className="button primary" type="submit">
+					<button className="button primary" type="submit" disabled={busy}>
 						<Save className="icon-size-16" />{" "}
 						{employee ? "Lưu thay đổi" : "Thêm nhân viên"}
 					</button>

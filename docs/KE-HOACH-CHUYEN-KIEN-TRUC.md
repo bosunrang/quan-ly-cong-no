@@ -5,7 +5,7 @@ Cập nhật: 19/11/2026. Mục tiêu: app công nợ có **một đường dữ
 
 ## Vì sao phải chuyển
 
-| | App công nợ hiện tại | App cước phí (đích đến) |
+| | App công nợ trước chuyển đổi (giai đoạn 0) | App cước phí (đích đến) |
 |---|---|---|
 | Đường dữ liệu | Ba nhánh: trình duyệt (localStorage/IndexedDB), desktop (Electron gọi thẳng SQLite), LAN (`server/lan.cjs`) | Một đường: giao diện, kể cả trong Electron, gọi HTTP tới máy chủ nội bộ |
 | Nơi tính toán | Trình duyệt tải **cả sổ** rồi tự tính công nợ, phân bổ, báo cáo | Máy chủ tính, lọc và phân trang |
@@ -13,7 +13,7 @@ Cập nhật: 19/11/2026. Mục tiêu: app công nợ có **một đường dữ
 | API | Một điểm vào, máy trạm gửi tên thao tác và gửi lại cả danh sách | REST theo route, một HTTP client duy nhất |
 | Phân quyền | Máy chủ so cả danh sách cũ/mới để đoán quyền; bản desktop không qua lớp kiểm tra này | Mặc định cấm, kiểm quyền theo từng route; desktop cũng đi qua máy chủ |
 
-Hệ quả hiện tại: kiểm tra dữ liệu bị lặp ở hai nơi, phải tải nguyên sổ (có bộ đệm `datasetCache`
+Hệ quả ở đầu kế hoạch: kiểm tra dữ liệu bị lặp ở hai nơi, phải tải nguyên sổ (có bộ đệm `datasetCache`
 để đỡ chậm), danh mục trên LAN còn đọc đồng bộ, logic desktop và LAN có thể lệch nhau.
 
 ## Nguyên tắc cho mọi giai đoạn
@@ -39,29 +39,48 @@ Hệ quả hiện tại: kiểm tra dữ liệu bị lặp ở hai nơi, phải 
   đã đối chiếu tính tay. Test chạy cả đường đi qua SQLite (khôi phục rồi xuất lại).
   Chưa có dữ liệu thật; khi có bản sao lưu thật nên bổ sung thêm một bộ số chuẩn từ đó.
 
-## Giai đoạn 1. Một đường dữ liệu (vừa)
+## Giai đoạn 1. Một đường dữ liệu (vừa) — đã xong 19/11/2026
 
-- Bản desktop luôn tự chạy máy chủ ngay trong app (`127.0.0.1`, hoặc `0.0.0.0` khi làm máy chủ LAN);
+- [x] Bản desktop luôn tự chạy máy chủ ngay trong app (`127.0.0.1`, hoặc `0.0.0.0` khi làm máy chủ LAN);
   giao diện gọi HTTP như máy trạm.
-- Gỡ cầu nối SQLite trong `preload` (`congNoDatabase`), bỏ chế độ chỉ chạy trên trình duyệt.
+- [x] Gỡ cầu nối SQLite trong `preload` (`congNoDatabase`), bỏ chế độ chỉ chạy trên trình duyệt.
   Chạy dev dùng máy chủ ở chế độ loopback như app cước phí.
-- Tệp `cong-no.sqlite` của bản desktop có cùng cấu trúc với tệp của máy chủ nên dùng thẳng được.
-- Bản desktop dùng một máy cũng đăng nhập (dùng luồng tạo admin lần đầu đã có).
+- [x] Tệp `cong-no.sqlite` của bản desktop có cùng cấu trúc với tệp của máy chủ nên dùng thẳng được.
+- [x] Bản desktop dùng một máy cũng đăng nhập (dùng luồng tạo admin lần đầu đã có).
 
 **Xong khi:** `src/domain` không còn nhánh `getDatabaseBridge`/`lanEndpoint()`; số tiền chuẩn khớp;
 chạy thử Electron và LAN đều được.
 
-## Giai đoạn 2. API theo route (lớn)
+Đã kiểm chứng:
+- `pnpm check`: lint, TypeScript, kiểm tra cú pháp Electron, 127 test Vitest, 14 test SQLite,
+  7 test LAN/phân quyền đều đạt.
+- Test số tiền chuẩn thêm vòng khôi phục/xuất qua HTTP thật với SQLite tạm, không sửa số chuẩn.
+- `pnpm build` và `pnpm test:desktop`: Electron thật mở bằng HTTP loopback, đọc tệp
+  `cong-no.sqlite` có sẵn, không có bridge, bắt buộc đăng nhập/đổi mật khẩu và khôi phục phiên cookie.
+- Dev: giao diện đăng nhập hiển thị được; proxy cho phép cùng nguồn, từ chối nguồn khác (403)
+  và từ chối đọc sổ khi chưa đăng nhập (401).
 
-- Lấy bộ định tuyến của app cước phí (`server/http.cjs`, `server/index.cjs`): `PUBLIC_ROUTES` mặc định
+Cách chạy mới: `pnpm dev:init-admin` một lần, sau đó `pnpm dev`; kho phát triển riêng ở `data/dev`.
+Desktop cục bộ dùng nguyên đường dẫn dữ liệu cũ, bản sao lưu JSON giữ `companyId: null`.
+Không thay schema SQLite ở giai đoạn này.
+
+## Giai đoạn 2. API theo route (lớn) — đã xong 19/11/2026
+
+- [x] Dùng mẫu bộ định tuyến của app cước phí (`server/http.cjs`, `server/index.cjs`): `PUBLIC_ROUTES` mặc định
   cấm, mỗi route khai báo thẻ quyền và giới hạn dung lượng gửi lên, lỗi có mã HTTP.
-- Một HTTP client duy nhất `src/shared/api/client.ts`. Mọi đọc dữ liệu thành bất đồng bộ: hết XHR
+- [x] Một HTTP client duy nhất `src/shared/api/client.ts`. Mọi đọc dữ liệu thành bất đồng bộ: hết XHR
   đồng bộ, các trang có trạng thái đang tải.
-- Khách hàng, nhân viên, phân công sửa theo từng bản ghi (POST/PATCH/DELETE) → bỏ việc so cả danh sách
+- [x] Khách hàng, nhân viên, phân công sửa theo từng bản ghi (POST/PATCH/DELETE) → bỏ việc so cả danh sách
   để đoán quyền (`requireCustomerChangePermission`) và revision của cả danh mục.
-- Giữ đăng nhập bằng cookie HttpOnly hiện tại.
+- [x] Giữ đăng nhập bằng cookie HttpOnly hiện tại.
 
-**Xong khi:** không còn `requestLanSync`; mỗi route có test ranh giới quyền.
+Máy chủ kiểm quyền và giới hạn dung lượng theo từng route. Giao diện tải bất đồng bộ qua một client chung.
+Các thao tác nhập khách hàng và giao nhiều khách hàng gửi đúng các bản ghi cần xử lý trong một giao dịch.
+Chỉnh sửa dùng phiên bản từng hồ sơ để phát hiện xung đột. Kết thúc phân công giữ lại lịch sử.
+
+Kiểm thử HTTP bao phủ ranh giới đăng nhập của từng route, quyền theo thẻ, giới hạn dung lượng và
+xung đột khi ghi. Bộ số tiền chuẩn đọc lại danh mục và hai sổ qua các route mới sau khi khôi phục SQLite.
+Cả 5 test số tiền chuẩn đều đạt với cùng tệp số chuẩn.
 
 ## Giai đoạn 3. Bảng riêng cho sổ (lớn)
 

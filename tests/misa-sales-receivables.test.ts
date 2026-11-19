@@ -23,7 +23,7 @@ vi.mock("../src/domain/customers/customer.repository", () => ({
 	readCustomers: vi.fn(),
 }));
 vi.mock("../src/domain/employees/employee.repository", () => ({
-	readSalesEmployees: () => [],
+	readSalesEmployees: async () => [],
 }));
 vi.mock("../src/domain/misa/misa.sales-book.repository", () => ({
 	readMisaSalesBook: vi.fn(),
@@ -232,7 +232,7 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 		"Ghép nhầm",
 	);
 	let refresh = () => {};
-	vi.mocked(readCustomers).mockReturnValue([customer]);
+	vi.mocked(readCustomers).mockResolvedValue([customer]);
 	vi.mocked(readMisaSalesBook).mockResolvedValue(book);
 	vi.mocked(readReceiptLedger).mockResolvedValue(recorded);
 	vi.mocked(subscribeReceiptLedger).mockImplementation((callback) => {
@@ -339,7 +339,7 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 		name: "Bệnh viện phía Nam",
 		province: "TP Hồ Chí Minh",
 	};
-	vi.mocked(readCustomers).mockReturnValue([customer, secondCustomer]);
+	vi.mocked(readCustomers).mockResolvedValue([customer, secondCustomer]);
 	vi.mocked(readMisaSalesBook).mockResolvedValue({
 		fileName: "ban-hang.xlsx",
 		importedAt: "2026-06-01T00:00:00Z",

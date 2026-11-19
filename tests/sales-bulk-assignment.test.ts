@@ -1,13 +1,11 @@
+import { directoryServer } from "./fixtures/directory-server";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
+import { assignCustomers } from "../src/domain/assignments/assignment.service";
 import App from "../src/app/App";
 import type { Customer } from "../src/domain/customers/customer.model";
-import {
-	readCustomers,
-	writeCustomers,
-} from "../src/domain/customers/customer.repository";
-import { writeSalesEmployees } from "../src/domain/employees/employee.repository";
+import { readCustomers } from "../src/domain/customers/customer.repository";
 import type { SalesEmployee } from "../src/domain/employees/employee.model";
 import { readMisaSalesBook } from "../src/domain/misa/misa.sales-book.repository";
 
@@ -62,9 +60,39 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 		value: vi.fn(),
 	});
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-	window.localStorage.clear();
-	writeCustomers(customers);
-	writeSalesEmployees([employee, other]);
+	const { datasets, api } = directoryServer(customers, [employee, other]);
+	api.mockImplementation(async (_method, operation, payload) => {
+		if (operation === "session") {
+			const profile = {
+				id: "admin",
+				name: "Quản trị",
+				username: "admin",
+				role: "admin",
+				active: true,
+				sessionVersion: "s1",
+			};
+			return { profile, accounts: [profile] } as never;
+		}
+		if (operation.endsWith("/stamp") || operation === "receipt-ledger")
+			return null as never;
+		if (operation === "assignments") {
+			const args = payload as {
+				customers: { id: string }[];
+				effectiveFrom: string;
+			};
+			const saved = assignCustomers(
+				customers,
+				args.customers.map(({ id }) => id),
+				employee,
+				args.effectiveFrom,
+			);
+			datasets.set("customers", saved);
+			return saved.filter(
+				(record, index) => record !== customers[index],
+			) as never;
+		}
+		return datasets.get(operation) as never;
+	});
 	vi.mocked(readMisaSalesBook).mockResolvedValue({
 		fileName: "MISA.xlsx",
 		importedAt: date,
@@ -143,7 +171,7 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 			"Giao 29 khách hàng",
 		);
 		await click("Xác nhận phân công");
-		const saved = readCustomers();
+		const saved = await readCustomers();
 		expect(
 			saved
 				.slice(0, 29)
@@ -155,7 +183,11 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 		await click("Công nợ phải thu");
 		await vi.waitFor(async () => {
 			await act(async () => undefined);
-			if (!container.querySelector('select[aria-label="Lọc theo nhân viên phụ trách"]'))
+			if (
+				!container.querySelector(
+					'select[aria-label="Lọc theo nhân viên phụ trách"]',
+				)
+			)
 				throw new Error("Trang công nợ chưa hiện");
 		});
 		await select("Lọc theo nhân viên phụ trách", employee.id);
@@ -166,7 +198,7 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 	} finally {
 		await act(async () => root.unmount());
 		container.remove();
-		window.localStorage.clear();
+		vi.restoreAllMocks();
 		if (originalScroll)
 			Object.defineProperty(HTMLElement.prototype, "scrollTo", originalScroll);
 		else Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");

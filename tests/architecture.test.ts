@@ -3,7 +3,6 @@ import { URL } from "node:url";
 import { describe, expect, it } from "vitest";
 import electronDatabase from "../electron/database.cjs?raw";
 import electronMain from "../electron/main.cjs?raw";
-import electronPreload from "../electron/preload.cjs?raw";
 import indexHtml from "../index.html?raw";
 
 const sourceModules = import.meta.glob("../src/**/*.{ts,tsx}", {
@@ -117,16 +116,21 @@ describe("architecture guardrails", () => {
 	});
 
 	it("dùng chung trạng thái tương tác của nút ở trang và hộp thoại", () => {
-		const sharedButton = /\.(?:button|text-button|row-action|drawer-close)(?![\w-])/;
+		const sharedButton =
+			/\.(?:button|text-button|row-action|drawer-close)(?![\w-])/;
 		const dialogScope = /\b(?:aria-modal|dialog-shell|dialog-overlay)\b/;
 		const interaction = /:(?:hover|active|disabled)\b/;
 		for (const [path, styles] of Object.entries(styleModules)) {
-			const selectors = Array.from(styles.matchAll(/([^{}]+)\{/g), ([, selector]) =>
-				selector.trim(),
-			).filter((selector) => interaction.test(selector) && sharedButton.test(selector));
+			const selectors = Array.from(
+				styles.matchAll(/([^{}]+)\{/g),
+				([, selector]) => selector.trim(),
+			).filter(
+				(selector) => interaction.test(selector) && sharedButton.test(selector),
+			);
 			if (path.endsWith("/styles/shared/controls.css")) {
 				expect(selectors, path).not.toHaveLength(0);
-				for (const selector of selectors) expect(selector).not.toMatch(dialogScope);
+				for (const selector of selectors)
+					expect(selector).not.toMatch(dialogScope);
 			} else {
 				expect(selectors, path).toEqual([]);
 			}
@@ -189,6 +193,14 @@ describe("architecture guardrails", () => {
 		expect(violations).toEqual([]);
 	});
 
+	it("chỉ gọi HTTP từ client bất đồng bộ dùng chung", () => {
+		for (const [path, source] of Object.entries(sourceModules)) {
+			expect(source, path).not.toMatch(/\b(?:XMLHttpRequest|requestLanSync)\b/);
+			if (!path.endsWith("/shared/api/client.ts"))
+				expect(source, path).not.toMatch(/\bfetch\s*\(/);
+		}
+	});
+
 	it("giữ cấu hình Electron ở trạng thái phòng thủ mặc định", () => {
 		expect(electronMain).toContain("app.enableSandbox()");
 		expect(electronMain).toContain("contextIsolation: true");
@@ -199,14 +211,16 @@ describe("architecture guardrails", () => {
 		expect(electronMain).toContain("setPermissionRequestHandler");
 		expect(electronMain).toContain("setWindowOpenHandler");
 		expect(electronMain).toContain("on('will-navigate'");
-		expect(electronMain).toContain(
-			"preload: path.join(__dirname, 'preload.cjs')",
-		);
-		expect(electronMain).toContain("ipcMain.on('database:read-dataset'");
-		expect(electronPreload).toContain(
-			"contextBridge.exposeInMainWorld('congNoDatabase'",
-		);
-		expect(electronPreload).not.toContain("require('node:fs')");
+		expect(electronMain).toContain("window.loadURL(url)");
+		expect(electronMain).toContain("startLanHost(mode");
+		expect(electronMain).not.toMatch(/ipcMain|preload|loadFile|openDatabase/);
+		for (const [path, source] of Object.entries(sourceModules)) {
+			expect(source, path).not.toMatch(
+				/getDatabaseBridge|congNoDatabase|\bindexedDB\b|\blocalStorage\b/,
+			);
+			if (path.includes("/domain/"))
+				expect(source, path).not.toMatch(/\blanEndpoint\b/);
+		}
 		expect(electronDatabase).toContain("require('node:sqlite')");
 		expect(electronDatabase).toContain("PRAGMA foreign_keys = ON");
 		expect(electronDatabase).toContain("BEGIN IMMEDIATE");

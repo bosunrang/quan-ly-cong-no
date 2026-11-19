@@ -1,8 +1,8 @@
 import { ArrowRight, Database, FilterX, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import { readCustomers } from "../../domain/customers/customer.repository";
-import { readSalesEmployees } from "../../domain/employees/employee.repository";
+import { readDirectory } from "../../domain/customers/directory.repository";
+import { useAsyncData } from "../../shared/hooks/useAsyncData";
 import type { MisaSalesBook } from "../../domain/misa/misa.sales-book";
 import { readMisaSalesBook } from "../../domain/misa/misa.sales-book.repository";
 import { buildSalesReceivables } from "../../domain/misa/misa.sales-receivables";
@@ -31,8 +31,7 @@ export function SalesReceivablesPage({
 	const [error, setError] = useState("");
 	const [ledger, setLedger] = useState<ReceiptLedger>();
 	const [ledgerError, setLedgerError] = useState("");
-	const [customers] = useState(readCustomers);
-	const [employees] = useState(readSalesEmployees);
+	const directory = useAsyncData(readDirectory);
 	const [query, setQuery] = useState("");
 	// Ô tìm kiếm cập nhật ngay; danh sách lọc lại sau đó để gõ phím không bị khựng.
 	const searchQuery = useDeferredValue(query);
@@ -90,8 +89,15 @@ export function SalesReceivablesPage({
 	}, []);
 
 	const salesGroups = useMemo(
-		() => (book ? buildSalesReceivables(book.rows, customers, employees) : []),
-		[book, customers, employees],
+		() =>
+			book && directory.data
+				? buildSalesReceivables(
+						book.rows,
+						directory.data.customers,
+						directory.data.employees,
+					)
+				: [],
+		[book, directory.data],
 	);
 	const { customers: groups, unmatchedCount: unmatchedAllocationCount } =
 		useMemo(
@@ -134,6 +140,18 @@ export function SalesReceivablesPage({
 		? groups.find((group) => group.id === openedId)
 		: undefined;
 
+	if (directory.error)
+		return (
+			<Notice tone="danger" announce>
+				{directory.error}
+			</Notice>
+		);
+	if (directory.loading)
+		return (
+			<p className="panel empty-state" role="status">
+				Đang tải danh mục…
+			</p>
+		);
 	if (error)
 		return (
 			<Notice tone="danger" title="Không thể mở sổ bán hàng MISA" announce>

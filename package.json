@@ -12,18 +12,20 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b && tsc -p tsconfig.test.json",
     "lint": "biome lint src tests vite.config.ts vitest.config.ts --error-on-warnings",
-    "check:electron": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/database.cjs",
+    "check:electron": "node --check electron/main.cjs && node --check electron/lan-host.cjs && node --check electron/database.cjs && node --check server/development.cjs",
     "test": "vitest run",
     "test:sqlite": "node --test tests/sqlite-database.test.cjs",
     "test:lan": "node --test tests/lan.test.cjs tests/lan-security.test.cjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "check": "pnpm lint && pnpm typecheck && pnpm check:electron && pnpm test && pnpm test:sqlite && pnpm test:lan",
-    "preview": "vite preview",
+    "preview": "node server/development.cjs",
     "start": "electron .",
     "desktop": "pnpm build && electron . --local",
     "desktop:lan": "electron . --lan",
-    "dist": "pnpm build && electron-builder --win nsis"
+    "dist": "pnpm build && electron-builder --win nsis",
+    "dev:init-admin": "node server/init-dev-admin.cjs",
+    "test:desktop": "node tests/electron-http-smoke.cjs"
   },
   "build": {
     "appId": "vn.naviva.congno",

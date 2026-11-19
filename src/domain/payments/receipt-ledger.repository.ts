@@ -1,14 +1,10 @@
 import { randomId } from "../../shared/lib/randomId";
-import { type DatabaseEnvelope, getDatabaseBridge } from "../../shared/storage/databaseBridge";
+import type { DatabaseEnvelope } from "../../shared/storage/storage.types";
 import {
 	forgetCachedDataset,
 	readCachedDataset,
 } from "../../shared/storage/datasetCache";
-import { lanEndpoint, requestLan } from "../../shared/storage/lanStorage";
-import {
-	MISA_SALES_BOOK_KEY,
-	withSalesBookStore,
-} from "../misa/misa.sales-book.repository";
+import { api } from "../../shared/api/client";
 import {
 	emptyReceiptLedger,
 	migrateReceiptLedger,
@@ -27,7 +23,7 @@ function ledgerChannel() {
 	try {
 		return typeof BroadcastChannel === "undefined"
 			? undefined
-			: new BroadcastChannel(`${lanEndpoint() ?? ""}${storageKey}`);
+			: new BroadcastChannel(storageKey);
 	} catch {
 		// The view can still reread the ledger when its window regains focus.
 		return undefined;
@@ -77,19 +73,7 @@ function decodeLedger(envelope: DatabaseEnvelope | null): ReceiptLedger {
 }
 
 export async function readReceiptLedger(): Promise<ReceiptLedger> {
-	const bridge = getDatabaseBridge();
-	const lan = lanEndpoint();
-	if (lan || bridge) {
-		return readCachedDataset(storageKey, decodeLedger);
-	}
-	const result = await withSalesBookStore<unknown>(
-		"readonly",
-		(store, complete) => {
-			const request = store.get(storageKey);
-			request.onsuccess = () => complete(request.result);
-		},
-	);
-	return result === undefined ? emptyReceiptLedger : validate(result);
+	return readCachedDataset("receipt-ledger", decodeLedger);
 }
 
 export async function saveReceiptLedger(
@@ -97,60 +81,14 @@ export async function saveReceiptLedger(
 	salesBookImportedAt?: string,
 ): Promise<ReceiptLedger> {
 	const next = { ...ledger, revision: randomId() };
-	const bridge = getDatabaseBridge();
-	forgetCachedDataset(storageKey);
-	if (lanEndpoint()) {
-		const written = await requestLan<boolean>("write-ledger", {
-			revision: ledger.revision, data: next, salesBookImportedAt,
-		});
-		if (!written) throw changed();
-	} else if (bridge) {
-		const result = await bridge.writeReceiptLedger(
-			ledger.revision,
-			next,
-			salesBookImportedAt,
-		);
-		if (!result.ok)
-			throw new Error(result.error || "Không thể lưu sổ đối soát.");
-		if (!result.value) throw changed();
-	} else
-		await withSalesBookStore<ReceiptLedger>(
-			"readwrite",
-			(store, complete, fail) => {
-				const current = store.get(storageKey);
-				current.onsuccess = () => {
-					try {
-						const revision =
-							current.result === undefined
-								? ""
-								: validate(current.result).revision;
-						if (revision !== ledger.revision) {
-							fail(changed());
-							return;
-						}
-						const write = () => {
-							const request = store.put(next, storageKey);
-							request.onsuccess = () => complete(next);
-						};
-						if (salesBookImportedAt === undefined) write();
-						else {
-							const book = store.get(MISA_SALES_BOOK_KEY);
-							book.onsuccess = () => {
-								if (book.result?.importedAt !== salesBookImportedAt)
-									fail(changed());
-								else write();
-							};
-						}
-					} catch (error) {
-						fail(
-							error instanceof Error
-								? error
-								: new Error("Không thể lưu sổ đối soát."),
-						);
-					}
-				};
-			},
-		);
+	forgetCachedDataset("receipt-ledger");
+	const written = await api<boolean>("PUT", "receipt-ledger", {
+		revision: ledger.revision,
+		data: next,
+		salesBookImportedAt,
+	});
+	if (!written) throw changed();
+
 	notifyReceiptLedger();
 	return next;
 }

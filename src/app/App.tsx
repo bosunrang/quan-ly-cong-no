@@ -1,9 +1,13 @@
 import { Notice } from "../shared/ui/Notice";
-import { type ComponentProps, lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
 import {
-	canOpenPage,
-	localAdministrator,
-} from "../domain/access/accounts.model";
+	type ComponentProps,
+	lazy,
+	Suspense,
+	useEffect,
+	useLayoutEffect,
+	useState,
+} from "react";
+import { canOpenPage } from "../domain/access/accounts.model";
 import {
 	accountAwaitingPassword,
 	accountSession,
@@ -20,34 +24,42 @@ import { Sidebar } from "./layout/Sidebar";
 import { useAppSettings } from "../features/settings/useAppSettings";
 import { useStorageIssue } from "../shared/hooks/useStorageIssue";
 import type { PageId } from "../types";
-import {
-	recordActivity,
-	setActivityActor,
-} from "../shared/storage/activityLog";
-import { lanEndpoint } from "../shared/storage/lanStorage";
-import { reportStorageIssue } from "../shared/storage/localStorage";
+import { setActivityActor } from "../shared/storage/activityLog";
+import { reportStorageIssue } from "../shared/storage/storageIssues";
 import { navItems } from "./navigation";
 import { useLocalAccounts } from "./useLocalAccounts";
 
 // Mỗi trang tải riêng khi được mở lần đầu, để màn hình đăng nhập và
 // trang tổng quan không phải chờ mã của các trang ít dùng.
 const AccountsPage = lazy(() =>
-	import("../features/accounts/AccountsPage").then((m) => ({ default: m.AccountsPage })),
+	import("../features/accounts/AccountsPage").then((m) => ({
+		default: m.AccountsPage,
+	})),
 );
 const ActivityPage = lazy(() =>
-	import("../features/activity/ActivityPage").then((m) => ({ default: m.ActivityPage })),
+	import("../features/activity/ActivityPage").then((m) => ({
+		default: m.ActivityPage,
+	})),
 );
 const Dashboard = lazy(() =>
-	import("../features/dashboard/Dashboard").then((m) => ({ default: m.Dashboard })),
+	import("../features/dashboard/Dashboard").then((m) => ({
+		default: m.Dashboard,
+	})),
 );
 const CustomersPage = lazy(() =>
-	import("../features/customers/CustomersPage").then((m) => ({ default: m.CustomersPage })),
+	import("../features/customers/CustomersPage").then((m) => ({
+		default: m.CustomersPage,
+	})),
 );
 const MisaDataPage = lazy(() =>
-	import("../features/misa/MisaDataPage").then((m) => ({ default: m.MisaDataPage })),
+	import("../features/misa/MisaDataPage").then((m) => ({
+		default: m.MisaDataPage,
+	})),
 );
 const PaymentsPage = lazy(() =>
-	import("../features/payments/PaymentsPage").then((m) => ({ default: m.PaymentsPage })),
+	import("../features/payments/PaymentsPage").then((m) => ({
+		default: m.PaymentsPage,
+	})),
 );
 const SalesReceivablesPage = lazy(() =>
 	import("../features/receivables/SalesReceivablesPage").then((m) => ({
@@ -60,7 +72,9 @@ const SalesInvoiceDrawer = lazy(() =>
 	})),
 );
 // Ngăn chi tiết hóa đơn có Suspense riêng để lần mở đầu không làm trống cả trang.
-function DashboardInvoiceDrawer(props: ComponentProps<typeof SalesInvoiceDrawer>) {
+function DashboardInvoiceDrawer(
+	props: ComponentProps<typeof SalesInvoiceDrawer>,
+) {
 	return (
 		<Suspense fallback={null}>
 			<SalesInvoiceDrawer {...props} />
@@ -68,13 +82,17 @@ function DashboardInvoiceDrawer(props: ComponentProps<typeof SalesInvoiceDrawer>
 	);
 }
 const ReportsPage = lazy(() =>
-	import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })),
+	import("../features/reports/ReportsPage").then((m) => ({
+		default: m.ReportsPage,
+	})),
 );
 const SalesPage = lazy(() =>
 	import("../features/sales/SalesPage").then((m) => ({ default: m.SalesPage })),
 );
 const SettingsPage = lazy(() =>
-	import("../features/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+	import("../features/settings/SettingsPage").then((m) => ({
+		default: m.SettingsPage,
+	})),
 );
 
 const accountPageOptions = navItems.map((item) => ({
@@ -83,42 +101,42 @@ const accountPageOptions = navItems.map((item) => ({
 }));
 
 function App() {
-	const lan = Boolean(lanEndpoint());
 	const [requestedPage, setActivePage] = useState<PageId>("dashboard");
 	const [collapsed, setCollapsed] = useState(false);
 	const [session, setSession] = useState<AccountSession>();
-	const [restoring, setRestoring] = useState(lan);
+	const [restoring, setRestoring] = useState(true);
 	const { accounts, error: accountsError, refresh } = useLocalAccounts();
 	const signedInAccount = sessionAccount(accounts, session);
 	const pendingPassword = accountAwaitingPassword(accounts, session);
-	const actor = accountsError
-		? undefined
-		: lan || accounts.length
-			? signedInAccount
-			: localAdministrator;
+	const actor = accountsError ? undefined : signedInAccount;
 	const activePage =
 		actor &&
 		(canOpenPage(actor, requestedPage)
 			? requestedPage
 			: navItems.find(({ id }) => canOpenPage(actor, id))?.id);
-	const { settings, saveSettings, reloadSettings } = useAppSettings();
+	const {
+		settings,
+		saveSettings,
+		error: settingsError,
+		loading: settingsLoading,
+	} = useAppSettings(actor?.sessionVersion);
 	const { storageIssue, clearStorageIssue } = useStorageIssue();
 
 	useEffect(() => {
-		if (!lan) return;
 		let cancelled = false;
 		void restoreLanSession()
 			.then((restored) => {
 				if (cancelled) return;
-				reloadSettings();
 				setSession(restored);
 			})
 			.catch(() => undefined)
 			.finally(() => {
 				if (!cancelled) setRestoring(false);
 			});
-		return () => { cancelled = true; };
-	}, [lan, reloadSettings]);
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	useLayoutEffect(() => {
 		setActivityActor(actor);
@@ -159,37 +177,43 @@ function App() {
 	}
 
 	async function logout() {
-		if (lan) {
-			try {
-				await signOutLan();
-			} catch (error) {
-				reportStorageIssue("Máy chủ chưa xác nhận đăng xuất. Hãy thử lại.", error);
-				return;
-			}
-		} else if (signedInAccount) {
-			void recordActivity("session", "Đăng xuất", "", signedInAccount);
+		try {
+			await signOutLan();
+		} catch (error) {
+			reportStorageIssue(
+				"Máy chủ chưa xác nhận đăng xuất. Hãy thử lại.",
+				error,
+			);
+			return;
 		}
+
 		clearStorageIssue();
 		setSession(undefined);
 		setActivePage("dashboard");
 	}
 
-	if (restoring) {
+	if (restoring || settingsLoading) {
 		return (
 			<main className="access-login" aria-busy="true">
-				<div className="panel access-login-panel" role="status">Đang kết nối máy chủ…</div>
+				<div className="panel access-login-panel" role="status">
+					Đang kết nối máy chủ…
+				</div>
 			</main>
 		);
 	}
 
-	if (accountsError) {
+	if (accountsError || (actor && settingsError)) {
 		return (
 			<main className="access-login">
 				<section className="panel access-login-panel">
 					<Notice tone="danger" title="Không thể mở tài khoản" announce>
-						{accountsError}
+						{accountsError || settingsError}
 					</Notice>
-					<button className="button secondary" type="button" onClick={refresh}>
+					<button
+						className="button secondary"
+						type="button"
+						onClick={accountsError ? refresh : () => window.location.reload()}
+					>
 						Thử lại
 					</button>
 				</section>
@@ -203,10 +227,8 @@ function App() {
 				session={session}
 				username={pendingPassword.username}
 				logoDataUrl={settings.logoDataUrl}
-				sessionError={lan ? storageIssue : undefined}
+				sessionError={storageIssue}
 				onComplete={(account) => {
-					if (lan) reloadSettings();
-					else void recordActivity("accounts", "Đổi mật khẩu được cấp", "", account);
 					setSession(accountSession(account));
 				}}
 				onCancel={() => void logout()}
@@ -218,8 +240,6 @@ function App() {
 			<LoginPage
 				settings={settings}
 				onSignIn={(account) => {
-					if (lan) reloadSettings();
-					else void recordActivity("session", "Đăng nhập", "", account);
 					setSession(accountSession(account));
 					setActivePage("dashboard");
 				}}
@@ -274,7 +294,9 @@ function App() {
 			);
 		if (activePage === "customers") return <CustomersPage />;
 		if (activePage === "sales")
-			return <SalesPage linkableAccounts={role === "admin" ? accounts : undefined} />;
+			return (
+				<SalesPage linkableAccounts={role === "admin" ? accounts : undefined} />
+			);
 		if (activePage === "users")
 			return (
 				<AccountsPage
@@ -282,7 +304,6 @@ function App() {
 					pageOptions={accountPageOptions}
 					session={session}
 					onSignIn={(account) => {
-						if (lan) reloadSettings();
 						setSession(accountSession(account));
 					}}
 				/>
@@ -310,9 +331,7 @@ function App() {
 					subtitle={meta.subtitle}
 					name={actor.name}
 					role={role}
-					onLogout={
-						signedInAccount ? () => void logout() : undefined
-					}
+					onLogout={signedInAccount ? () => void logout() : undefined}
 					onMenuClick={() => setCollapsed((value) => !value)}
 				/>
 				<main className="page-content">

@@ -1,7 +1,7 @@
 import { ArchiveRestore } from "lucide-react";
 import { useState } from "react";
 import { formatTimestamp } from "../../shared/lib/date";
-import { clearLanRevisions, requestLan } from "../../shared/storage/lanStorage";
+import { api } from "../../shared/api/client";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { Notice } from "../../shared/ui/Notice";
 
@@ -26,7 +26,7 @@ export function AutomaticBackups({ onRestore }: { onRestore: () => void }) {
 		setSelected("");
 		setError("");
 		try {
-			setStatus(await requestLan<BackupStatus>("backup-status"));
+			setStatus(await api<BackupStatus>("GET", "automatic-backups"));
 		} catch (reason) {
 			setError(
 				reason instanceof Error
@@ -41,10 +41,10 @@ export function AutomaticBackups({ onRestore }: { onRestore: () => void }) {
 		setBusy(true);
 		setError("");
 		try {
-			await requestLan<boolean>("restore-automatic-backup", {
-				fileName: selected,
-			});
-			clearLanRevisions();
+			await api<boolean>(
+				"POST",
+				`automatic-backups/${encodeURIComponent(selected)}/restore`,
+			);
 			setOpen(false);
 			onRestore();
 		} catch (reason) {

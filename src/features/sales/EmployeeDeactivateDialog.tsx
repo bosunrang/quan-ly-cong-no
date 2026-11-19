@@ -12,6 +12,7 @@ interface EmployeeDeactivateDialogProps {
 	historyCount: number;
 	latestActiveFrom?: string;
 	onClose: () => void;
+	busy?: boolean;
 	onConfirm: (effectiveTo: string) => void;
 }
 
@@ -21,6 +22,7 @@ export function EmployeeDeactivateDialog({
 	historyCount,
 	latestActiveFrom,
 	onClose,
+	busy = false,
 	onConfirm,
 }: EmployeeDeactivateDialogProps) {
 	const [effectiveTo, setEffectiveTo] = useState(todayLocal);
@@ -37,15 +39,21 @@ export function EmployeeDeactivateDialog({
 			tone="warning"
 			className="employee-delete-dialog"
 			onClose={onClose}
+			disableClose={busy}
 			footer={
 				<>
-					<button className="button secondary" type="button" onClick={onClose}>
+					<button
+						className="button secondary"
+						type="button"
+						disabled={busy}
+						onClick={onClose}
+					>
 						Hủy
 					</button>
 					<button
 						className="button warning"
 						type="button"
-						disabled={invalidDate}
+						disabled={busy || invalidDate}
 						onClick={() => onConfirm(effectiveTo)}
 					>
 						<UserX className="icon-size-16" /> Ngừng hoạt động

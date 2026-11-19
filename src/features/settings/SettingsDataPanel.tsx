@@ -19,9 +19,6 @@ import type {
 	BusinessGroup,
 } from "../../domain/settings/business-data.types";
 import { formatTimestamp, todayLocal } from "../../shared/lib/date";
-import { captureActivity } from "../../shared/storage/activityLog";
-import { getDatabaseStatus } from "../../shared/storage/databaseBridge";
-import { lanEndpoint } from "../../shared/storage/lanStorage";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { Notice } from "../../shared/ui/Notice";
 import { StatusPill } from "../../shared/ui/StatusPill";
@@ -46,8 +43,6 @@ interface Props {
 }
 
 export function SettingsDataPanel({ onNotice }: Props) {
-	const lan = Boolean(lanEndpoint());
-	const database = getDatabaseStatus();
 	const fileInput = useRef<HTMLInputElement>(null);
 	const [busy, setBusy] = useState(false);
 	const [review, setReview] = useState<Review>();
@@ -77,7 +72,6 @@ export function SettingsDataPanel({ onNotice }: Props) {
 			link.download = `sao-luu-cong-no-${backup.companyId ? `${backup.companyId}-` : ""}${todayLocal()}.json`;
 			link.click();
 			window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-			if (!lan) void captureActivity()("settings", "Xuất bản sao lưu");
 			onNotice("Đã xuất bản sao lưu.");
 		} catch (reason) {
 			onNotice(
@@ -124,14 +118,6 @@ export function SettingsDataPanel({ onNotice }: Props) {
 					? { type: "restore", backup: review.backup }
 					: { type: "delete", groups: selected },
 			);
-			if (!lan)
-				void captureActivity()(
-					"settings",
-					restoring ? "Khôi phục dữ liệu" : "Xóa dữ liệu theo nhóm",
-					restoring
-						? review.fileName
-						: selected.map((key) => groups[key][0]).join(", "),
-				);
 			finish(
 				restoring ? "Đã khôi phục bản sao lưu." : "Đã xóa dữ liệu đã chọn.",
 			);
@@ -153,14 +139,10 @@ export function SettingsDataPanel({ onNotice }: Props) {
 				<h2>Quản trị dữ liệu</h2>
 				<StatusPill
 					className="settings-database-status"
-					tone={lan || database ? "success" : "neutral"}
+					tone="success"
 					icon={<i />}
 				>
-					{lan
-						? "SQLite · Máy chủ LAN"
-						: database
-							? `SQLite · schema ${database.schemaVersion}`
-							: "Dữ liệu cục bộ trên trình duyệt"}
+					SQLite · Máy chủ
 				</StatusPill>
 			</div>
 			<div className="settings-data-grid">
@@ -205,11 +187,11 @@ export function SettingsDataPanel({ onNotice }: Props) {
 						<FileUp className="icon-size-16" /> Chọn tệp sao lưu
 					</button>
 				</article>
-				{lan && (
+				{
 					<AutomaticBackups
 						onRestore={() => finish("Đã khôi phục bản sao lưu tự động.")}
 					/>
-				)}
+				}
 				<article className="settings-data-card settings-data-danger">
 					<div>
 						<h3>Xóa dữ liệu</h3>
@@ -323,9 +305,7 @@ export function SettingsDataPanel({ onNotice }: Props) {
 									</label>
 								))}
 								<Notice tone="warning">
-									{lan
-										? "Máy chủ sẽ lưu một bản sao trước khi xóa."
-										: "Xuất một bản sao lưu trước khi xóa nếu cần khôi phục sau này."}
+									Máy chủ sẽ lưu một bản sao trước khi xóa.
 								</Notice>
 							</div>
 						)}

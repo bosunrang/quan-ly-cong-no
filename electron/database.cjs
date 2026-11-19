@@ -355,16 +355,27 @@ function groupByCustomer(rows) {
   return grouped;
 }
 
-function readCustomers(database, version) {
-  const customers = database.prepare('SELECT * FROM customers ORDER BY sort_order').all();
-  const assignments = database.prepare('SELECT * FROM customer_assignments ORDER BY customer_id, sort_order').all();
-  const assignmentsByCustomer = groupByCustomer(assignments);
-  return { version, data: customers.map((customer) => ({
+function customerFromRow(customer, assignments) {
+  return {
     id: customer.id, misaCode: customer.misa_code, name: customer.name, group: customer.customer_group,
     taxCode: customer.tax_code, province: customer.province, address: customer.address, status: customer.status,
-    assignments: (assignmentsByCustomer.get(customer.id) ?? []).map((item) => ({ id: item.id, employeeId: item.employee_id, employeeName: item.employee_name, province: item.province, source: item.source, effectiveFrom: item.effective_from, effectiveTo: item.effective_to })),
+    assignments: assignments.map((item) => ({ id: item.id, employeeId: item.employee_id, employeeName: item.employee_name,
+      province: item.province, source: item.source, effectiveFrom: item.effective_from, effectiveTo: item.effective_to })),
     createdAt: customer.created_at, updatedAt: customer.updated_at,
-  })) };
+  };
+}
+
+function readCustomers(database, version) {
+  const customers = database.prepare('SELECT * FROM customers ORDER BY sort_order, rowid').all();
+  const assignments = database.prepare('SELECT * FROM customer_assignments ORDER BY customer_id, sort_order').all();
+  const grouped = groupByCustomer(assignments);
+  return { version, data: customers.map((row) => customerFromRow(row, grouped.get(row.id) ?? [])) };
+}
+
+function readCustomer(database, id) {
+  const row = database.prepare('SELECT * FROM customers WHERE id = ?').get(id);
+  if (row) return customerFromRow(row, database.prepare(
+    'SELECT * FROM customer_assignments WHERE customer_id = ? ORDER BY sort_order').all(id));
 }
 
 function writeEmployees(database, version, employees) {
@@ -392,13 +403,100 @@ function writeEmployees(database, version, employees) {
   writeVersion(database, DATASET_KEYS.employees, version);
 }
 
-function readEmployees(database, version) {
-  const data = database.prepare('SELECT * FROM sales_employees ORDER BY sort_order').all().map((item) => ({
+function employeeFromRow(item) {
+  return {
     id: item.id, code: item.code, name: item.name, phone: item.phone, email: item.email,
     status: item.status, createdAt: item.created_at,
     ...(item.linked_account_id ? { linkedAccountId: item.linked_account_id } : {}),
+  };
+}
+
+function readEmployees(database, version) {
+  return { version, data: database.prepare('SELECT * FROM sales_employees ORDER BY sort_order, rowid').all().map(employeeFromRow) };
+}
+
+function nextUpdatedAt(previous) {
+  return new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString();
+}
+
+// Each route makes its checks and writes in one SQLite transaction.
+function directoryTransaction(database, work) {
+  function touchCustomer(id) {
+    const row = database.prepare('SELECT updated_at FROM customers WHERE id = ?').get(id);
+    database.prepare('UPDATE customers SET updated_at = ? WHERE id = ?').run(nextUpdatedAt(row.updated_at), id);
+  }
+  return withTransaction(database, () => work({
+    customer: (id) => readCustomer(database, id),
+    employee(id) {
+      const row = database.prepare('SELECT * FROM sales_employees WHERE id = ?').get(id);
+      if (row) return employeeFromRow(row);
+    },
+    customerHasReceipts(id) {
+      return (readGeneric(database, 'cong-no.receipt-ledger.v1')?.data?.receipts ?? [])
+        .some((receipt) => receipt.customerId === id);
+    },
+    insertCustomer(item, order) {
+      database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+        item.id, item.misaCode, item.name, item.group, item.taxCode, item.province, item.address,
+        item.status, item.createdAt, item.updatedAt, order);
+      writeVersion(database, DATASET_KEYS.customers, 2);
+    },
+    customerCodes() {
+      return database.prepare('SELECT id, misa_code, tax_code FROM customers').all();
+    },
+    employeeCodes() {
+      return database.prepare('SELECT id, code FROM sales_employees').all();
+    },
+    customerOrder(prepend) {
+      const row = database.prepare('SELECT MIN(sort_order) AS first, MAX(sort_order) AS last FROM customers').get();
+      return prepend ? (row.first ?? 0) - 1 : (row.last ?? -1) + 1;
+    },
+    updateCustomer(item) {
+      database.prepare(`UPDATE customers SET misa_code=?, name=?, customer_group=?, tax_code=?,
+        province=?, address=?, status=?, updated_at=? WHERE id=?`).run(
+        item.misaCode, item.name, item.group, item.taxCode, item.province, item.address, item.status, item.updatedAt, item.id);
+    },
+    deleteCustomer(id) {
+      database.prepare('DELETE FROM customers WHERE id = ?').run(id);
+    },
+    saveEmployee(item) {
+      const link = item.linkedAccountId ?? null;
+      if (link && !(readGeneric(database, 'cong-no.accounts.v1')?.data ?? []).some(({ id }) => id === link))
+        throw Object.assign(new Error('Tài khoản liên kết không còn tồn tại.'), { status: 400 });
+      database.prepare(`INSERT INTO sales_employees
+        (id, code, name, phone, email, status, created_at, sort_order, linked_account_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM sales_employees), ?)
+        ON CONFLICT(id) DO UPDATE SET code=excluded.code, name=excluded.name, phone=excluded.phone,
+        email=excluded.email, status=excluded.status, linked_account_id=excluded.linked_account_id`).run(
+        item.id, item.code, item.name, item.phone, item.email, item.status, item.createdAt, link);
+      writeVersion(database, DATASET_KEYS.employees, 2);
+    },
+    deleteEmployee(id) {
+      database.prepare('DELETE FROM sales_employees WHERE id = ?').run(id);
+    },
+    employeeAssignments(id, openOnly) {
+      return database.prepare(`SELECT id, customer_id, effective_from FROM customer_assignments
+        WHERE employee_id = ?${openOnly ? ' AND effective_to IS NULL' : ''}`).all(id);
+    },
+    renameEmployeeAssignments(id, name) {
+      const rows = database.prepare(`UPDATE customer_assignments SET employee_name = ?
+        WHERE employee_id = ? AND employee_name <> ? RETURNING customer_id`).all(name, id, name);
+      for (const customerId of new Set(rows.map((row) => row.customer_id))) touchCustomer(customerId);
+    },
+    assignment(id) {
+      return database.prepare('SELECT * FROM customer_assignments WHERE id = ?').get(id);
+    },
+    endAssignment(id, date, customerId) {
+      database.prepare('UPDATE customer_assignments SET effective_to = ? WHERE id = ?').run(date, id);
+      touchCustomer(customerId);
+    },
+    insertAssignment(item, customerId) {
+      database.prepare(`INSERT INTO customer_assignments VALUES (?, ?, ?, ?, ?, 'direct', ?, NULL,
+        (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM customer_assignments WHERE customer_id = ?))`)
+        .run(item.id, customerId, item.employeeId, item.employeeName, item.province, item.effectiveFrom, customerId);
+      touchCustomer(customerId);
+    },
   }));
-  return { version, data };
 }
 
 const sellerText = (value) => (typeof value === 'string' ? value.slice(0, 500) : '');
@@ -602,13 +700,7 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
     changeBusinessData(change, companyId = null, expected, onChange) {
       return changeBusinessData(database, change, companyId, expected, onChange);
     },
-    writeDirectory(customers, employees) {
-      return withTransaction(database, () => {
-        writeCustomers(database, 2, customers);
-        writeEmployees(database, 2, employees);
-        return true;
-      });
-    },
+    changeDirectory(work) { return directoryTransaction(database, work); },
     writeAccounts(expected, accounts) {
       return withTransaction(database, () => {
         const key = 'cong-no.accounts.v1';
@@ -619,7 +711,7 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
         return true;
       });
     },
-    writeReceiptLedger(revision, data, salesBookImportedAt) {
+    writeReceiptLedger(revision, data, salesBookImportedAt, { checkNewCustomers = false } = {}) {
       return withTransaction(database, () => {
         const key = 'cong-no.receipt-ledger.v1';
         const current = readGeneric(database, key);
@@ -627,6 +719,16 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
         if ((current?.data?.revision ?? '') !== revision) return false;
         if (salesBookImportedAt !== undefined &&
             readGeneric(database, 'cong-no.misa-sales-book.v1')?.data?.importedAt !== salesBookImportedAt) return false;
+        if (checkNewCustomers) {
+          const previous = new Set((current?.data?.receipts ?? []).map(({ id }) => id));
+          const lookup = database.prepare('SELECT misa_code FROM customers WHERE id = ?');
+          for (const receipt of data.receipts) {
+            if (previous.has(receipt.id)) continue;
+            const customer = lookup.get(receipt.customerId);
+            if (!customer || customer.misa_code !== receipt.customerCode)
+              throw Object.assign(new Error('Khách hàng hoặc mã MISA vừa thay đổi. Hãy tải lại danh mục.'), { status: 409 });
+          }
+        }
         writeGeneric(database, key, 1, data);
         return true;
       });

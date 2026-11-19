@@ -1,3 +1,4 @@
+import { directoryServer } from "./fixtures/directory-server";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Customer } from "../src/domain/customers/customer.model";
 import { readCustomers } from "../src/domain/customers/customer.repository";
@@ -89,9 +90,9 @@ describe("Giá trị hóa đơn và khóa hóa đơn", () => {
 			ledger.receipts[0],
 			[customer],
 		);
-		expect(invoices.map(({ documentNumber, amount }) => [documentNumber, amount])).toEqual([
-			["BH01", 9_500_000],
-		]);
+		expect(
+			invoices.map(({ documentNumber, amount }) => [documentNumber, amount]),
+		).toEqual([["BH01", 9_500_000]]);
 	});
 
 	it("tách hóa đơn có cùng số chứng từ ở hai năm khác nhau", () => {
@@ -118,9 +119,12 @@ describe("Giá trị hóa đơn và khóa hóa đơn", () => {
 		const sales = book([line("2026-11-01", "BH02", 800_000)]);
 		const ledger = receiptFor(500_000);
 		const [invoice] = getReceiptInvoices(sales, ledger.receipts[0], [customer]);
-		const allocated = allocateReceipt(ledger, ledger.receipts[0].id, "2026-11-10", [
-			{ invoice, amount: 500_000 },
-		]);
+		const allocated = allocateReceipt(
+			ledger,
+			ledger.receipts[0].id,
+			"2026-11-10",
+			[{ invoice, amount: 500_000 }],
+		);
 		const legacy = {
 			...allocated,
 			allocations: allocated.allocations.map((allocation) => ({
@@ -149,9 +153,12 @@ describe("Biên bản đối chiếu công nợ", () => {
 	it("trình bày tiền thu chưa phân bổ và công nợ thuần", () => {
 		const ledger = receiptFor(1_300_000);
 		const [invoice] = getReceiptInvoices(sales, ledger.receipts[0], [customer]);
-		const allocated = allocateReceipt(ledger, ledger.receipts[0].id, "2026-11-10", [
-			{ invoice, amount: 1_000_000 },
-		]);
+		const allocated = allocateReceipt(
+			ledger,
+			ledger.receipts[0].id,
+			"2026-11-10",
+			[{ invoice, amount: 1_000_000 }],
+		);
 		const statement = buildReceivableStatement(
 			sales,
 			allocated,
@@ -196,10 +203,12 @@ describe("Biên bản đối chiếu công nợ", () => {
 });
 
 describe("Kho mới", () => {
-	beforeEach(() => window.localStorage.clear());
+	beforeEach(() => {
+		directoryServer();
+	});
 
-	it("không nạp khách hàng và nhân viên mẫu", () => {
-		expect(readCustomers()).toEqual([]);
-		expect(readSalesEmployees()).toEqual([]);
+	it("không nạp khách hàng và nhân viên mẫu", async () => {
+		await expect(readCustomers()).resolves.toEqual([]);
+		await expect(readSalesEmployees()).resolves.toEqual([]);
 	});
 });

@@ -18,7 +18,6 @@ import {
 	type AccountDraft,
 	type AccountSession,
 	changeAccountStatus,
-	createFirstAdministrator,
 	saveAccount,
 } from "../../domain/access/accounts.repository";
 import {
@@ -26,11 +25,6 @@ import {
 	MIN_PASSWORD_LENGTH,
 } from "../../domain/access/password";
 import { usePagination } from "../../shared/hooks/usePagination";
-import {
-	captureActivity,
-	recordActivity,
-} from "../../shared/storage/activityLog";
-import { lanEndpoint } from "../../shared/storage/lanStorage";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
@@ -60,47 +54,17 @@ export function AccountsPage({
 	const [statusTarget, setStatusTarget] = useState<AccountProfile>();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
-	const setup = accounts.length === 0;
 	const pagination = usePagination(accounts);
 
 	async function save(draft: AccountDraft) {
 		if (busy || !editor) return;
-		const log = captureActivity();
 		setBusy(true);
 		setError("");
 		try {
 			const editing = typeof editor !== "string" ? editor : undefined;
-			const account = setup
-				? await createFirstAdministrator(draft)
-				: await saveAccount(session, draft, editing?.id);
-			const pages =
-				account.role === "admin"
-					? "Toàn bộ thẻ"
-					: pageOptions
-							.filter(({ id }) => canOpenPage(account, id))
-							.map(({ label }) => label)
-							.join(", ");
-			const passwordNote =
-				editing && draft.password
-					? account.mustChangePassword
-						? " · Đã cấp lại mật khẩu tạm thời"
-						: " · Đã đổi mật khẩu"
-					: "";
-			const details = `${account.name} · ${account.username} · ${roleLabels[account.role]} · ${pages}${passwordNote}`;
-			if (setup)
-				void recordActivity(
-					"accounts",
-					"Tạo quản trị đầu tiên",
-					details,
-					account,
-				);
-			else if (!lanEndpoint())
-				void log(
-					"accounts",
-					editing ? "Cập nhật tài khoản" : "Tạo tài khoản",
-					details,
-				);
-			if (setup || session?.id === account.id) onSignIn(account);
+			const account = await saveAccount(session, draft, editing?.id);
+			if (session?.id === account.id) onSignIn(account);
+
 			setEditor(undefined);
 		} catch (reason) {
 			setError(
@@ -116,17 +80,7 @@ export function AccountsPage({
 		setBusy(true);
 		setError("");
 		try {
-			const updated = await changeAccountStatus(
-				session,
-				statusTarget.id,
-				!statusTarget.active,
-			);
-			if (!lanEndpoint())
-				void recordActivity(
-					"accounts",
-					updated.active ? "Mở khóa tài khoản" : "Khóa tài khoản",
-					`${updated.name} · ${updated.username}`,
-				);
+			await changeAccountStatus(session, statusTarget.id, !statusTarget.active);
 			setStatusTarget(undefined);
 		} catch (reason) {
 			setError(
@@ -160,15 +114,10 @@ export function AccountsPage({
 					}}
 				>
 					<UserPlus className="icon-size-16" aria-hidden="true" />
-					{setup ? "Tạo tài khoản quản trị" : "Thêm người dùng"}
+					Thêm người dùng
 				</button>
 			</section>
-			{setup ? (
-				<Notice tone="info">
-					Tạo tài khoản quản trị đầu tiên để bật đăng nhập cho app trên kho dữ
-					liệu này.
-				</Notice>
-			) : (
+			{
 				<section className="panel data-panel" aria-label="Danh sách người dùng">
 					<div className="table-scroll table-scroll-auto-gutter access-table">
 						<table>
@@ -258,10 +207,9 @@ export function AccountsPage({
 						/>
 					</footer>
 				</section>
-			)}
+			}
 			{editor && (
 				<AccountEditor
-					setup={setup}
 					account={typeof editor === "string" ? undefined : editor}
 					pageOptions={pageOptions}
 					self={typeof editor !== "string" && editor.id === session?.id}
@@ -321,7 +269,6 @@ export function AccountsPage({
 }
 
 function AccountEditor({
-	setup,
 	account,
 	pageOptions,
 	self,
@@ -330,7 +277,6 @@ function AccountEditor({
 	onSave,
 	onClose,
 }: {
-	setup: boolean;
 	account?: AccountProfile;
 	pageOptions: PageOption[];
 	self: boolean;
@@ -342,7 +288,7 @@ function AccountEditor({
 	const [draft, setDraft] = useState<AccountDraft>({
 		name: account?.name ?? "",
 		username: account?.username ?? "",
-		role: setup ? "admin" : (account?.role ?? "editor"),
+		role: account?.role ?? "editor",
 		password: "",
 		pages:
 			account && account.role !== "admin"
@@ -354,26 +300,18 @@ function AccountEditor({
 	const [confirmation, setConfirmation] = useState("");
 	const [confirmationError, setConfirmationError] = useState(false);
 	const allowedPages = grantablePagesForRole(draft.role);
-	const passwordLabel = setup
-		? "Mật khẩu"
-		: account
-			? self
-				? "Mật khẩu mới (nếu đổi)"
-				: "Mật khẩu tạm thời (nếu đặt lại)"
-			: "Mật khẩu tạm thời";
+	const passwordLabel = account
+		? self
+			? "Mật khẩu mới (nếu đổi)"
+			: "Mật khẩu tạm thời (nếu đặt lại)"
+		: "Mật khẩu tạm thời";
 	return (
 		<Dialog
 			ariaLabelledBy="account-editor-title"
 			eyebrow="NGƯỜI DÙNG"
-			title={
-				setup
-					? "Tạo tài khoản quản trị"
-					: account
-						? "Sửa tài khoản"
-						: "Thêm người dùng"
-			}
+			title={account ? "Sửa tài khoản" : "Thêm người dùng"}
 			icon={<ShieldCheck className="icon-size-19" aria-hidden="true" />}
-			className={setup ? "" : "account-access-dialog"}
+			className="account-access-dialog"
 			disableClose={busy}
 			onClose={onClose}
 			onSubmit={(event) => {
@@ -438,7 +376,7 @@ function AccountEditor({
 						Vai trò
 						<select
 							value={draft.role}
-							disabled={setup || self || busy}
+							disabled={self || busy}
 							onChange={(event) => {
 								const role = event.target.value as AccountRole;
 								setDraft({
@@ -492,7 +430,7 @@ function AccountEditor({
 						/>
 					</label>
 				</div>
-				{!setup && !self && (
+				{!self && (
 					<p className="account-password-hint">
 						Người dùng phải tự đặt mật khẩu mới khi đăng nhập bằng mật khẩu tạm
 						thời.

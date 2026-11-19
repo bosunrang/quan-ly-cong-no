@@ -1,242 +1,184 @@
-import { useCallback, useState } from "react";
-import type { Customer } from "../../domain/customers/customer.model";
+import { useRef, useState } from "react";
 import {
-	CUSTOMER_STORAGE_KEY,
-	readCustomers,
-	writeCustomers,
-} from "../../domain/customers/customer.repository";
+	createAssignments,
+	endAssignment,
+} from "../../domain/assignments/assignment.repository";
+import type { Customer } from "../../domain/customers/customer.model";
+import { readDirectory } from "../../domain/customers/directory.repository";
+import { currentAssignment } from "../../domain/customers/customer.selectors";
+import { createEmployee } from "../../domain/employees/employee.factory";
 import type {
 	EmployeeDraft,
 	SalesEmployee,
 } from "../../domain/employees/employee.model";
 import {
-	assignCustomers,
-	endEmployeeAssignments,
-	unassignCustomer,
-} from "../../domain/assignments/assignment.service";
-import { createEmployee } from "../../domain/employees/employee.factory";
-import { recordActivity } from "../../shared/storage/activityLog";
-import { lanEndpoint, writeLanEmployeeDirectory } from "../../shared/storage/lanStorage";
-import { reportStorageIssue } from "../../shared/storage/localStorage";
-import {
-	EMPLOYEE_STORAGE_KEY,
-	readSalesEmployees,
-	writeSalesEmployees,
+	addSalesEmployee,
+	removeSalesEmployee,
+	updateSalesEmployee,
 } from "../../domain/employees/employee.repository";
+import { useAsyncData } from "../../shared/hooks/useAsyncData";
+import { recordActivity } from "../../shared/storage/activityLog";
+import { reportStorageIssue } from "../../shared/storage/storageIssues";
 
-function saveEmployeeDirectory(
-	customers: Customer[],
-	employees: SalesEmployee[],
-	previousCustomers: Customer[],
-) {
-	if (lanEndpoint()) {
-		try {
-			return writeLanEmployeeDirectory(customers, employees, CUSTOMER_STORAGE_KEY, EMPLOYEE_STORAGE_KEY);
-		} catch (error) {
-			reportStorageIssue(error instanceof Error ? error.message : "Không thể lưu danh mục.", error);
-			return false;
-		}
-	}
-	if (!writeCustomers(customers)) return false;
-	if (writeSalesEmployees(employees)) return true;
-	writeCustomers(previousCustomers);
-	return false;
-}
+const empty = { customers: [], employees: [] };
 
 export function useSalesAssignments() {
-	const [customers, setCustomers] = useState(readCustomers);
-	const [employees, setEmployees] = useState(readSalesEmployees);
+	const { data, setData, error, loading } = useAsyncData(readDirectory);
+	const { customers, employees } = data ?? empty;
+	const saving = useRef(false);
+	const [busy, setBusy] = useState(false);
 
-	const assign = useCallback(
-		(
-			selected: Customer[],
-			target: SalesEmployee,
-			effectiveFrom: string,
-		): { count: number } | { error: string } => {
-			const latestEmployees = readSalesEmployees();
-			setEmployees(latestEmployees);
-			const employee = latestEmployees.find(
-				(item) => item.id === target.id,
-			);
-			if (employee?.status !== "active" || employee.name !== target.name)
-				return {
-					error:
-						"Thông tin nhân viên đã thay đổi. Hãy tải lại trang để chọn lại người phụ trách.",
-				};
-			const latest = readCustomers();
-			const byId = new Map(latest.map((customer) => [customer.id, customer]));
-			const changed = selected.some((preview) => {
-				const current = byId.get(preview.id);
-				return (
-					!current ||
-					current.updatedAt !== preview.updatedAt ||
-					JSON.stringify(current.assignments) !==
-						JSON.stringify(preview.assignments)
-				);
-			});
-			if (changed)
-				return {
-					error:
-						"Danh sách hoặc phân công đã thay đổi. Hãy tải lại trang và chọn lại khách hàng.",
-				};
-			const next = assignCustomers(
-				latest,
-				selected.map(({ id }) => id),
-				employee,
-				effectiveFrom,
-			);
-			const count = next.filter(
-				(customer, index) => customer !== latest[index],
-			).length;
-			if (!count || count !== selected.length)
-				return {
-					error:
-						"Một số khách hàng không còn đủ điều kiện hoặc ngày bắt đầu trùng lịch sử phân công.",
-				};
-			if (!writeCustomers(next))
-				return { error: "Không thể lưu phân công. Hãy thử lại." };
-			setCustomers(next);
-			void recordActivity(
-				"data",
-				"Phân công khách hàng",
-				`${count} khách hàng · ${employee.name} · Từ ${effectiveFrom}`,
-			);
-			return { count };
-		},
-		[],
-	);
+	function updateDirectory(
+		records: Customer[],
+		updateEmployees: (list: SalesEmployee[]) => SalesEmployee[] = (list) =>
+			list,
+	) {
+		const changed = new Map(records.map((item) => [item.id, item]));
+		setData(
+			(current) =>
+				current && {
+					customers: current.customers.map(
+						(item) => changed.get(item.id) ?? item,
+					),
+					employees: updateEmployees(current.employees),
+				},
+		);
+	}
 
-	const unassign = useCallback(
-		(customerId: string, employeeId: string, effectiveTo: string) => {
-			const next = unassignCustomer(
-				customers,
-				customerId,
-				employeeId,
-				effectiveTo,
+	async function run<T>(work: () => Promise<T>): Promise<T | undefined> {
+		if (saving.current) return undefined;
+		saving.current = true;
+		setBusy(true);
+		try {
+			return await work();
+		} catch (reason) {
+			reportStorageIssue(
+				reason instanceof Error ? reason.message : "Không thể lưu danh mục.",
+				reason,
 			);
-			if (!writeCustomers(next)) return false;
-			setCustomers(next);
-			const customer = customers.find((item) => item.id === customerId);
-			void recordActivity(
-				"data",
-				"Bỏ phân công khách hàng",
-				`${customer?.name ?? customerId} · Đến ${effectiveTo}`,
-			);
-			return true;
-		},
-		[customers],
-	);
+			return undefined;
+		} finally {
+			saving.current = false;
+			setBusy(false);
+		}
+	}
 
-	const addEmployee = useCallback(
-		(draft: EmployeeDraft) => {
-			const employee = createEmployee(draft);
-			const next = [...employees, employee];
-			if (!writeSalesEmployees(next)) return undefined;
-			setEmployees(next);
-			void recordActivity(
-				"data",
-				"Thêm nhân viên",
-				`${employee.code} · ${employee.name}`,
-			);
-			return employee.id;
-		},
-		[employees],
-	);
-
-	const updateEmployee = useCallback(
-		(employeeId: string, draft: EmployeeDraft) => {
-			const nextEmployees = employees.map((employee) =>
-				employee.id === employeeId
-					? {
-							...employee,
-							code: draft.code.trim(),
-							name: draft.name.trim(),
-							linkedAccountId: draft.linkedAccountId,
-							status: draft.status,
-						}
-					: employee,
-			);
-			const nextCustomers = customers.map((customer) => ({
-				...customer,
-				assignments: customer.assignments.map((assignment) =>
-					assignment.employeeId === employeeId
-						? { ...assignment, employeeName: draft.name.trim() }
-						: assignment,
-				),
-			}));
-			if (!saveEmployeeDirectory(nextCustomers, nextEmployees, customers)) return false;
-			setCustomers(nextCustomers);
-			setEmployees(nextEmployees);
-			void recordActivity(
-				"data",
-				"Cập nhật nhân viên",
-				`${draft.code} · ${draft.name}`,
-			);
-			return true;
-		},
-		[customers, employees],
-	);
-
-	const deactivateEmployee = useCallback(
-		(employeeId: string, effectiveTo: string) => {
-			const nextEmployees = employees.map((employee) =>
-				employee.id === employeeId
-					? { ...employee, status: "inactive" as const }
-					: employee,
-			);
-			const nextCustomers = endEmployeeAssignments(
-				customers,
-				employeeId,
-				effectiveTo,
-			);
-			if (!saveEmployeeDirectory(nextCustomers, nextEmployees, customers)) return false;
-			setCustomers(nextCustomers);
-			setEmployees(nextEmployees);
-			const employee = employees.find((item) => item.id === employeeId);
-			void recordActivity(
-				"data",
-				"Ngừng hoạt động nhân viên",
-				`${employee?.name ?? employeeId} · Đến ${effectiveTo}`,
-			);
-			return true;
-		},
-		[customers, employees],
-	);
-
-	const deleteEmployee = useCallback(
-		(employeeId: string, effectiveTo: string) => {
-			if (!employees.some((employee) => employee.id === employeeId))
-				return false;
-			const nextEmployees = employees.filter(
-				(employee) => employee.id !== employeeId,
-			);
-			const nextCustomers = endEmployeeAssignments(
-				customers,
-				employeeId,
-				effectiveTo,
-			);
-			if (!saveEmployeeDirectory(nextCustomers, nextEmployees, customers)) return false;
-			setCustomers(nextCustomers);
-			setEmployees(nextEmployees);
-			const employee = employees.find((item) => item.id === employeeId);
-			void recordActivity(
-				"data",
-				"Xóa nhân viên",
-				employee?.name ?? employeeId,
-			);
-			return true;
-		},
-		[customers, employees],
-	);
+	async function editEmployee(
+		previous: SalesEmployee,
+		next: SalesEmployee,
+		effectiveTo?: string,
+	) {
+		const changed = await updateSalesEmployee(next, previous, effectiveTo);
+		updateDirectory(changed.customers, (list) =>
+			list.map((item) => (item.id === previous.id ? changed.employee : item)),
+		);
+		return changed.employee;
+	}
 
 	return {
 		customers,
 		employees,
-		assignCustomers: assign,
-		unassignCustomer: unassign,
-		addEmployee,
-		updateEmployee,
-		deactivateEmployee,
-		deleteEmployee,
+		error,
+		loading,
+		busy,
+		async assignCustomers(
+			selected: Customer[],
+			employee: SalesEmployee,
+			effectiveFrom: string,
+		) {
+			return run(async () => {
+				const records = await createAssignments(
+					selected,
+					employee,
+					effectiveFrom,
+				);
+				updateDirectory(records);
+				void recordActivity(
+					"data",
+					"Phân công khách hàng",
+					`${records.length} khách hàng · ${employee.name} · Từ ${effectiveFrom}`,
+				);
+				return { count: records.length };
+			});
+		},
+		async unassignCustomer(
+			customerId: string,
+			employeeId: string,
+			effectiveTo: string,
+		) {
+			const customer = customers.find((item) => item.id === customerId);
+			const assignment = customer && currentAssignment(customer);
+			if (!customer || assignment?.employeeId !== employeeId) return false;
+			return run(async () => {
+				updateDirectory([
+					await endAssignment(assignment.id, customer, effectiveTo),
+				]);
+				void recordActivity(
+					"data",
+					"Bỏ phân công khách hàng",
+					`${customer.name} · Đến ${effectiveTo}`,
+				);
+				return true;
+			});
+		},
+		async addEmployee(draft: EmployeeDraft) {
+			return run(async () => {
+				const employee = await addSalesEmployee(createEmployee(draft));
+				updateDirectory([], (list) => [...list, employee]);
+				void recordActivity(
+					"data",
+					"Thêm nhân viên",
+					`${employee.code} · ${employee.name}`,
+				);
+				return employee.id;
+			});
+		},
+		async updateEmployee(employeeId: string, draft: EmployeeDraft) {
+			const current = employees.find((item) => item.id === employeeId);
+			if (!current) return false;
+			return run(async () => {
+				const saved = await editEmployee(current, {
+					...current,
+					...draft,
+					code: draft.code.trim(),
+					name: draft.name.trim(),
+				});
+				void recordActivity(
+					"data",
+					"Cập nhật nhân viên",
+					`${saved.code} · ${saved.name}`,
+				);
+				return true;
+			});
+		},
+		async deactivateEmployee(employeeId: string, effectiveTo: string) {
+			const current = employees.find((item) => item.id === employeeId);
+			if (!current) return false;
+			return run(async () => {
+				await editEmployee(
+					current,
+					{ ...current, status: "inactive" },
+					effectiveTo,
+				);
+				void recordActivity(
+					"data",
+					"Ngừng hoạt động nhân viên",
+					`${current.name} · Đến ${effectiveTo}`,
+				);
+				return true;
+			});
+		},
+		async deleteEmployee(employeeId: string, effectiveTo: string) {
+			const current = employees.find((item) => item.id === employeeId);
+			if (!current) return false;
+			return run(async () => {
+				const records = await removeSalesEmployee(current, effectiveTo);
+				updateDirectory(records, (list) =>
+					list.filter((item) => item.id !== employeeId),
+				);
+				void recordActivity("data", "Xóa nhân viên", current.name);
+				return true;
+			});
+		},
 	};
 }

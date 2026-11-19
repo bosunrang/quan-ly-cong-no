@@ -1,0 +1,171 @@
+const { createHash } = require('node:crypto');
+const { DATASET_KEYS, openDatabase } = require('../electron/database.cjs');
+const { companySettings } = require('./companies.cjs');
+const { audit, canOpen, fail } = require('./access.cjs');
+const { createRouter, readJsonBody, sendJson } = require('./http.cjs');
+const { registerDirectoryRoutes } = require('./directory.cjs');
+const { deleteBusinessGroups, isValidReceiptLedger, isValidSalesBook,
+  isValidSettings, validateBusinessBackup } = require('../src/domain/settings/business-data.rules.mjs');
+
+const book = 'cong-no.misa-sales-book.v1';
+const ledger = 'cong-no.receipt-ledger.v1';
+const directoryReaders = ['dashboard', 'misa', 'payments', 'receivables', 'reports', 'customers', 'sales'];
+const ledgerReaders = ['dashboard', 'payments', 'receivables', 'reports'];
+const activityCategories = new Set(['session', 'accounts', 'data', 'payments', 'reports', 'settings']);
+const PUBLIC_ROUTES = new Set(['POST /api/session', 'GET /api/branding']);
+const SMALL = 16 * 1024;
+const LARGE = 64 * 1024 * 1024;
+const pages = (list, maxBodyBytes = 0, options = {}) => ({ pages: list, maxBodyBytes, ...options });
+
+function requirePage(account, allowed) {
+  if (allowed.length && !allowed.some((page) => canOpen(account, page)))
+    fail(403, 'Tài khoản chưa có quyền truy cập dữ liệu này.');
+}
+
+function settingsOf(tenant) {
+  const value = tenant.db.readDataset(DATASET_KEYS.settings)?.data ?? {};
+  const defaults = companySettings(tenant.company);
+  return {
+    ...defaults, ...value,
+    companyName: value.companyName?.trim() || defaults.companyName,
+    displayName: value.displayName?.trim() || defaults.displayName,
+  };
+}
+
+const backupCompany = ({ company }) => company.id === 'local' ? null : company.id;
+const settingsRevision = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+async function saveBusinessChange(tenant, req, change, detail = "") {
+  const { db, backups } = tenant;
+  const previous = db.exportBusinessBackup(backupCompany(tenant));
+  if (change.type === 'restore') {
+    if (validateBusinessBackup(change.backup).companyId !== backupCompany(tenant)) {
+      fail(400, 'Bản sao lưu không thuộc công ty đang mở.');
+    }
+  } else if (change.type === 'delete') {
+    deleteBusinessGroups(previous.data, change.groups);
+  } else fail(400, 'Thao tác dữ liệu không hợp lệ.');
+  await backups.saveBeforeChange(previous);
+  const account = tenant.access.actor(req);
+  requirePage(account, ['settings']);
+  return db.changeBusinessData(change, backupCompany(tenant), JSON.stringify(previous.data), () =>
+    audit(db, account, 'settings', change.type === 'restore' ? 'Khôi phục dữ liệu' : 'Xóa dữ liệu theo nhóm', detail));
+}
+
+function createApi(tenant, tls) {
+  const { db, access, backups } = tenant;
+  const router = createRouter();
+  const auth = (operation, transform = (body) => body) =>
+    ({ body, params, req, res }) => access.handle(operation, transform(body, params), req, res);
+  const pending = { allowPending: true };
+  router.post('/api/session', auth('login'), pages([], SMALL));
+  router.get('/api/session', auth('session'), pages([], 0, pending));
+  router.delete('/api/session', auth('logout'), pages([], 0, pending));
+  router.patch('/api/session/password', auth('initial-password'), pages([], SMALL, pending));
+  router.post('/api/accounts', auth('save-account', ({ draft }) => ({ draft })), pages(['users'], SMALL));
+  router.patch('/api/accounts/:id', auth('save-account', (body, { id }) => ({ ...body, id })), pages(['users'], SMALL));
+  router.patch('/api/accounts/:id/status', auth('account-status', (body, { id }) => ({ ...body, id })), pages(['users'], SMALL));
+
+  router.get('/api/branding', () => {
+    const settings = settingsOf(tenant);
+    return { ...settings, companyAddress: '', bankAccounts: [], accountingContact: '', signatoryName: '', signatoryTitle: '' };
+  }, pages([]));
+  router.get('/api/settings', () => {
+    const data = settingsOf(tenant);
+    return { data, revision: settingsRevision(data) };
+  }, pages([]));
+  router.put('/api/settings', ({ body }) => {
+    if (!isValidSettings(body.data)) fail(400, 'Cài đặt không hợp lệ.');
+    if (body.expected !== settingsRevision(settingsOf(tenant)))
+      fail(409, 'Cài đặt vừa thay đổi. Hãy tải lại trước khi lưu.');
+    db.writeDataset(DATASET_KEYS.settings, 2, body.data);
+    const data = settingsOf(tenant);
+    return { data, revision: settingsRevision(data) };
+  }, pages(['settings'], 2 * 1024 * 1024));
+
+  registerDirectoryRoutes(router, db, directoryReaders);
+  const bookReaders = [...ledgerReaders, 'misa'];
+  for (const [path, key, readers] of [['sales-book', book, bookReaders], ['receipt-ledger', ledger, ledgerReaders]]) {
+    router.get('/api/' + path, () => db.readDataset(key) ?? null, pages(readers));
+    router.get('/api/' + path + '/stamp', () => db.datasetStamp(key), pages(readers));
+  }
+  router.get('/api/sales-book/allocated-documents', () => {
+    const allocations = db.readDataset(ledger)?.data?.allocations ?? [];
+    const documents = new Set();
+    for (const allocation of allocations) {
+      if (!allocation.reversal) {
+        for (const { invoice } of allocation.lines) documents.add(invoice.documentNumber);
+      }
+    }
+    return [...documents];
+  }, pages(['misa']));
+  router.put('/api/sales-book', ({ body }) => {
+    if (!isValidSalesBook(body.data) || (body.expected !== null && typeof body.expected !== 'string'))
+      fail(400, 'Sổ bán hàng không hợp lệ.');
+    if (!db.writeMisaSalesBook(body.expected, body.data))
+      fail(409, 'Sổ bán hàng vừa thay đổi. Kiểm tra lại dữ liệu trước khi xác nhận.');
+    return true;
+  }, pages(['misa'], LARGE));
+  router.put('/api/receipt-ledger', ({ body }) => {
+    if (typeof body.revision !== 'string' || !isValidReceiptLedger(body.data) ||
+        (body.salesBookImportedAt !== undefined && typeof body.salesBookImportedAt !== 'string'))
+      fail(400, 'Sổ đối soát không hợp lệ.');
+    if (!db.writeReceiptLedger(body.revision, body.data, body.salesBookImportedAt, { checkNewCustomers: true }))
+      fail(409, 'Sổ đối soát hoặc sổ bán hàng đã thay đổi. Mở lại thao tác để kiểm tra số liệu mới.');
+    return true;
+  }, pages(['payments'], LARGE));
+
+  router.get('/api/activities', () => db.readActivities(), pages(['audit']));
+  router.post('/api/activities', ({ body: { category, action, detail }, account }) => {
+    if (!activityCategories.has(category) || typeof action !== 'string' ||
+        !action || action.length > 140 || typeof detail !== 'string')
+      fail(400, 'Bản ghi nhật ký không hợp lệ.');
+    if (category === 'session' && action === 'Mở màn hình') return true;
+    return audit(db, account, category, action, detail);
+  }, pages([], SMALL));
+  router.get('/api/business-backup', ({ account }) => {
+    const backup = db.exportBusinessBackup(backupCompany(tenant));
+    audit(db, account, 'settings', 'Xuất bản sao lưu');
+    return backup;
+  }, pages(['settings']));
+  router.post('/api/business-backup/restore', ({ body, req }) =>
+    saveBusinessChange(tenant, req, { type: 'restore', backup: body.backup }), pages(['settings'], LARGE));
+  router.delete('/api/business-data', ({ body, req }) =>
+    saveBusinessChange(tenant, req, { type: 'delete', groups: body.groups },
+      Array.isArray(body.groups) ? body.groups.join(', ') : ''), pages(['settings'], SMALL));
+  router.get('/api/automatic-backups', () => backups.status(), pages(['settings']));
+  router.post('/api/automatic-backups/:fileName/restore', async ({ params, req }) => {
+    const location = await backups.findSnapshot(params.fileName);
+    if (!location) fail(404, 'Không tìm thấy bản sao lưu đã chọn.');
+    const saved = openDatabase(location, { readOnly: true });
+    let backup;
+    try { backup = saved.exportBusinessBackup(backupCompany(tenant)); }
+    finally { saved.close(); }
+    return saveBusinessChange(tenant, req, { type: 'restore', backup }, params.fileName);
+  }, pages(['settings']));
+  router.get('/api/status', () => ({ backend: 'lan', schemaVersion: db.status().schemaVersion }), pages([]));
+
+  return async (req, res, pathname) => {
+    if (req.headers['x-cong-no-lan'] !== '1' ||
+        (req.headers.origin && req.headers.origin !== (tls ? 'https://' : 'http://') + req.headers.host))
+      fail(403, 'Yêu cầu khác nguồn bị từ chối.');
+    const route = router.match(req.method, pathname);
+    if (!route) fail(404, 'Chức năng không tồn tại.');
+    let account;
+    if (!PUBLIC_ROUTES.has(req.method + ' ' + pathname)) {
+      account = access.actor(req, route.options.allowPending);
+      requirePage(account, route.options.pages);
+    }
+    const body = route.options.maxBodyBytes ? await readJsonBody(req, route.options.maxBodyBytes) : {};
+    if (!route.options.maxBodyBytes && (Number(req.headers['content-length']) > 0 || req.headers['transfer-encoding']))
+      fail(413, 'Yêu cầu này không nhận dữ liệu gửi lên.');
+    if (account && route.options.maxBodyBytes) {
+      account = access.actor(req, route.options.allowPending);
+      requirePage(account, route.options.pages);
+    }
+    const value = await route.handler({ req, res, params: route.params, body, account });
+    sendJson(res, 200, { ok: true, value });
+  };
+}
+
+module.exports = { createApi };

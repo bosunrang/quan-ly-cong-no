@@ -7,17 +7,24 @@
 - Electron cho ứng dụng Windows.
 - React + TypeScript cho giao diện.
 - Vite cho môi trường phát triển và build.
-- Bản desktop lưu dữ liệu bằng SQLite tích hợp sẵn; bản chạy trên trình duyệt dùng `localStorage` và IndexedDB để thử giao diện.
-- Dữ liệu được truy cập qua repository theo từng domain; seed chỉ dùng khi chưa có dữ liệu lưu.
+- Mọi giao diện gọi HTTP tới máy chủ; bản desktop tự chạy máy chủ loopback hoặc LAN và lưu SQLite.
+- Dữ liệu được truy cập qua repository theo từng domain; mọi chế độ đều bắt buộc đăng nhập.
 
 ## Chạy giao diện khi phát triển
 
 ```powershell
 pnpm install
+pnpm dev:init-admin
 pnpm dev
 ```
 
-Mở `http://127.0.0.1:5176` trên máy đang chạy app. Dùng lại đúng địa chỉ đã mở khi nhập dữ liệu vì bản phát triển lưu dữ liệu theo địa chỉ trình duyệt.
+Mở `http://127.0.0.1:5176`. Lệnh `dev:init-admin` chỉ chạy lần đầu: ghi lại mật khẩu tạm và đổi
+mật khẩu ở lần đăng nhập đầu. `pnpm dev` tự mở máy chủ loopback và chuyển tiếp HTTP qua Vite;
+dữ liệu ở `data/dev/cong-no.sqlite`, không phụ thuộc địa chỉ trình duyệt. Đặt `CONG_NO_DEV_DATA_DIR`
+để chọn kho phát triển khác; dùng cùng biến khi tạo admin và chạy dev.
+
+`pnpm build` rồi `pnpm preview` để thử bản build qua HTTP với cùng kho phát triển.
+Bản mở trực tiếp bằng `file://` và chế độ lưu nghiệp vụ trên trình duyệt đã được bỏ.
 
 ## Chạy qua mạng nội bộ trên ba máy chủ
 
@@ -40,7 +47,10 @@ Khi mở công ty lần đầu, tạo tài khoản quản trị nếu được h
 
 Bấm **X** để ẩn cửa sổ xuống khay và giữ máy chủ chạy. Bấm đúp biểu tượng để mở cửa sổ. Trong menu chuột phải, chọn **Địa chỉ cho máy nhân viên…** để xem địa chỉ kết nối. Chọn **Thoát và dừng máy chủ** để kết thúc máy chủ của công ty đó.
 
-Trên bản đã cài, tick **Khởi động cùng Windows** ở biểu tượng của từng công ty cần chạy. Máy chung cần tick cả hai biểu tượng. Sau khi đăng nhập vào tài khoản Windows đã bật tùy chọn, mỗi công ty lên thẳng dưới khay. Mở thủ công qua shortcut vẫn cho chọn công ty. Chọn **Bản cục bộ** nếu dùng dữ liệu Electron cục bộ.
+Trên bản đã cài, tick **Khởi động cùng Windows** ở biểu tượng của từng công ty cần chạy. Máy chung cần tick cả hai biểu tượng. Sau khi đăng nhập vào tài khoản Windows đã bật tùy chọn, mỗi công ty lên thẳng dưới khay. Mở thủ công qua shortcut vẫn cho chọn công ty. Chọn **Bản cục bộ** nếu dùng tệp `cong-no.sqlite` của Electron trước đây. App mở trực tiếp tệp
+đó qua máy chủ chỉ lắng nghe `127.0.0.1`, với cổng tự chọn; không tạo kho nghiệp vụ thay thế.
+Bản cục bộ cũng yêu cầu đăng nhập và dùng luồng tạo quản trị dưới khay như bản LAN.
+Các bản sao lưu JSON cục bộ cũ vẫn khôi phục được (`companyId: null`).
 
 Bản cài lưu dữ liệu LAN tại `%APPDATA%\QuanLyCongNo\lan`. Nếu máy đã có dữ liệu LAN ở thư mục khác, đặt biến môi trường người dùng `CONG_NO_LAN_DATA_DIR` thành đường dẫn tuyệt đối của thư mục đó trước khi mở bản cài. Mục khởi động Windows ghi nhớ thư mục đang dùng khi bật tùy chọn.
 
@@ -109,6 +119,7 @@ Lệnh trên build giao diện rồi mở ứng dụng Electron.
 pnpm check
 pnpm test:coverage
 pnpm build
+pnpm test:desktop
 ```
 
 `pnpm check` chạy lint, typecheck và toàn bộ test. Báo cáo coverage HTML được tạo tại `coverage/index.html`.
@@ -129,7 +140,7 @@ Trong **Dữ liệu MISA**, chọn file Excel **Sổ chi tiết bán hàng**, ki
 
 ## Người dùng và nhật ký sử dụng
 
-Với kho cục bộ, mở **Người dùng** để tạo tài khoản quản trị đầu tiên và bật đăng nhập. Với kho LAN, cấp quản trị đầu tiên bằng lệnh trên máy chủ. **Quản trị** có quyền truy cập toàn bộ thẻ. Khi tạo hoặc sửa tài khoản **Nhập liệu** hay **Chỉ xem**, chọn từng thẻ trong giới hạn của vai trò. Tài khoản cũ chưa có danh sách thẻ riêng dùng quyền mặc định của vai trò. Khóa tài khoản, đổi quyền truy cập hoặc đổi mật khẩu sẽ vô hiệu hóa phiên cũ của tài khoản đó.
+Với bản desktop cục bộ hoặc LAN, tạo quản trị đầu tiên trong hộp thoại khi mở app hoặc mục **Tạo tài khoản quản trị…** dưới khay. Với máy chủ chạy bằng lệnh, dùng `lan:init-admin`; kho phát triển dùng `dev:init-admin`. Mọi chế độ đều yêu cầu đăng nhập. **Quản trị** có quyền truy cập toàn bộ thẻ. Khi tạo hoặc sửa tài khoản **Nhập liệu** hay **Chỉ xem**, chọn từng thẻ trong giới hạn của vai trò. Tài khoản cũ chưa có danh sách thẻ riêng dùng quyền mặc định của vai trò. Khóa tài khoản, đổi quyền truy cập hoặc đổi mật khẩu sẽ vô hiệu hóa phiên cũ của tài khoản đó.
 
 Mật khẩu quản trị cấp khi tạo hoặc đặt lại cho người khác là mật khẩu tạm thời. Người dùng đăng nhập bằng mật khẩu đó, đặt mật khẩu riêng rồi mới vào các thẻ được cấp. Nhật ký ghi việc đổi mật khẩu mà không lưu nội dung mật khẩu.
 

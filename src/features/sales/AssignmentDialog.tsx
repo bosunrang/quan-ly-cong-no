@@ -17,6 +17,7 @@ interface AssignmentDialogProps {
 	employee: SalesEmployee;
 	error: string;
 	onClose: () => void;
+	busy?: boolean;
 	onConfirm: (effectiveFrom: string) => void;
 }
 
@@ -25,6 +26,7 @@ export function AssignmentDialog({
 	employee,
 	error,
 	onClose,
+	busy = false,
 	onConfirm,
 }: AssignmentDialogProps) {
 	const [effectiveFrom, setEffectiveFrom] = useState(todayLocal);
@@ -44,15 +46,23 @@ export function AssignmentDialog({
 			icon={<ArrowRightLeft className="icon-size-19" />}
 			className="assignment-dialog"
 			onClose={onClose}
+			disableClose={busy}
 			footer={
 				<>
-					<button className="button secondary" type="button" onClick={onClose}>
+					<button
+						className="button secondary"
+						type="button"
+						disabled={busy}
+						onClick={onClose}
+					>
 						Hủy
 					</button>
 					<button
 						className="button primary"
 						type="button"
-						disabled={!validDate || conflictingDate || !customers.length}
+						disabled={
+							busy || !validDate || conflictingDate || !customers.length
+						}
 						onClick={() => onConfirm(effectiveFrom)}
 					>
 						<CheckCircle2 className="icon-size-16" /> Xác nhận phân công

@@ -18,12 +18,14 @@ type ImportFilter = "all" | CustomerImportStatus;
 
 interface CustomerImportDialogProps {
 	preview: CustomerImportPreview;
+	busy?: boolean;
 	onClose: () => void;
 	onConfirm: () => void;
 }
 
 export function CustomerImportDialog({
 	preview,
+	busy = false,
 	onClose,
 	onConfirm,
 }: CustomerImportDialogProps) {
@@ -42,15 +44,21 @@ export function CustomerImportDialog({
 			icon={<FileSpreadsheet className="icon-size-19" />}
 			className="import-preview-dialog"
 			onClose={onClose}
+			disableClose={busy}
 			footer={
 				<>
-					<button className="button secondary" type="button" onClick={onClose}>
+					<button
+						className="button secondary"
+						type="button"
+						disabled={busy}
+						onClick={onClose}
+					>
 						Hủy
 					</button>
 					<button
 						className="button primary"
 						type="button"
-						disabled={importCount === 0}
+						disabled={busy || importCount === 0}
 						onClick={onConfirm}
 					>
 						<Upload className="icon-size-16" /> Xử lý {importCount} khách hàng

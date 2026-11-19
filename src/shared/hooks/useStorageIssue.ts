@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
 	consumeStorageIssue,
 	subscribeStorageIssues,
-} from "../storage/localStorage";
+} from "../storage/storageIssues";
 
 export function useStorageIssue() {
 	const [issue, setIssue] = useState<string>();

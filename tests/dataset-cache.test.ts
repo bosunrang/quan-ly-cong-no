@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readMisaSalesBook } from "../src/domain/misa/misa.sales-book.repository";
 import { readReceiptLedger } from "../src/domain/payments/receipt-ledger.repository";
+import * as transport from "../src/shared/api/client";
 import { forgetCachedDataset } from "../src/shared/storage/datasetCache";
 
 const book = {
@@ -28,9 +29,16 @@ function installBridge() {
 		ok: true,
 		value: stamps.get(key) ?? null,
 	}));
-	Object.defineProperty(window, "congNoDatabase", {
-		configurable: true,
-		value: { readDataset: vi.fn(), readDatasetAsync, datasetStamp },
+
+	vi.spyOn(transport, "api").mockImplementation(async (_method, path) => {
+		const key = path.startsWith("sales-book")
+			? "cong-no.misa-sales-book.v1"
+			: "cong-no.receipt-ledger.v1";
+		const response = path.endsWith("/stamp")
+			? await datasetStamp(key)
+			: await readDatasetAsync(key);
+		if (!response.ok) throw new Error((response as { error?: string }).error);
+		return response.value as never;
 	});
 	return { stamps, readDatasetAsync, datasetStamp };
 }
@@ -38,7 +46,7 @@ function installBridge() {
 describe("Bộ đệm sổ lớn dùng chung", () => {
 	afterEach(() => {
 		forgetCachedDataset();
-		Reflect.deleteProperty(window, "congNoDatabase");
+		vi.restoreAllMocks();
 	});
 
 	it("chỉ tải lại sổ bán hàng khi dấu thay đổi khác", async () => {
@@ -65,12 +73,12 @@ describe("Bộ đệm sổ lớn dùng chung", () => {
 		]);
 		expect(left).toBe(right);
 		expect(bridge.readDatasetAsync).toHaveBeenCalledTimes(1);
-		forgetCachedDataset("cong-no.receipt-ledger.v1");
+		forgetCachedDataset("receipt-ledger");
 		await readReceiptLedger();
 		expect(bridge.readDatasetAsync).toHaveBeenCalledTimes(2);
 	});
 
-	it("báo lỗi khi SQLite không trả được dấu thay đổi", async () => {
+	it("báo lỗi khi máy chủ không trả được dấu thay đổi", async () => {
 		const bridge = installBridge();
 		bridge.datasetStamp.mockResolvedValueOnce({
 			ok: false,

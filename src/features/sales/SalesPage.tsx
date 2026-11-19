@@ -36,6 +36,9 @@ export function SalesPage({
 		updateEmployee,
 		deactivateEmployee,
 		deleteEmployee,
+		busy,
+		loading,
+		error: loadError,
 	} = useSalesAssignments();
 	const activeEmployees = employees.filter(
 		(employee) => employee.status === "active",
@@ -261,15 +264,17 @@ export function SalesPage({
 			return next;
 		});
 	};
-	const confirmAssignment = (effectiveFrom: string) => {
+	const confirmAssignment = async (effectiveFrom: string) => {
 		if (!selectedEmployee) return;
-		const result = assignCustomers(
+		const result = await assignCustomers(
 			selectedCustomers,
 			selectedEmployee,
 			effectiveFrom,
 		);
-		if ("error" in result) {
-			setAssignmentError(result.error);
+		if (!result) {
+			setAssignmentError(
+				"Không thể lưu phân công. Kiểm tra thông báo và tải lại nếu dữ liệu đã thay đổi.",
+			);
 			return;
 		}
 		setAssignmentOpen(false);
@@ -278,6 +283,19 @@ export function SalesPage({
 			`Đã phân công ${result.count} khách hàng cho ${selectedEmployee.name}.`,
 		);
 	};
+
+	if (loadError)
+		return (
+			<Notice tone="danger" announce>
+				{loadError}
+			</Notice>
+		);
+	if (loading)
+		return (
+			<p className="panel empty-state" role="status">
+				Đang tải danh mục…
+			</p>
+		);
 
 	return (
 		<div className="page-stack sales-page">
@@ -367,6 +385,7 @@ export function SalesPage({
 
 			{employeeEditorId && (
 				<EmployeeFormDialog
+					busy={busy}
 					employees={employees}
 					linkableAccounts={linkableAccounts}
 					employee={
@@ -376,34 +395,37 @@ export function SalesPage({
 					}
 					assignedCount={employeeEditorAssignedCount}
 					onClose={() => setEmployeeEditorId(undefined)}
-					onSave={(draft) => {
+					onSave={async (draft) => {
 						if (employeeEditorId === "new") {
-							const employeeId = addEmployee(draft);
+							const employeeId = await addEmployee(draft);
 							if (!employeeId) return false;
 							setSelectedEmployeeId(employeeId);
 							showNotice("Đã thêm nhân viên mới.", 2400);
 							return true;
 						}
-						const saved = updateEmployee(employeeEditorId, draft);
+						const saved = await updateEmployee(employeeEditorId, draft);
 						if (saved) showNotice("Đã cập nhật hồ sơ nhân viên.", 2400);
-						return saved;
+						return Boolean(saved);
 					}}
 				/>
 			)}
 			{employeeToDeactivate && (
 				<EmployeeDeactivateDialog
+					busy={busy}
 					employee={employeeToDeactivate}
 					activeAssignmentCount={employeeToDeactivateOwnedCustomers.length}
 					historyCount={employeeToDeactivateHistoryCount}
 					latestActiveFrom={latestEmployeeAssignmentStart}
 					onClose={() => setEmployeeDeactivateId(undefined)}
-					onConfirm={(effectiveTo) => {
+					onConfirm={async (effectiveTo) => {
 						const employeeName = employeeToDeactivate.name;
 						const affectedCount = employeeToDeactivateOwnedCustomers.length;
 						const nextEmployee = activeEmployees.find(
 							(employee) => employee.id !== employeeToDeactivate.id,
 						);
-						if (!deactivateEmployee(employeeToDeactivate.id, effectiveTo))
+						if (
+							!(await deactivateEmployee(employeeToDeactivate.id, effectiveTo))
+						)
 							return;
 						if (selectedEmployeeId === employeeToDeactivate.id)
 							setSelectedEmployeeId(nextEmployee?.id ?? "");
@@ -418,12 +440,13 @@ export function SalesPage({
 			)}
 			{employeeToDelete && (
 				<EmployeeDeleteDialog
+					busy={busy}
 					employee={employeeToDelete}
 					activeAssignmentCount={employeeToDeleteOwnedCustomers.length}
 					historyCount={employeeToDeleteHistoryCount}
 					latestActiveFrom={latestEmployeeToDeleteAssignmentStart}
 					onClose={() => setEmployeeDeleteId(undefined)}
-					onConfirm={(effectiveTo) => {
+					onConfirm={async (effectiveTo) => {
 						const employeeName = employeeToDelete.name;
 						const affectedCount = employeeToDeleteOwnedCustomers.length;
 						const nextEmployee =
@@ -433,7 +456,8 @@ export function SalesPage({
 									employee.status === "active",
 							) ??
 							employees.find((employee) => employee.id !== employeeToDelete.id);
-						if (!deleteEmployee(employeeToDelete.id, effectiveTo)) return;
+						if (!(await deleteEmployee(employeeToDelete.id, effectiveTo)))
+							return;
 						if (selectedEmployeeId === employeeToDelete.id)
 							setSelectedEmployeeId(nextEmployee?.id ?? "");
 						setSelectedCustomerIds(new Set());
@@ -447,17 +471,18 @@ export function SalesPage({
 			)}
 			{customerToUnassign && selectedEmployee && assignmentToEnd && (
 				<UnassignDialog
+					busy={busy}
 					customer={customerToUnassign}
 					employee={selectedEmployee}
 					assignment={assignmentToEnd}
 					onClose={() => setUnassignCustomerId(undefined)}
-					onConfirm={(effectiveTo) => {
+					onConfirm={async (effectiveTo) => {
 						if (
-							!unassignCustomer(
+							!(await unassignCustomer(
 								customerToUnassign.id,
 								selectedEmployee.id,
 								effectiveTo,
-							)
+							))
 						)
 							return;
 						setUnassignCustomerId(undefined);
@@ -469,6 +494,7 @@ export function SalesPage({
 			)}
 			{assignmentOpen && selectedEmployee && (
 				<AssignmentDialog
+					busy={busy}
 					customers={selectedCustomers}
 					employee={selectedEmployee}
 					error={assignmentError}

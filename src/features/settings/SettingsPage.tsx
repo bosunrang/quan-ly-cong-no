@@ -9,10 +9,11 @@ import { Notice } from "../../shared/ui/Notice";
 import { SettingsDataPanel } from "./SettingsDataPanel";
 interface SettingsPageProps {
 	settings: AppSettings;
-	onSave: (settings: AppSettings) => boolean;
+	onSave: (settings: AppSettings) => Promise<boolean>;
 }
 
 export function SettingsPage({ settings, onSave }: SettingsPageProps) {
+	const [saving, setSaving] = useState(false);
 	const fileInput = useRef<HTMLInputElement>(null);
 	const [fileName, setFileName] = useState("Chưa chọn tệp");
 	const { notice, showNotice, dismissNotice } = useTransientNotice(2200);
@@ -45,22 +46,28 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 			<section className="settings-profile-grid">
 				<form
 					className="panel settings-form-card"
-					onSubmit={(event) => {
+					onSubmit={async (event) => {
 						event.preventDefault();
-						if (
-							onSave({
-								...settings,
-								companyName: companyName.trim(),
-								companyAddress: companyAddress.trim(),
-								bankAccounts: bankAccounts
-									.map((account) => account.trim())
-									.filter(Boolean),
-								accountingContact: accountingContact.trim(),
-								signatoryName: signatoryName.trim(),
-								signatoryTitle: signatoryTitle.trim(),
-							})
-						) {
-							showNotice("Đã lưu thông tin doanh nghiệp.");
+						if (saving) return;
+						setSaving(true);
+						try {
+							if (
+								await onSave({
+									...settings,
+									companyName: companyName.trim(),
+									companyAddress: companyAddress.trim(),
+									bankAccounts: bankAccounts
+										.map((account) => account.trim())
+										.filter(Boolean),
+									accountingContact: accountingContact.trim(),
+									signatoryName: signatoryName.trim(),
+									signatoryTitle: signatoryTitle.trim(),
+								})
+							) {
+								showNotice("Đã lưu thông tin doanh nghiệp.");
+							}
+						} finally {
+							setSaving(false);
 						}
 					}}
 				>
@@ -126,7 +133,7 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 								onChange={(event) => setSignatoryTitle(event.target.value)}
 							/>
 						</label>
-						<button className="button primary" type="submit">
+						<button className="button primary" type="submit" disabled={saving}>
 							<Save className="icon-size-16" /> Lưu thông tin
 						</button>
 					</div>
@@ -134,17 +141,23 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 
 				<form
 					className="panel settings-form-card"
-					onSubmit={(event) => {
+					onSubmit={async (event) => {
 						event.preventDefault();
-						if (
-							onSave({
-								...settings,
-								displayName: displayName.trim(),
-								tagline: tagline.trim(),
-								logoDataUrl,
-							})
-						) {
-							showNotice("Đã lưu tên và nhận diện phần mềm.");
+						if (saving) return;
+						setSaving(true);
+						try {
+							if (
+								await onSave({
+									...settings,
+									displayName: displayName.trim(),
+									tagline: tagline.trim(),
+									logoDataUrl,
+								})
+							) {
+								showNotice("Đã lưu tên và nhận diện phần mềm.");
+							}
+						} finally {
+							setSaving(false);
 						}
 					}}
 				>
@@ -168,7 +181,11 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 								/>
 							</label>
 							<div className="settings-brand-actions">
-								<button className="button primary" type="submit">
+								<button
+									className="button primary"
+									type="submit"
+									disabled={saving}
+								>
 									<Save className="icon-size-16" /> Lưu logo
 								</button>
 								<button

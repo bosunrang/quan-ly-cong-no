@@ -1,7 +1,6 @@
 import { randomId } from "../lib/randomId";
-import { getDatabaseBridge } from "./databaseBridge";
-import { lanEndpoint, requestLan } from "./lanStorage";
-import { reportStorageIssue } from "./localStorage";
+import { api } from "../api/client";
+import { reportStorageIssue } from "./storageIssues";
 
 export const activityCategories = {
 	session: "Truy cập",
@@ -24,8 +23,6 @@ export type ActivityEntry = {
 	detail: string;
 };
 
-const databaseName = "cong-no-activity";
-const storeName = "events";
 const changeEvent = "cong-no:activity-written";
 let currentActor: ActivityActor | undefined;
 
@@ -33,51 +30,16 @@ export function setActivityActor(actor?: ActivityActor) {
 	currentActor = actor && { id: actor.id, name: actor.name };
 }
 
-function withEventStore<T>(
-	mode: IDBTransactionMode,
-	work: (store: IDBObjectStore) => IDBRequest<T>,
-) {
-	return new Promise<T>((resolve, reject) => {
-		const open = indexedDB.open(databaseName, 1);
-		open.onupgradeneeded = () =>
-			open.result.createObjectStore(storeName, { keyPath: "id" });
-		open.onerror = () => reject(open.error);
-		open.onsuccess = () => {
-			const database = open.result;
-			try {
-				const transaction = database.transaction(storeName, mode);
-				const request = work(transaction.objectStore(storeName));
-				transaction.oncomplete = () => {
-					database.close();
-					resolve(request.result);
-				};
-				transaction.onabort = () => {
-					database.close();
-					reject(
-						transaction.error ??
-							new Error("Không thể hoàn tất giao dịch nhật ký."),
-					);
-				};
-			} catch (error) {
-				database.close();
-				reject(error);
-			}
-		};
-	});
-}
-
 async function appendActivity(entry: ActivityEntry) {
-	const bridge = getDatabaseBridge();
-	if (lanEndpoint()) {
-		const { category, action, detail } = entry;
-		await requestLan<boolean>("append-activity", { category, action, detail });
-	} else if (bridge) {
-		const result = bridge.appendActivity(entry);
-		if (!result.ok || result.value !== true)
-			throw new Error(result.error || "Không thể ghi nhật ký SQLite.");
-	} else {
-		await withEventStore("readwrite", (store) => store.add(entry));
-	}
+	const { category, action, detail } = entry;
+	if (
+		!(await api<boolean>("POST", "activities", {
+			category,
+			action,
+			detail,
+		}))
+	)
+		throw new Error("Không thể ghi nhật ký.");
 	window.dispatchEvent(new Event(changeEvent));
 }
 
@@ -123,25 +85,9 @@ export function subscribeActivities(refresh: () => void) {
 	};
 }
 
-async function readStoredActivities(): Promise<ActivityEntry[]> {
-	if (lanEndpoint()) return requestLan<ActivityEntry[]>("read-activities");
-	const bridge = getDatabaseBridge();
-	if (bridge) {
-		const result = bridge.readActivities();
-		if (!result.ok || !Array.isArray(result.value))
-			throw new Error(result.error || "Không thể đọc nhật ký SQLite.");
-		return result.value;
-	}
-	const events: ActivityEntry[] = await withEventStore("readonly", (store) =>
-		store.getAll(),
-	);
-	return events.sort(
-		(a, b) => b.time.localeCompare(a.time) || b.id.localeCompare(a.id),
-	);
-}
-
 export async function readActivities(): Promise<ActivityEntry[]> {
-	return (await readStoredActivities()).filter(
-		({ category, action }) => category !== "session" || action !== "Mở màn hình",
+	return (await api<ActivityEntry[]>("GET", "activities")).filter(
+		({ category, action }) =>
+			category !== "session" || action !== "Mở màn hình",
 	);
 }

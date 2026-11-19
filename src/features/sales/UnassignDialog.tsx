@@ -15,6 +15,7 @@ interface UnassignDialogProps {
 	employee: SalesEmployee;
 	assignment: SalesAssignment;
 	onClose: () => void;
+	busy?: boolean;
 	onConfirm: (effectiveTo: string) => void;
 }
 
@@ -23,6 +24,7 @@ export function UnassignDialog({
 	employee,
 	assignment,
 	onClose,
+	busy = false,
 	onConfirm,
 }: UnassignDialogProps) {
 	const [effectiveTo, setEffectiveTo] = useState(todayLocal);
@@ -37,15 +39,21 @@ export function UnassignDialog({
 			tone="warning"
 			className="unassign-dialog"
 			onClose={onClose}
+			disableClose={busy}
 			footer={
 				<>
-					<button className="button secondary" type="button" onClick={onClose}>
+					<button
+						className="button secondary"
+						type="button"
+						disabled={busy}
+						onClick={onClose}
+					>
 						Hủy
 					</button>
 					<button
 						className="button warning"
 						type="button"
-						disabled={invalidDate}
+						disabled={busy || invalidDate}
 						onClick={() => onConfirm(effectiveTo)}
 					>
 						<CalendarX2 className="icon-size-16" /> Kết thúc phụ trách

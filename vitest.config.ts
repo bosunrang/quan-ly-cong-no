@@ -19,7 +19,7 @@ export default defineConfig({
 				"src/domain/orders/order.model.ts",
 				"src/shared/lib/date.ts",
 				"src/features/customers/customer.import.ts",
-				"src/shared/storage/localStorage.ts",
+				"src/shared/api/client.ts",
 			],
 			thresholds: {
 				lines: 75,

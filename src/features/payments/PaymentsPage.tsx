@@ -27,6 +27,7 @@ import {
 	saveReceiptLedger,
 	subscribeReceiptLedger,
 } from "../../domain/payments/receipt-ledger.repository";
+import { useAsyncData } from "../../shared/hooks/useAsyncData";
 import { usePagination } from "../../shared/hooks/usePagination";
 import { useTransientNotice } from "../../shared/hooks/useTransientNotice";
 import { formatDateOnly, formatTimestamp } from "../../shared/lib/date";
@@ -46,6 +47,8 @@ type Action =
 	| { kind: "create" | "allocate" | "reverseReceipt" }
 	| { kind: "reverse"; id: string };
 
+const emptyCustomers: Awaited<ReturnType<typeof readCustomers>> = [];
+
 const statuses = {
 	reversed: { tone: "neutral", label: "Đã hủy khoản thu" },
 	closed: { tone: "success", label: "Đã phân bổ hết" },
@@ -57,7 +60,8 @@ const errorText = (reason: unknown) =>
 	reason instanceof Error ? reason.message : "Không thể hoàn tất thao tác.";
 
 export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
-	const [customers] = useState(readCustomers);
+	const directory = useAsyncData(readCustomers);
+	const customers = directory.data ?? emptyCustomers;
 	const [ledger, setLedger] = useState<ReceiptLedger>();
 	const [book, setBook] = useState<MisaSalesBook | null>();
 	const [loadError, setLoadError] = useState("");
@@ -184,7 +188,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 		update: (
 			current: ReceiptLedger,
 			latestBook: MisaSalesBook | null,
-		) => ReceiptLedger,
+		) => ReceiptLedger | Promise<ReceiptLedger>,
 		message: string,
 		{ requireBook = false, detail = "" } = {},
 	) {
@@ -208,7 +212,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 				);
 			}
 			const saved = await saveReceiptLedger(
-				update(current, latestBook),
+				await update(current, latestBook),
 				latestBook?.importedAt,
 			);
 			const receipt =
@@ -232,6 +236,18 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 		}
 	}
 
+	if (directory.error)
+		return (
+			<Notice tone="danger" announce>
+				{directory.error}
+			</Notice>
+		);
+	if (directory.loading)
+		return (
+			<p className="panel empty-state" role="status">
+				Đang tải khách hàng…
+			</p>
+		);
 	if (!ledger && loadError)
 		return (
 			<Notice tone="danger" title="Không thể mở sổ đối soát" announce>
@@ -560,8 +576,8 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 					error={error}
 					onClose={closeAction}
 					onSave={(customer, fields) =>
-						void commit((current) => {
-							const latest = readCustomers().find(
+						void commit(async (current) => {
+							const latest = (await readCustomers()).find(
 								(item) => item.id === customer.id,
 							);
 							if (!latest || latest.misaCode !== customer.misaCode)
@@ -584,13 +600,17 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 					onClose={closeAction}
 					onSave={(date, lines) =>
 						void commit(
-							(current, latestBook) => {
+							async (current, latestBook) => {
 								const receipt = current.receipts.find(
 									(item) => item.id === selected.id,
 								);
 								const candidates =
 									latestBook && receipt
-										? getReceiptInvoices(latestBook, receipt, readCustomers())
+										? getReceiptInvoices(
+												latestBook,
+												receipt,
+												await readCustomers(),
+											)
 										: [];
 								if (
 									lines.some(

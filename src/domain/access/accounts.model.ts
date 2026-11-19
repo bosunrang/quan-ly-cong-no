@@ -27,12 +27,6 @@ export interface LocalAccount {
 
 export type AccountProfile = Omit<LocalAccount, "proof">;
 
-export const localAdministrator = {
-	id: "local",
-	name: "Quản trị cục bộ",
-	role: "admin",
-} as const;
-
 export const roleOptions: AccountRole[] = ["admin", "editor", "viewer"];
 
 const grantablePages: Record<

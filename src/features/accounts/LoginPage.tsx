@@ -6,7 +6,7 @@ import {
 	type AppSettings,
 	defaultSettings,
 } from "../../domain/settings/settings.model";
-import { isInsecureLanConnection } from "../../shared/storage/lanStorage";
+import { isInsecureLanConnection } from "../../shared/api/client";
 import { Notice } from "../../shared/ui/Notice";
 import { AccessBrand } from "./AccessBrand";
 
@@ -57,7 +57,8 @@ export function LoginPage({
 				{insecure && (
 					<Notice tone="warning" title="Kết nối chưa mã hóa">
 						Mật khẩu được gửi qua mạng nội bộ ở dạng không mã hóa. Chỉ đăng nhập
-						trong mạng tin cậy và đề nghị quản trị bật HTTPS cho máy chủ công nợ.
+						trong mạng tin cậy và đề nghị quản trị bật HTTPS cho máy chủ công
+						nợ.
 					</Notice>
 				)}
 				{error && (

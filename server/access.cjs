@@ -162,10 +162,6 @@ function createAccess(db, company, tls) {
   }
   return {
     actor,
-    hasSession(req) {
-      const session = sessions.get(token(req));
-      return Boolean(session && session.until > Date.now());
-    },
     async handle(operation, payload, req, res) {
       if (operation === 'login') {
         const now = Date.now();

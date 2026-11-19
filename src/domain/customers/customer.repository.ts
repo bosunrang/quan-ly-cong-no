@@ -1,28 +1,28 @@
-import { isCustomerList, type Customer } from "./customer.model";
-import {
-	readVersionedLocalStorage,
-	writeVersionedLocalStorage,
-} from "../../shared/storage/localStorage";
+import { api } from "../../shared/api/client";
+import type { Customer, CustomerDraft } from "./customer.model";
 
-export const CUSTOMER_STORAGE_KEY = "cong-no.customers.v2";
-const STORAGE_VERSION = 2;
-
-export function readCustomers(): Customer[] {
-	return readVersionedLocalStorage({
-		key: CUSTOMER_STORAGE_KEY,
-		label: "khách hàng",
-		version: STORAGE_VERSION,
-		// Kho mới bắt đầu trống: dữ liệu mẫu không được lẫn vào sổ công nợ thật.
-		fallback: () => [],
-		isValid: isCustomerList,
+export function readCustomers() {
+	return api<Customer[]>("GET", "customers");
+}
+export function addCustomer(customer: CustomerDraft) {
+	return api<Customer>("POST", "customers", customer);
+}
+export function updateCustomer(current: Customer, customer: CustomerDraft) {
+	return api<Customer>("PATCH", `customers/${encodeURIComponent(current.id)}`, {
+		customer,
+		expected: current.updatedAt,
 	});
 }
-
-export function writeCustomers(customers: Customer[]): boolean {
-	return writeVersionedLocalStorage(
-		CUSTOMER_STORAGE_KEY,
-		STORAGE_VERSION,
-		customers,
-		"dữ liệu khách hàng",
+export function removeCustomer(customer: Customer) {
+	return api<boolean>(
+		"DELETE",
+		`customers/${encodeURIComponent(customer.id)}`,
+		{ expected: customer.updatedAt },
 	);
+}
+export function importCustomerRecords(
+	customers: CustomerDraft[],
+	source: "imports" | "misa-supplements",
+) {
+	return api<Customer[]>("POST", `customers/${source}`, { customers });
 }

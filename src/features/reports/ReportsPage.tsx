@@ -25,7 +25,7 @@ import { StatementDocument } from "./StatementDocument";
 type ReportData = {
 	book: Awaited<ReturnType<typeof readMisaSalesBook>>;
 	ledger: Awaited<ReturnType<typeof readReceiptLedger>>;
-	customers: ReturnType<typeof readCustomers>;
+	customers: Awaited<ReturnType<typeof readCustomers>>;
 };
 
 export function ReportsPage({
@@ -47,10 +47,13 @@ export function ReportsPage({
 
 	const refresh = useCallback(() => {
 		const pending = ++request.current;
-		void Promise.all([readMisaSalesBook(), readReceiptLedger()])
-			.then(([book, ledger]) => {
+		void Promise.all([
+			readMisaSalesBook(),
+			readReceiptLedger(),
+			readCustomers(),
+		])
+			.then(([book, ledger, customers]) => {
 				if (pending !== request.current) return;
-				const customers = readCustomers();
 				// Sổ chưa đổi thì giữ nguyên dữ liệu cũ để không tính lại khi chọn lại cửa sổ.
 				setData((previous) =>
 					previous?.book === book &&
@@ -254,10 +257,10 @@ export function ReportsPage({
 						</Notice>
 					)}
 					<StatementDocument
-					statement={statement}
-					seller={seller}
-					issuedOn={issuedOn}
-				/>
+						statement={statement}
+						seller={seller}
+						issuedOn={issuedOn}
+					/>
 				</>
 			) : (
 				<p className="panel empty-state">

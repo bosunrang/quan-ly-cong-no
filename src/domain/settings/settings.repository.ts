@@ -1,46 +1,27 @@
-import {
-	defaultSettings,
-	isAppSettings,
-	normalizeSettings,
-	type AppSettings,
-} from "./settings.model";
-import {
-	readVersionedLocalStorage,
-	reportStorageIssue,
-	writeVersionedLocalStorage,
-} from "../../shared/storage/localStorage";
+import { api } from "../../shared/api/client";
+import { type AppSettings, normalizeSettings } from "./settings.model";
 
-export const SETTINGS_STORAGE_KEY = "cong-no.settings.v2";
-const STORAGE_VERSION = 2;
-const MAX_LOGO_DATA_URL_LENGTH = 1_500_000;
-
-export function readSettings(): AppSettings {
-	return normalizeSettings(
-		readVersionedLocalStorage({
-			key: SETTINGS_STORAGE_KEY,
-			label: "cài đặt ứng dụng",
-			version: STORAGE_VERSION,
-			fallback: () => ({ ...defaultSettings }),
-			isValid: isAppSettings,
-		}),
-	);
+interface SettingsSnapshot {
+	data: AppSettings;
+	revision: string;
 }
 
-export function writeSettings(settings: AppSettings): boolean {
-	const normalized = normalizeSettings(settings);
-	if (
-		normalized.logoDataUrl &&
-		normalized.logoDataUrl.length > MAX_LOGO_DATA_URL_LENGTH
-	) {
-		reportStorageIssue(
+export async function readBranding() {
+	return normalizeSettings(await api<AppSettings>("GET", "branding"));
+}
+export async function readSettings() {
+	const result = await api<SettingsSnapshot>("GET", "settings");
+	return { ...result, data: normalizeSettings(result.data) };
+}
+export async function writeSettings(settings: AppSettings, expected: string) {
+	const data = normalizeSettings(settings);
+	if (data.logoDataUrl && data.logoDataUrl.length > 1_500_000)
+		throw new Error(
 			"Logo quá lớn để lưu an toàn. Vui lòng chọn ảnh nhỏ hơn 1 MB.",
 		);
-		return false;
-	}
-	return writeVersionedLocalStorage(
-		SETTINGS_STORAGE_KEY,
-		STORAGE_VERSION,
-		normalized,
-		"cài đặt ứng dụng",
-	);
+	const result = await api<SettingsSnapshot>("PUT", "settings", {
+		data,
+		expected,
+	});
+	return { ...result, data: normalizeSettings(result.data) };
 }

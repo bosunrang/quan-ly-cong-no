@@ -34,6 +34,8 @@ export function CustomersPage() {
 	const {
 		customers,
 		salesEmployees,
+		loading,
+		error: loadError,
 		saveCustomer,
 		importCustomers,
 		deleteCustomer,
@@ -118,7 +120,10 @@ export function CustomersPage() {
 	};
 	const handleSave = async (draft: CustomerDraft, customerId?: string) => {
 		try {
-			const saved = await saveCustomer(draft, customerId);
+			const saved = await saveCustomer(
+				draft,
+				customerId ? (formCustomer ?? undefined) : undefined,
+			);
 			if (saved)
 				showNotice(
 					customerId
@@ -153,6 +158,19 @@ export function CustomersPage() {
 			setImportLoading(false);
 		}
 	};
+
+	if (loadError)
+		return (
+			<Notice tone="danger" announce>
+				{loadError}
+			</Notice>
+		);
+	if (loading)
+		return (
+			<p className="panel empty-state" role="status">
+				Đang tải danh mục…
+			</p>
+		);
 
 	return (
 		<div className="page-stack customers-page">
@@ -270,14 +288,28 @@ export function CustomersPage() {
 			{importPreview && (
 				<CustomerImportDialog
 					preview={importPreview}
+					busy={importLoading}
 					onClose={() => setImportPreview(undefined)}
-					onConfirm={() => {
+					onConfirm={async () => {
+						if (importLoading) return;
 						const importableRows = importPreview.rows.filter(
 							(row) => row.status === "ready",
 						);
-						if (importCustomers(importableRows.map((row) => row.draft))) {
+						setImportLoading(true);
+						try {
+							await importCustomers(importableRows.map((row) => row.draft));
 							setImportPreview(undefined);
 							showNotice(`Đã thêm ${importPreview.readyCount} khách hàng.`);
+						} catch (reason) {
+							showNotice(
+								reason instanceof Error
+									? reason.message
+									: "Không thể nhập khách hàng.",
+								6000,
+								"danger",
+							);
+						} finally {
+							setImportLoading(false);
 						}
 					}}
 				/>
@@ -289,7 +321,7 @@ export function CustomersPage() {
 					onConfirm={async () => {
 						const removedName = customerToDelete.name;
 						try {
-							if (await deleteCustomer(customerToDelete.id)) {
+							if (await deleteCustomer(customerToDelete)) {
 								setDeleteCustomerId(undefined);
 								setDetailCustomerId(undefined);
 								showNotice(`Đã xóa khách hàng ${removedName}.`);
@@ -299,7 +331,7 @@ export function CustomersPage() {
 							showNotice(
 								error instanceof Error
 									? error.message
-									: "Không thể kiểm tra sổ đối soát trước khi xóa.",
+									: "Không thể xóa khách hàng.",
 								6000,
 								"danger",
 							);

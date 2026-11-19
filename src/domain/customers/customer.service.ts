@@ -68,3 +68,9 @@ export function updateCustomerFromDraft(
 		updatedAt: new Date().toISOString(),
 	};
 }
+
+export function customerImportFields(
+	draft: CustomerImportDraft,
+): CustomerDraft {
+	return { ...draft, taxCode: "", status: "active" };
+}

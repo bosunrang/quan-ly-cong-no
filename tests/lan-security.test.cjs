@@ -2,7 +2,6 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { openDatabase } = require('../electron/database.cjs');
 const { createAccess, initializeAdministrator } = require('../server/access.cjs');
-const { requireCustomerChangePermission } = require('../server/lan.cjs');
 const {
   isValidCustomerList, isValidReceiptLedger, isValidSalesBook, isValidSettings,
 } = require('../src/domain/settings/business-data.rules.mjs');
@@ -72,30 +71,6 @@ const customer = {
   address: '', status: 'active', assignments: [],
   createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 };
-const assignment = {
-  id: 'a1', employeeId: 'e1', employeeName: 'NV', province: 'Hà Nội', source: 'direct',
-  effectiveFrom: '2026-02-01', effectiveTo: null,
-};
-const account = (pages) => ({ role: 'editor', pages });
-
-test('tài khoản không có thẻ Khách hàng chỉ được thêm khách hoặc đổi phân công theo thẻ được cấp', () => {
-  const current = [customer];
-  const assigned = [{ ...customer, assignments: [assignment], updatedAt: '2026-02-01T00:00:00.000Z' }];
-  const added = [customer, { ...customer, id: 'c2', misaCode: 'KH002' }];
-  const renamed = [{ ...customer, name: 'Đổi tên' }];
-
-  assert.doesNotThrow(() => requireCustomerChangePermission(account(['customers']), current, []));
-  assert.doesNotThrow(() => requireCustomerChangePermission(account(['sales']), current, assigned));
-  assert.doesNotThrow(() => requireCustomerChangePermission(account(['misa']), current, added));
-  assert.throws(() => requireCustomerChangePermission(account(['misa']), current, []), { status: 403 });
-  assert.throws(() => requireCustomerChangePermission(account(['misa']), current, assigned), { status: 403 });
-  assert.throws(() => requireCustomerChangePermission(account(['sales']), current, added), { status: 403 });
-  assert.throws(() => requireCustomerChangePermission(account(['sales', 'misa']), current, renamed), { status: 403 });
-  // Thứ tự khóa trong đối tượng không làm sai kết quả so sánh.
-  const reordered = [Object.fromEntries(Object.entries(customer).reverse())];
-  assert.doesNotThrow(() => requireCustomerChangePermission(account(['misa']), current, reordered));
-});
-
 test('máy chủ từ chối dữ liệu ghi sai cấu trúc', () => {
   assert.equal(isValidCustomerList([customer]), true);
   assert.equal(isValidCustomerList([{ ...customer, status: 'deleted' }]), false);

@@ -12,6 +12,7 @@ interface EmployeeDeleteDialogProps {
 	historyCount: number;
 	latestActiveFrom?: string;
 	onClose: () => void;
+	busy?: boolean;
 	onConfirm: (effectiveTo: string) => void;
 }
 
@@ -21,6 +22,7 @@ export function EmployeeDeleteDialog({
 	historyCount,
 	latestActiveFrom,
 	onClose,
+	busy = false,
 	onConfirm,
 }: EmployeeDeleteDialogProps) {
 	const [effectiveTo, setEffectiveTo] = useState(todayLocal);
@@ -37,15 +39,21 @@ export function EmployeeDeleteDialog({
 			tone="danger"
 			className="employee-delete-dialog"
 			onClose={onClose}
+			disableClose={busy}
 			footer={
 				<>
-					<button className="button secondary" type="button" onClick={onClose}>
+					<button
+						className="button secondary"
+						type="button"
+						disabled={busy}
+						onClick={onClose}
+					>
 						Hủy
 					</button>
 					<button
 						className="button danger"
 						type="button"
-						disabled={invalidDate}
+						disabled={busy || invalidDate}
 						onClick={() => onConfirm(effectiveTo)}
 					>
 						<Trash2 className="icon-size-16" /> Xóa nhân viên

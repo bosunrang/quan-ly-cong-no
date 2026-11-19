@@ -1,11 +1,12 @@
-import { afterEach, expect, it } from "vitest";
+import * as transport from "../src/shared/api/client";
+import { afterEach, expect, it, vi } from "vitest";
 import {
 	type ActivityEntry,
 	readActivities,
 } from "../src/shared/storage/activityLog";
 
 afterEach(() => {
-	Reflect.deleteProperty(window, "congNoDatabase");
+	vi.restoreAllMocks();
 });
 
 it("ẩn lịch sử chuyển thẻ nhưng giữ các thao tác quan trọng", async () => {
@@ -26,12 +27,7 @@ it("ẩn lịch sử chuyển thẻ nhưng giữ các thao tác quan trọng", a
 		action: "Nhập sổ bán hàng MISA",
 		detail: "Sổ bán hàng.xlsx",
 	};
-	Object.defineProperty(window, "congNoDatabase", {
-		configurable: true,
-		value: {
-			readActivities: () => ({ ok: true, value: [entry, login, importBook] }),
-		},
-	});
+	vi.spyOn(transport, "api").mockResolvedValue([entry, login, importBook]);
 
 	expect(await readActivities()).toEqual([login, importBook]);
 });

@@ -45,8 +45,8 @@ type Row = CustomerRow | Summary["periodReceipts"][number];
 type DashboardData = {
 	book: Awaited<ReturnType<typeof readMisaSalesBook>>;
 	ledger: Awaited<ReturnType<typeof readReceiptLedger>>;
-	customers: ReturnType<typeof readCustomers>;
-	employees: ReturnType<typeof readSalesEmployees>;
+	customers: Awaited<ReturnType<typeof readCustomers>>;
+	employees: Awaited<ReturnType<typeof readSalesEmployees>>;
 };
 
 const emptyRows: Row[] = [];
@@ -76,11 +76,14 @@ export function Dashboard({
 
 	const refresh = useCallback(() => {
 		const current = ++request.current;
-		void Promise.all([readMisaSalesBook(), readReceiptLedger()])
-			.then(([book, ledger]) => {
+		void Promise.all([
+			readMisaSalesBook(),
+			readReceiptLedger(),
+			readCustomers(),
+			readSalesEmployees(),
+		])
+			.then(([book, ledger, customers, employees]) => {
 				if (current !== request.current) return;
-				const customers = readCustomers();
-				const employees = readSalesEmployees();
 				// Sổ chưa đổi thì giữ nguyên dữ liệu cũ để không tính lại khi chọn lại cửa sổ.
 				setData((previous) =>
 					previous?.book === book &&

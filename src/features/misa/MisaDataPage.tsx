@@ -11,16 +11,15 @@ import {
 import { normalizeVietnamese } from "../../domain/customers/customer.province";
 import {
 	readCustomers,
-	writeCustomers,
+	importCustomerRecords,
 } from "../../domain/customers/customer.repository";
-import { createCustomerFromImport } from "../../domain/customers/customer.service";
+import { customerImportFields } from "../../domain/customers/customer.service";
 import type { MisaSalesBook } from "../../domain/misa/misa.sales-book";
 import {
+	readAllocatedDocuments,
 	readMisaSalesBook,
 	writeMisaSalesBook,
 } from "../../domain/misa/misa.sales-book.repository";
-import { allocatedDocumentNumbers } from "../../domain/payments/receipt-ledger";
-import { readReceiptLedger } from "../../domain/payments/receipt-ledger.repository";
 import { usePagination } from "../../shared/hooks/usePagination";
 import { formatTimestamp } from "../../shared/lib/date";
 import { captureActivity } from "../../shared/storage/activityLog";
@@ -127,15 +126,19 @@ export function MisaDataPage() {
 			const [source, saved, ledger] = await Promise.all([
 				parseMisaSalesWorkbook(file),
 				readMisaSalesBook(),
-				addCustomers ? undefined : readReceiptLedger(),
+				addCustomers ? undefined : readAllocatedDocuments(),
 			]);
 			setBook(saved);
-			if (ledger) setAllocatedDocuments(allocatedDocumentNumbers(ledger));
+			if (ledger) setAllocatedDocuments(ledger);
 			setImportChoices({});
 			if (addCustomers && saved) {
 				setSupplement({
 					source,
-					plan: planMisaCustomerSupplement(saved, source, readCustomers()),
+					plan: planMisaCustomerSupplement(
+						saved,
+						source,
+						await readCustomers(),
+					),
 				});
 			} else if (!addCustomers) {
 				setPreview(source);
@@ -163,28 +166,24 @@ export function MisaDataPage() {
 					"Sổ bán hàng đã thay đổi. Hãy chọn lại file MISA để đối chiếu.",
 				);
 			}
-			const customers = readCustomers();
+			const customers = await readCustomers();
 			const plan = planMisaCustomerSupplement(
 				saved,
 				supplement.source,
 				customers,
 			);
 			// Saving the catalog first makes a retry safe if the sales-book write fails.
-			if (
-				plan.additions.length &&
-				!writeCustomers([
-					...customers,
-					...plan.additions.map(createCustomerFromImport),
-				])
-			) {
-				throw new Error("Không thể lưu danh mục khách hàng.");
-			}
-			if (plan.additions.length)
+			if (plan.additions.length) {
+				await importCustomerRecords(
+					plan.additions.map(customerImportFields),
+					"misa-supplements",
+				);
 				void log(
 					"data",
 					"Bổ sung khách hàng từ MISA",
 					`${plan.additions.length} khách hàng · ${supplement.source.book.fileName}`,
 				);
+			}
 			const updated = plan.linkedRows
 				? await writeMisaSalesBook(plan.book, saved.importedAt)
 				: saved;
@@ -219,7 +218,7 @@ export function MisaDataPage() {
 			let plan = importPlan;
 			if (plan.removedCount) {
 				// Kiểm tra lại phân bổ ngay trước khi thay hoặc gỡ chứng từ đã lưu.
-				const latest = allocatedDocumentNumbers(await readReceiptLedger());
+				const latest = await readAllocatedDocuments();
 				plan = planMisaSalesImport(book, preview, {
 					...importChoices,
 					allocatedDocuments: latest,

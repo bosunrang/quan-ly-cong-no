@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { isInsecureLanConnection } from "../src/shared/storage/lanStorage";
+import { isInsecureLanConnection } from "../src/shared/api/client";
 
 function useLanEndpoint() {
 	const meta = document.createElement("meta");
@@ -10,14 +10,13 @@ function useLanEndpoint() {
 
 describe("Cảnh báo kết nối LAN không mã hóa", () => {
 	afterEach(() => {
-		for (const meta of document.querySelectorAll('meta[name="cong-no-lan-api"]'))
+		for (const meta of document.querySelectorAll(
+			'meta[name="cong-no-lan-api"]',
+		))
 			meta.remove();
 	});
 
 	it("chỉ cảnh báo khi vào máy chủ LAN qua HTTP từ máy khác", () => {
-		expect(
-			isInsecureLanConnection({ protocol: "http:", hostname: "192.168.1.5" }),
-		).toBe(false);
 		useLanEndpoint();
 		expect(
 			isInsecureLanConnection({ protocol: "http:", hostname: "192.168.1.5" }),

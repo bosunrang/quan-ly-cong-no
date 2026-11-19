@@ -40,13 +40,18 @@ function showLanAddresses(company, settings) {
 }
 
 async function startLanHost(company, { createWindow, configureSession }) {
+  const local = company === 'local';
+  if (local) company = Object.freeze({ id: 'local', name: 'Bản cục bộ', port: 0 });
+  const localDirectory = app.getPath('userData');
   const defaultDirectory = app.isPackaged
     ? join(app.getPath('appData'), 'QuanLyCongNo', 'lan')
     : join(app.getAppPath(), 'data', 'lan');
-  const settings = lanOptions(process.argv, defaultDirectory);
+  const settings = local
+    ? { directory: localDirectory, databasePath: join(localDirectory, 'cong-no.sqlite'), staticRoot: join(app.getAppPath(), 'dist'), host: '127.0.0.1', loopback: true }
+    : lanOptions(process.argv, defaultDirectory);
   const browserProfile = join(app.getPath('userData'), 'lan-profiles', company.id);
   mkdirSync(browserProfile, { recursive: true });
-  app.setPath('userData', browserProfile);
+  if (!local) app.setPath('userData', browserProfile);
   const hidden = process.argv.includes('--hidden');
   if (!app.requestSingleInstanceLock({ hidden })) return app.quit();
   configureSession();
@@ -67,9 +72,10 @@ async function startLanHost(company, { createWindow, configureSession }) {
   let tray;
   let creatingAdministrator = false;
   const protocol = settings.tls ? 'https' : 'http';
-  const url = `${protocol}://127.0.0.1:${company.port}/`;
-  const startup = loginItem(company, settings, process.execPath);
-  const canAutoStart = app.isPackaged && process.platform === 'win32';
+  const port = server.address().port;
+  const url = `${protocol}://127.0.0.1:${port}/`;
+  const startup = local ? undefined : loginItem(company, settings, process.execPath);
+  const canAutoStart = !local && app.isPackaged && process.platform === 'win32';
   const backups = backupDirectory(settings.directory, company);
 
   app.on('before-quit', () => { quitting = true; });
@@ -97,6 +103,12 @@ async function startLanHost(company, { createWindow, configureSession }) {
     window = createWindow({ url });
     window.on('close', (event) => {
       if (quitting) return;
+      // Bản cục bộ chỉ phục vụ máy này: đóng cửa sổ là thoát hẳn và dừng máy chủ.
+      // Máy chủ LAN thì ẩn xuống khay để các máy trạm vẫn dùng được.
+      if (local) {
+        app.quit();
+        return;
+      }
       event.preventDefault();
       window.hide();
     });
@@ -136,11 +148,12 @@ async function startLanHost(company, { createWindow, configureSession }) {
 
   const icon = nativeImage.createFromPath(join(__dirname, 'lan-icon.png'));
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip(`${company.name} · Công nợ · Cổng ${company.port}${settings.tls ? '' : ' · HTTP chưa mã hóa'}`);
+  tray.setToolTip(`${company.name} · Công nợ · Cổng ${port}${settings.loopback || settings.tls ? '' : ' · HTTP chưa mã hóa'}`);
   function updateMenu() {
     const items = [
       { label: 'Mở ứng dụng', click: showWindow },
-      { label: 'Địa chỉ cho máy nhân viên…', click: () => showLanAddresses(company, settings) },
+      // Bản cục bộ chỉ nghe trên 127.0.0.1 nên không có địa chỉ cho máy khác.
+      ...(local ? [] : [{ label: 'Địa chỉ cho máy nhân viên…', click: () => showLanAddresses(company, settings) }]),
       {
         label: 'Mở thư mục sao lưu…',
         click: async () => {

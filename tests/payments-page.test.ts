@@ -16,7 +16,7 @@ import { PaymentsPage } from "../src/features/payments/PaymentsPage";
 import { ReceiptAllocationDialog } from "../src/features/payments/ReceiptAllocationDialog";
 
 vi.mock("../src/domain/customers/customer.repository", () => ({
-	readCustomers: () => [],
+	readCustomers: async () => [],
 }));
 vi.mock("../src/domain/misa/misa.sales-book.repository", () => ({
 	readMisaSalesBook: async () => null,
