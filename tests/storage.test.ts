@@ -8,7 +8,7 @@ import {
 describe("versioned local storage", () => {
 	beforeEach(() => {
 		window.localStorage.clear();
-		Reflect.deleteProperty(window, "mktDatabase");
+		Reflect.deleteProperty(window, "congNoDatabase");
 		consumeStorageIssue();
 		vi.restoreAllMocks();
 	});
@@ -18,7 +18,7 @@ describe("versioned local storage", () => {
 			"items.v2",
 			JSON.stringify({ version: 2, data: ["local"] }),
 		);
-		Object.defineProperty(window, "mktDatabase", {
+		Object.defineProperty(window, "congNoDatabase", {
 			configurable: true,
 			value: {
 				readDataset: vi.fn(() => ({
@@ -51,7 +51,7 @@ describe("versioned local storage", () => {
 			JSON.stringify({ version: 2, data: ["local"] }),
 		);
 		const writeDataset = vi.fn(() => ({ ok: true, value: true }));
-		Object.defineProperty(window, "mktDatabase", {
+		Object.defineProperty(window, "congNoDatabase", {
 			configurable: true,
 			value: {
 				readDataset: vi.fn(() => ({ ok: true, value: null })),
@@ -74,37 +74,51 @@ describe("versioned local storage", () => {
 
 		expect(result).toEqual(["local"]);
 		expect(writeDataset).toHaveBeenCalledWith("items.v2", 2, ["local"]);
-		expect(window.localStorage.getItem("items.v2")).not.toBeNull();
+		// Bản cũ được cất sang khóa dự phòng và không còn được đọc lại.
+		expect(window.localStorage.getItem("items.v2")).toBeNull();
+		expect(
+			JSON.parse(
+				window.localStorage.getItem("items.v2.backup-before-sqlite") ?? "",
+			),
+		).toEqual({ version: 2, data: ["local"] });
 	});
 
-	it("migrate khóa cũ sang envelope có version", () => {
-		window.localStorage.setItem("legacy.items", JSON.stringify(["A", "B"]));
-
-		const result = readVersionedLocalStorage({
-			key: "items.v2",
-			label: "danh sách thử nghiệm",
-			version: 2,
-			fallback: () => [],
-			isValid: (value): value is string[] =>
-				Array.isArray(value) && value.every((item) => typeof item === "string"),
-			legacy: [
-				{
-					key: "legacy.items",
-					migrate: (value) =>
-						Array.isArray(value)
-							? value.filter((item): item is string => typeof item === "string")
-							: undefined,
+	it.each([
+		["lỗi đọc", { ok: false, error: "disk" }],
+		["sai cấu trúc", { ok: true, value: { version: 2, data: [1] } }],
+	])(
+		"không dùng bản trên trình duyệt thay SQLite khi SQLite %s",
+		(_, response) => {
+			window.localStorage.setItem(
+				"items.v2",
+				JSON.stringify({ version: 2, data: ["cu"] }),
+			);
+			const writeDataset = vi.fn(() => ({ ok: true, value: true }));
+			Object.defineProperty(window, "congNoDatabase", {
+				configurable: true,
+				value: {
+					readDataset: vi.fn(() => response),
+					writeDataset,
+					status: vi.fn(() => ({
+						ok: true,
+						value: { backend: "sqlite", schemaVersion: 1 },
+					})),
 				},
-			],
-		});
-
-		expect(result).toEqual(["A", "B"]);
-		expect(JSON.parse(window.localStorage.getItem("items.v2") ?? "")).toEqual({
-			version: 2,
-			data: ["A", "B"],
-		});
-		expect(window.localStorage.getItem("legacy.items")).not.toBeNull();
-	});
+			});
+			expect(() =>
+				readVersionedLocalStorage({
+					key: "items.v2",
+					label: "danh sách thử nghiệm",
+					version: 2,
+					fallback: () => [],
+					isValid: (value): value is string[] =>
+						Array.isArray(value) &&
+						value.every((item) => typeof item === "string"),
+				}),
+			).toThrow("Dữ liệu chưa bị thay đổi");
+			expect(writeDataset).not.toHaveBeenCalled();
+		},
+	);
 
 	it("cách ly JSON lỗi trước khi dùng fallback", () => {
 		vi.spyOn(console, "error").mockImplementation(() => undefined);

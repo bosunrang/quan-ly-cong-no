@@ -1,0 +1,70 @@
+.invoice-lines-dialog {
+	width: min(var(--layout-760), 100%);
+}
+
+.invoice-lines-source {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-6) var(--space-12);
+	margin: 0;
+	color: var(--text-body);
+	font-size: var(--type-body-sm);
+}
+
+.invoice-lines-balances {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-8) var(--space-24);
+	margin: 0;
+	padding: var(--space-8) var(--space-11);
+	border: var(--border-width) solid var(--line);
+	border-radius: var(--control-radius);
+	background: var(--surface-subtle);
+	font-size: var(--type-body-sm);
+}
+
+.invoice-lines-balances > div {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-8);
+}
+
+.invoice-lines-balances dt {
+	color: var(--muted);
+}
+
+.invoice-lines-balances dd {
+	margin: 0;
+	color: var(--ink);
+	font-weight: 750;
+	font-variant-numeric: tabular-nums;
+}
+
+.invoice-lines-table {
+	max-height: 55vh;
+	border: var(--border-width) solid var(--line);
+	border-radius: var(--control-radius);
+}
+
+.invoice-lines-table table {
+	min-width: var(--layout-520);
+}
+
+.invoice-lines-table th {
+	position: sticky;
+	top: 0;
+	z-index: var(--z-sticky);
+}
+
+.invoice-lines-table :is(th, td):not(:first-child) {
+	text-align: center;
+}
+
+.invoice-lines-table td:nth-child(n+3) {
+	font-variant-numeric: tabular-nums;
+}
+
+.invoice-lines-table td:first-child {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}

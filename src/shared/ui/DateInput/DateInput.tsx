@@ -1,6 +1,15 @@
 import { CalendarDays } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+	type KeyboardEvent as ReactKeyboardEvent,
+	useEffect,
+	useId,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
+import { keepTabInside } from "../Dialog/useDialogKeyboard";
+import { cssPixels } from "../../lib/cssPixels";
 import {
 	formatDateOnly,
 	isoDateFromParts,
@@ -53,6 +62,8 @@ export function DateInput({
 }: DateInputProps) {
 	const boxRef = useRef<HTMLSpanElement>(null);
 	const popupRef = useRef<HTMLDivElement>(null);
+	const triggerRef = useRef<HTMLButtonElement>(null);
+	const popupId = useId();
 	const [text, setText] = useState(() => formatDate(value));
 	const [open, setOpen] = useState(false);
 	const [mode, setMode] = useState<"day" | "month">("day");
@@ -61,7 +72,7 @@ export function DateInput({
 		const [year, month] = iso.split("-").map(Number);
 		return new Date(year, month - 1, 1);
 	});
-	const [position, setPosition] = useState({ left: 8, top: 8 });
+	const [position, setPosition] = useState<{ left: number; top: number }>();
 
 	useEffect(() => setText(formatDate(value)), [value]);
 
@@ -71,17 +82,30 @@ export function DateInput({
 		if (!open || !boxRef.current || !popupRef.current) return;
 		const rect = boxRef.current.getBoundingClientRect();
 		const popup = popupRef.current;
-		const width = 258;
+		const popupStyle = getComputedStyle(popup);
+		const padding = cssPixels(popupStyle, "--popup-viewport-padding");
+		const gap = cssPixels(popupStyle, "--calendar-anchor-gap");
+		const width = popup.getBoundingClientRect().width;
 		const left = Math.min(
-			Math.max(8, rect.left),
-			window.innerWidth - width - 8,
+			Math.max(padding, rect.left),
+			window.innerWidth - width - padding,
 		);
 		const top = Math.min(
-			rect.bottom + 6,
-			window.innerHeight - popup.offsetHeight - 8,
+			rect.bottom + gap,
+			window.innerHeight - popup.offsetHeight - padding,
 		);
-		setPosition({ left, top: Math.max(8, top) });
+		setPosition({ left, top: Math.max(padding, top) });
 	}, [mode, open, view]);
+
+	useLayoutEffect(() => {
+		const popup = popupRef.current;
+		if (!open || !popup || popup.contains(document.activeElement)) return;
+		const grid = mode === "day" ? ".vn-date-grid" : ".vn-month-grid";
+		(popup.querySelector<HTMLButtonElement>(`${grid} button.selected`) ??
+			popup.querySelector<HTMLButtonElement>("button"))?.focus({
+			preventScroll: true,
+		});
+	}, [mode, open]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -93,14 +117,9 @@ export function DateInput({
 			)
 				setOpen(false);
 		};
-		const closeEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") setOpen(false);
-		};
 		document.addEventListener("mousedown", closeOutside);
-		document.addEventListener("keydown", closeEscape);
 		return () => {
 			document.removeEventListener("mousedown", closeOutside);
-			document.removeEventListener("keydown", closeEscape);
 		};
 	}, [open]);
 
@@ -119,11 +138,24 @@ export function DateInput({
 		else setText(formatDate(value));
 	};
 
+	const closePicker = () => {
+		setOpen(false);
+		triggerRef.current?.focus({ preventScroll: true });
+	};
+
 	const pick = (iso: string) => {
 		onChange(iso);
 		setText(formatDate(iso));
-		setOpen(false);
+		closePicker();
 	};
+
+	function closePickerOnEscape(event: ReactKeyboardEvent) {
+		if (event.key !== "Escape" || !open) return;
+		event.preventDefault();
+		event.stopPropagation();
+		if (popupRef.current?.contains(document.activeElement)) closePicker();
+		else setOpen(false);
+	}
 
 	const moveMonth = (step: number) =>
 		setView(
@@ -156,7 +188,13 @@ export function DateInput({
 			className="vn-date-picker"
 			style={position}
 			role="dialog"
+			id={popupId}
 			aria-label="Chọn ngày"
+			tabIndex={-1}
+			onKeyDown={(event) => {
+				closePickerOnEscape(event);
+				keepTabInside(event);
+			}}
 		>
 			{mode === "month" ? (
 				<>
@@ -284,7 +322,7 @@ export function DateInput({
 				<button type="button" onClick={() => pick(today)}>
 					Hôm nay
 				</button>
-				<button type="button" onClick={() => setOpen(false)}>
+				<button type="button" onClick={closePicker}>
 					Đóng
 				</button>
 			</div>
@@ -305,14 +343,21 @@ export function DateInput({
 					onChange={(event) => setText(event.target.value)}
 					onBlur={commitText}
 					onKeyDown={(event) => {
+						closePickerOnEscape(event);
 						if (event.key === "Enter") commitText();
 					}}
 				/>
 				<button
+					ref={triggerRef}
 					className="datepick"
 					type="button"
 					title="Chọn ngày"
+					aria-label="Chọn ngày"
+					aria-haspopup="dialog"
+					aria-expanded={open}
+					aria-controls={open ? popupId : undefined}
 					onClick={openPicker}
+					onKeyDown={closePickerOnEscape}
 					disabled={disabled}
 				>
 					<CalendarDays />

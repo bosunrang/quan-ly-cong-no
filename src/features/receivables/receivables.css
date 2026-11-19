@@ -1,0 +1,161 @@
+.receivable-toolbar {
+	justify-content: flex-start;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: var(--space-9);
+}
+
+.receivable-toolbar .ui-field {
+	color: var(--muted);
+	font-size: var(--type-body-sm);
+	font-weight: 650;
+}
+
+.receivable-toolbar .ui-field > span:first-child {
+	padding-inline-start: var(--space-2);
+}
+
+.receivable-search-field {
+	flex: 1 1 var(--layout-310);
+	max-width: var(--layout-460);
+}
+
+.receivable-search-field .table-search {
+	min-width: 0;
+	max-width: none;
+}
+
+.receivable-toolbar select {
+	width: var(--layout-180);
+	max-width: 100%;
+}
+
+.receivable-toolbar > .row-action {
+	margin-block-end: var(--space-2);
+}
+
+.receivable-table {
+	max-height: 60vh;
+}
+
+.receivable-table table {
+	min-width: var(--layout-975);
+}
+
+:is(.receivable-table, .receivable-invoice-table) table {
+	table-layout: fixed;
+}
+
+.receivable-table th:first-child {
+	width: 32%;
+}
+
+.receivable-table .receivable-amount-column {
+	width: 13%;
+}
+
+:is(.receivable-table, .receivable-invoice-table) :is(th, td:not(.receivable-number), .cell-meta) {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.receivable-table th,
+.receivable-invoice-table th,
+.receivable-allocations-table th {
+	position: sticky;
+	top: 0;
+	z-index: var(--z-sticky);
+}
+
+.receivable-table :is(th, td):not(:first-child),
+.receivable-allocations-table :is(th, td):not(:first-child),
+.receivable-invoice-table :is(th, td) {
+	text-align: center;
+}
+
+.receivable-number {
+	font-variant-numeric: tabular-nums;
+}
+
+.receivable-table .receivable-customer-link {
+	display: inline-flex;
+	padding-inline: 0;
+	text-align: left;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	max-width: var(--layout-420);
+}
+
+.receivable-footer {
+	min-height: var(--layout-52);
+	padding: var(--space-8) var(--space-13);
+	border-top: var(--border-width) solid var(--line);
+	background: var(--table-footer-bg);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-16);
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.receivable-empty {
+	display: grid;
+	justify-items: center;
+	gap: var(--space-14);
+}
+
+.customer-drawer.receivable-invoice-drawer {
+	width: min(var(--drawer-width-receivables), 100vw);
+}
+
+.receivable-invoice-drawer .data-panel {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.receivable-invoice-drawer :is(.data-toolbar, .receivable-footer) {
+	flex: none;
+}
+
+.receivable-invoice-cutoff {
+	margin-inline-start: auto;
+	color: var(--muted);
+	font-size: var(--type-body-sm);
+	white-space: nowrap;
+}
+
+.receivable-invoice-table {
+	flex: 1;
+	min-height: 0;
+}
+
+.receivable-invoice-table table {
+	min-width: var(--layout-760);
+}
+
+.receivable-invoice-table .receivable-amount-column {
+	width: 15%;
+}
+
+.receivable-invoice-table .receivable-invoice-link {
+	display: inline;
+	padding-inline: 0;
+	font-size: var(--type-body-sm);
+}
+
+.dialog-shell.receivable-allocations-dialog {
+	width: min(var(--layout-650), 100%);
+}
+
+.receivable-allocations-table {
+	max-height: 55vh;
+}
+
+.receivable-allocations-table td:first-child {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+

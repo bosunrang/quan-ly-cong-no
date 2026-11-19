@@ -1,45 +1,45 @@
-import {
-	DatabaseBackup,
-	FileDown,
-	FileUp,
-	ImagePlus,
-	Save,
-	Trash2,
-} from "lucide-react";
-import { StatusPill } from "../../shared/ui/StatusPill";
+import { ImagePlus, Save } from "lucide-react";
 import { useRef, useState } from "react";
-import type { AppSettings } from "../../domain/settings/settings.model";
-import { getDatabaseStatus } from "../../shared/storage/databaseBridge";
-
+import {
+	type AppSettings,
+	MAX_BANK_ACCOUNTS,
+} from "../../domain/settings/settings.model";
+import { useTransientNotice } from "../../shared/hooks/useTransientNotice";
+import { Notice } from "../../shared/ui/Notice";
+import { SettingsDataPanel } from "./SettingsDataPanel";
 interface SettingsPageProps {
 	settings: AppSettings;
 	onSave: (settings: AppSettings) => boolean;
 }
 
 export function SettingsPage({ settings, onSave }: SettingsPageProps) {
-	const databaseStatus = getDatabaseStatus();
 	const fileInput = useRef<HTMLInputElement>(null);
 	const [fileName, setFileName] = useState("Chưa chọn tệp");
-	const [notice, setNotice] = useState("");
+	const { notice, showNotice, dismissNotice } = useTransientNotice(2200);
 	const [companyName, setCompanyName] = useState(settings.companyName);
 	const [companyAddress, setCompanyAddress] = useState(settings.companyAddress);
+	const [bankAccounts, setBankAccounts] = useState(() =>
+		Array.from(
+			{ length: MAX_BANK_ACCOUNTS },
+			(_, index) => settings.bankAccounts[index] ?? "",
+		),
+	);
+	const [accountingContact, setAccountingContact] = useState(
+		settings.accountingContact,
+	);
+	const [signatoryName, setSignatoryName] = useState(settings.signatoryName);
+	const [signatoryTitle, setSignatoryTitle] = useState(settings.signatoryTitle);
 	const [displayName, setDisplayName] = useState(settings.displayName);
 	const [tagline, setTagline] = useState(settings.tagline);
 	const [logoDataUrl, setLogoDataUrl] = useState<string | null>(
 		settings.logoDataUrl,
 	);
-
-	const showNotice = (message: string) => {
-		setNotice(message);
-		window.setTimeout(() => setNotice(""), 2200);
-	};
-
 	return (
 		<div className="page-stack settings-page">
 			{notice && (
-				<div className="settings-toast" role="status">
-					{notice}
-				</div>
+				<Notice tone={notice.tone} floating announce onDismiss={dismissNotice}>
+					{notice.text}
+				</Notice>
 			)}
 
 			<section className="settings-profile-grid">
@@ -52,6 +52,12 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 								...settings,
 								companyName: companyName.trim(),
 								companyAddress: companyAddress.trim(),
+								bankAccounts: bankAccounts
+									.map((account) => account.trim())
+									.filter(Boolean),
+								accountingContact: accountingContact.trim(),
+								signatoryName: signatoryName.trim(),
+								signatoryTitle: signatoryTitle.trim(),
 							})
 						) {
 							showNotice("Đã lưu thông tin doanh nghiệp.");
@@ -78,8 +84,50 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 								onChange={(event) => setCompanyAddress(event.target.value)}
 							/>
 						</label>
+						{bankAccounts.map((account, index) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: Fixed slots for bank account lines.
+							<label key={index}>
+								Tài khoản ngân hàng {index + 1}
+								<input
+									placeholder="Số tài khoản tại ngân hàng, chi nhánh"
+									value={account}
+									onChange={(event) => {
+										const value = event.target.value;
+										setBankAccounts((current) =>
+											current.map((item, position) =>
+												position === index ? value : item,
+											),
+										);
+									}}
+								/>
+							</label>
+						))}
+						<label>
+							Liên hệ đối chiếu
+							<input
+								placeholder="Phòng kế toán, số điện thoại"
+								value={accountingContact}
+								onChange={(event) => setAccountingContact(event.target.value)}
+							/>
+						</label>
+						<label>
+							Người ký biên bản
+							<input
+								placeholder="Họ tên người đại diện"
+								value={signatoryName}
+								onChange={(event) => setSignatoryName(event.target.value)}
+							/>
+						</label>
+						<label>
+							Chức danh người ký
+							<input
+								placeholder="Ví dụ: Giám đốc"
+								value={signatoryTitle}
+								onChange={(event) => setSignatoryTitle(event.target.value)}
+							/>
+						</label>
 						<button className="button primary" type="submit">
-							<Save size={16} /> Lưu thông tin
+							<Save className="icon-size-16" /> Lưu thông tin
 						</button>
 					</div>
 				</form>
@@ -121,7 +169,7 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 							</label>
 							<div className="settings-brand-actions">
 								<button className="button primary" type="submit">
-									<Save size={16} /> Lưu logo
+									<Save className="icon-size-16" /> Lưu logo
 								</button>
 								<button
 									className="button secondary"
@@ -130,7 +178,11 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 										setLogoDataUrl(null);
 										setFileName("Chưa chọn tệp");
 										if (fileInput.current) fileInput.current.value = "";
-										showNotice("Đã bỏ ảnh logo. Bấm Lưu logo để xác nhận.");
+										showNotice(
+											"Đã bỏ ảnh logo. Bấm Lưu logo để xác nhận.",
+											undefined,
+											"info",
+										);
 									}}
 								>
 									Bỏ ảnh logo
@@ -145,7 +197,7 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 									{logoDataUrl ? (
 										<img src={logoDataUrl} alt="Logo đang chọn" />
 									) : (
-										"MK"
+										"CN"
 									)}
 								</div>
 								<div>
@@ -164,6 +216,14 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 										const file = event.target.files?.[0];
 										setFileName(file?.name || "Chưa chọn tệp");
 										if (!file) return;
+										if (file.size > 1_000_000) {
+											showNotice(
+												"Logo phải nhỏ hơn 1 MB.",
+												undefined,
+												"danger",
+											);
+											return;
+										}
 										const reader = new FileReader();
 										reader.onload = () =>
 											setLogoDataUrl(
@@ -179,7 +239,7 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 									type="button"
 									onClick={() => fileInput.current?.click()}
 								>
-									<ImagePlus size={16} /> Chọn tệp
+									<ImagePlus className="icon-size-16" /> Chọn tệp
 								</button>
 								<span>{fileName}</span>
 							</div>
@@ -192,74 +252,9 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 				</form>
 			</section>
 
-			<section className="panel settings-data-panel">
-				<div className="settings-data-head">
-					<DatabaseBackup size={18} />
-					<h2>Quản trị dữ liệu</h2>
-					<StatusPill
-						className="settings-database-status"
-						tone={databaseStatus ? "success" : "neutral"}
-						icon={<i />}
-					>
-						{databaseStatus
-							? `SQLite · schema ${databaseStatus.schemaVersion}`
-							: "Bản trình duyệt · localStorage"}
-					</StatusPill>
-				</div>
-				<div className="settings-data-grid">
-					<article className="settings-data-card">
-						<div>
-							<h3>Xuất backup</h3>
-							<p>
-								Lưu toàn bộ dữ liệu hiện tại ra tệp sao lưu để sử dụng khi cần.
-							</p>
-						</div>
-						<button
-							className="button secondary"
-							type="button"
-							onClick={() =>
-								showNotice(
-									"Chức năng xuất backup sẽ được nối ở giai đoạn dữ liệu.",
-								)
-							}
-						>
-							<FileDown size={16} /> Xuất backup
-						</button>
-					</article>
-					<article className="settings-data-card">
-						<div>
-							<h3>Nhập backup</h3>
-							<p>Khôi phục dữ liệu từ tệp backup đã xuất trước đó.</p>
-						</div>
-						<button
-							className="button secondary"
-							type="button"
-							onClick={() =>
-								showNotice(
-									"Chức năng nhập backup sẽ được nối ở giai đoạn dữ liệu.",
-								)
-							}
-						>
-							<FileUp size={16} /> Chọn file backup
-						</button>
-					</article>
-					<article className="settings-data-card settings-data-danger">
-						<div>
-							<h3>Xóa sạch dữ liệu</h3>
-							<p>Xóa toàn bộ dữ liệu đang lưu trên máy này sau khi xác nhận.</p>
-						</div>
-						<button
-							className="button danger"
-							type="button"
-							onClick={() =>
-								showNotice("Bản giao diện mẫu không thực hiện xóa dữ liệu.")
-							}
-						>
-							<Trash2 size={16} /> Xóa sạch dữ liệu
-						</button>
-					</article>
-				</div>
-			</section>
+			<SettingsDataPanel
+				onNotice={(text, tone) => showNotice(text, undefined, tone)}
+			/>
 		</div>
 	);
 }

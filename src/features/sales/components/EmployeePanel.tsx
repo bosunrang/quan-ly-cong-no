@@ -1,5 +1,7 @@
-import { Pencil, Plus, Search, Trash2, UserX } from "lucide-react";
+import { RowActionButton } from "../../../shared/ui/RowActionButton";
+import { Plus, Search } from "lucide-react";
 import type { SalesEmployee } from "../../../domain/employees/employee.model";
+import type { AccountProfile } from "../../../domain/access/accounts.model";
 
 export function employeeInitials(name: string): string {
 	const words = name.trim().split(/\s+/);
@@ -8,6 +10,7 @@ export function employeeInitials(name: string): string {
 
 interface EmployeePanelProps {
 	employees: SalesEmployee[];
+	linkableAccounts?: readonly Pick<AccountProfile, "id" | "username">[];
 	assignmentCountByEmployee: Record<string, number>;
 	selectedEmployeeId?: string;
 	query: string;
@@ -21,6 +24,7 @@ interface EmployeePanelProps {
 
 export function EmployeePanel({
 	employees,
+	linkableAccounts,
 	assignmentCountByEmployee,
 	selectedEmployeeId,
 	query,
@@ -31,6 +35,9 @@ export function EmployeePanel({
 	onDelete,
 	onAdd,
 }: EmployeePanelProps) {
+	const usernames = new Map(
+		linkableAccounts?.map(({ id, username }) => [id, username]),
+	);
 	return (
 		<aside className="panel employee-panel">
 			<header className="sales-panel-head">
@@ -39,9 +46,16 @@ export function EmployeePanel({
 					<h2>Chọn nhân viên</h2>
 					<p>Chọn người sẽ nhận phân công mới</p>
 				</div>
+				<button
+					className="button primary sales-add-employee"
+					type="button"
+					onClick={onAdd}
+				>
+					<Plus className="icon-size-16" /> Thêm nhân viên
+				</button>
 			</header>
 			<div className="sales-search">
-				<Search size={16} />
+				<Search className="icon-size-16" />
 				<input
 					value={query}
 					onChange={(event) => onQueryChange(event.target.value)}
@@ -49,71 +63,74 @@ export function EmployeePanel({
 				/>
 			</div>
 			<div className="employee-list">
-				{employees.map((employee) => (
-					<article
-						className={`employee-card ${employee.id === selectedEmployeeId ? "is-selected" : ""} ${employee.status === "inactive" ? "is-inactive" : ""}`}
-						key={employee.id}
-					>
-						<button
-							className="employee-card-select"
-							type="button"
-							onClick={() => onSelect(employee.id)}
-							aria-label={`Chọn ${employee.name}`}
-							aria-pressed={employee.id === selectedEmployeeId}
+				{employees.map((employee) => {
+					const username = usernames.get(employee.linkedAccountId ?? "");
+					const accountLabelId = `employee-account-${employee.id}`;
+					return (
+						<article
+							className={`employee-card choice-card ${employee.id === selectedEmployeeId ? "is-selected" : ""} ${employee.status === "inactive" ? "is-inactive" : ""}`}
+							key={employee.id}
 						>
-							<span className="employee-avatar">
-								{employeeInitials(employee.name)}
-							</span>
-							<span className="employee-card-copy">
-								<strong>{employee.name}</strong>
-								<small>
-									<span>{employee.code}</span>
-									<span className="employee-unit-count">
-										{assignmentCountByEmployee[employee.id] ?? 0} đơn vị
-									</span>
-									{employee.status === "inactive" ? " · Đã ngừng" : ""}
-								</small>
-							</span>
-						</button>
-						<span className="employee-card-actions">
 							<button
+								className="employee-card-select"
 								type="button"
-								onClick={() => onEdit(employee.id)}
-								aria-label={`Chỉnh sửa ${employee.name}`}
-								title="Chỉnh sửa nhân viên"
+								onClick={() => onSelect(employee.id)}
+								aria-label={`Chọn ${employee.name}`}
+								aria-pressed={employee.id === selectedEmployeeId}
+								aria-describedby={username ? accountLabelId : undefined}
 							>
-								<Pencil size={15} />
+								<span className="employee-avatar">
+									{employeeInitials(employee.name)}
+								</span>
+								<span className="employee-card-copy">
+									<strong>{employee.name}</strong>
+									{username && (
+										<span
+											id={accountLabelId}
+											className="employee-card-account"
+											title={`@${username}`}
+										>
+											@{username}
+										</span>
+									)}
+									<small>
+										<span>{employee.code}</span>
+										<span className="employee-unit-count">
+											{assignmentCountByEmployee[employee.id] ?? 0} đơn vị
+										</span>
+										{employee.status === "inactive" ? " · Đã ngừng" : ""}
+									</small>
+								</span>
 							</button>
-							{employee.status === "active" && (
-								<button
-									className="danger"
-									type="button"
-									onClick={() => onDeactivate(employee.id)}
-									aria-label={`Ngừng hoạt động ${employee.name}`}
-									title="Ngừng hoạt động"
-								>
-									<UserX size={15} />
-								</button>
-							)}
-							<button
-								className="danger"
-								type="button"
-								onClick={() => onDelete(employee.id)}
-								aria-label={`Xóa ${employee.name}`}
-								title="Xóa nhân viên"
-							>
-								<Trash2 size={15} />
-							</button>
-						</span>
-					</article>
-				))}
+							<span className="employee-card-actions">
+								<RowActionButton
+									action="edit"
+									label={`Chỉnh sửa ${employee.name}`}
+									title="Chỉnh sửa nhân viên"
+									onClick={() => onEdit(employee.id)}
+								/>
+								{employee.status === "active" && (
+									<RowActionButton
+										action="deactivate"
+										onClick={() => onDeactivate(employee.id)}
+										label={`Ngừng hoạt động ${employee.name}`}
+										title="Ngừng hoạt động"
+									/>
+								)}
+								<RowActionButton
+									action="delete"
+									label={`Xóa ${employee.name}`}
+									title="Xóa nhân viên"
+									onClick={() => onDelete(employee.id)}
+								/>
+							</span>
+						</article>
+					);
+				})}
 				{employees.length === 0 && (
 					<p className="sales-empty">Không tìm thấy nhân viên.</p>
 				)}
 			</div>
-			<button className="sales-add-employee" type="button" onClick={onAdd}>
-				<Plus size={16} /> Thêm nhân viên kinh doanh
-			</button>
 		</aside>
 	);
 }

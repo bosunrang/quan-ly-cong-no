@@ -1,4 +1,5 @@
-import { AlertTriangle, History, Trash2 } from "lucide-react";
+import { Notice } from "../../shared/ui/Notice";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { SalesEmployee } from "../../domain/employees/employee.model";
 import { todayLocal } from "../../shared/lib/date";
@@ -32,7 +33,7 @@ export function EmployeeDeleteDialog({
 			ariaLabelledBy="employee-remove-title"
 			eyebrow="XÓA NHÂN VIÊN"
 			title="Xác nhận xóa hồ sơ"
-			icon={<Trash2 size={19} />}
+			icon={<Trash2 className="icon-size-19" />}
 			tone="danger"
 			className="employee-delete-dialog"
 			onClose={onClose}
@@ -47,18 +48,15 @@ export function EmployeeDeleteDialog({
 						disabled={invalidDate}
 						onClick={() => onConfirm(effectiveTo)}
 					>
-						<Trash2 size={16} /> Xóa nhân viên
+						<Trash2 className="icon-size-16" /> Xóa nhân viên
 					</button>
 				</>
 			}
 		>
-			<div className="employee-delete-body">
+			<div className="dialog-body">
 				<div className="employee-delete-target">
 					<strong>{employee.name}</strong>
-					<span>
-						{employee.code} ·{" "}
-						{employee.phone || employee.email || "Chưa có thông tin liên hệ"}
-					</span>
+					<span>{employee.code}</span>
 				</div>
 				{activeAssignmentCount > 0 && (
 					<>
@@ -71,47 +69,30 @@ export function EmployeeDeleteDialog({
 								onChange={setEffectiveTo}
 							/>
 						</label>
-						<div className="delete-rule-card warning">
-							<AlertTriangle size={19} />
-							<div>
-								<strong>
-									{activeAssignmentCount} đơn vị sẽ trở về “Chưa phân công”
-								</strong>
-								<span>
-									Các lượt đang phụ trách được kết thúc vào ngày đã chọn trước
-									khi hồ sơ bị xóa.
-								</span>
-							</div>
-						</div>
+						<Notice
+							tone="warning"
+							title={`${activeAssignmentCount} đơn vị sẽ trở về “Chưa phân công”`}
+						>
+							Các lượt đang phụ trách được kết thúc vào ngày đã chọn trước khi
+							hồ sơ bị xóa.
+						</Notice>
 						{invalidDate && (
-							<p className="assignment-error">
+							<Notice tone="danger" announce>
 								Ngày kết thúc không được trước ngày bắt đầu của lượt phân công
 								gần nhất.
-							</p>
+							</Notice>
 						)}
 					</>
 				)}
-				<div className="delete-rule-card">
-					<History size={19} />
-					<div>
-						<strong>Lịch sử phân công vẫn được giữ</strong>
-						<span>
-							{historyCount > 0
-								? `${historyCount} lượt phân công vẫn lưu tên nhân viên để báo cáo và đối soát.`
-								: "Nhân viên này chưa phát sinh lịch sử phân công."}
-						</span>
-					</div>
-				</div>
-				<div className="delete-rule-card danger">
-					<Trash2 size={19} />
-					<div>
-						<strong>Hồ sơ nhân viên sẽ bị xóa khỏi danh sách</strong>
-						<span>
-							Thao tác này không thể hoàn tác trực tiếp. Bạn cần tạo lại hồ sơ
-							nếu muốn sử dụng nhân viên này sau đó.
-						</span>
-					</div>
-				</div>
+				<Notice tone="info" title="Lịch sử phân công vẫn được giữ">
+					{historyCount > 0
+						? `${historyCount} lượt phân công vẫn lưu tên nhân viên để báo cáo và đối soát.`
+						: "Nhân viên này chưa phát sinh lịch sử phân công."}
+				</Notice>
+				<Notice tone="danger" title="Hồ sơ nhân viên sẽ bị xóa khỏi danh sách">
+					Thao tác này không thể hoàn tác trực tiếp. Bạn cần tạo lại hồ sơ nếu
+					muốn sử dụng nhân viên này sau đó.
+				</Notice>
 			</div>
 		</Dialog>
 	);

@@ -1,13 +1,15 @@
-import { Building2, MapPin, Search, UserMinus, UserRound } from "lucide-react";
+import { Building2, MapPin, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Customer } from "../../../domain/customers/customer.model";
 import { usePagination } from "../../../shared/hooks/usePagination";
 import { PaginationControls } from "../../../shared/ui/Pagination/PaginationControls";
+import { RowActionButton } from "../../../shared/ui/RowActionButton";
 
 interface AssignedCustomerPanelProps {
 	ownerKey: string;
 	employeeName?: string;
 	customers: Customer[];
+	onOpen: (customerId: string) => void;
 	onUnassign: (customerId: string) => void;
 }
 
@@ -15,6 +17,7 @@ export function AssignedCustomerPanel({
 	ownerKey,
 	employeeName,
 	customers,
+	onOpen,
 	onUnassign,
 }: AssignedCustomerPanelProps) {
 	const [query, setQuery] = useState("");
@@ -63,7 +66,7 @@ export function AssignedCustomerPanel({
 			</header>
 			<label className="sales-search assigned-customer-search">
 				<span className="visually-hidden">Tìm đơn vị đang phụ trách</span>
-				<Search size={16} />
+				<Search className="icon-size-16" />
 				<input
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
@@ -74,31 +77,36 @@ export function AssignedCustomerPanel({
 				{pagedCustomers.map((customer) => (
 					<article key={customer.id}>
 						<span className="assigned-building">
-							<Building2 size={16} />
+							<Building2 className="icon-size-16" />
 						</span>
 						<div>
 							<strong>{customer.name}</strong>
 							<span className="assigned-customer-meta">
 								<span>{customer.misaCode}</span>
 								<small>
-									<MapPin size={12} /> {customer.province}
+									<MapPin className="icon-size-12" /> {customer.province}
 								</small>
 							</span>
 						</div>
-						<button
+						<RowActionButton
+							action="inspect"
+							className="assigned-detail-button"
+							onClick={() => onOpen(customer.id)}
+							label={`Xem chi tiết ${customer.name}`}
+							title="Xem chi tiết khách hàng"
+						/>
+						<RowActionButton
+							action="unassign"
 							className="unassign-customer-button"
-							type="button"
 							onClick={() => onUnassign(customer.id)}
-							aria-label={`Bỏ phân công ${customer.name}`}
+							label={`Bỏ phân công ${customer.name}`}
 							title="Bỏ khỏi người phụ trách"
-						>
-							<UserMinus size={16} />
-						</button>
+						/>
 					</article>
 				))}
 				{visibleCustomers.length === 0 && (
 					<div className="sales-empty large">
-						<UserRound size={24} />
+						<UserRound className="icon-size-24" />
 						<strong>
 							{query ? "Không tìm thấy đơn vị" : "Chưa phụ trách đơn vị nào"}
 						</strong>

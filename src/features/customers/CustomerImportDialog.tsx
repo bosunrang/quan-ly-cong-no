@@ -1,3 +1,4 @@
+import { Notice } from "../../shared/ui/Notice";
 import {
 	AlertCircle,
 	CheckCircle2,
@@ -8,7 +9,6 @@ import {
 import { useState } from "react";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { StatusPill } from "../../shared/ui/StatusPill";
-import { customerGroupLabels } from "../../domain/customers/customer.model";
 import type {
 	CustomerImportPreview,
 	CustomerImportStatus,
@@ -32,14 +32,15 @@ export function CustomerImportDialog({
 		filter === "all"
 			? preview.rows
 			: preview.rows.filter((row) => row.status === filter);
+	const importCount = preview.readyCount;
 
 	return (
 		<Dialog
 			ariaLabelledBy="customer-import-title"
 			eyebrow="NHẬP DỮ LIỆU EXCEL"
 			title="Xem trước danh sách khách hàng"
-			icon={<FileSpreadsheet size={19} />}
-			className="customer-import-dialog"
+			icon={<FileSpreadsheet className="icon-size-19" />}
+			className="import-preview-dialog"
 			onClose={onClose}
 			footer={
 				<>
@@ -49,70 +50,71 @@ export function CustomerImportDialog({
 					<button
 						className="button primary"
 						type="button"
-						disabled={preview.readyCount === 0}
+						disabled={importCount === 0}
 						onClick={onConfirm}
 					>
-						<Upload size={16} /> Nhập {preview.readyCount} khách hàng
+						<Upload className="icon-size-16" /> Xử lý {importCount} khách hàng
 					</button>
 				</>
 			}
 		>
-			<div className="customer-import-body">
-				<div className="customer-import-file">
-					<FileSpreadsheet size={18} />
+			<div className="import-preview-body">
+				<div className="import-preview-file">
+					<FileSpreadsheet className="icon-size-18" />
 					<div>
 						<strong>{preview.fileName}</strong>
 						<span>{preview.rows.length} dòng dữ liệu được đọc từ Excel</span>
 					</div>
 				</div>
-				<div className="customer-import-summary">
+				<div className="import-preview-filters customer-import-summary">
 					<button
-						className={filter === "all" ? "is-active" : ""}
 						type="button"
+						aria-pressed={filter === "all"}
 						onClick={() => setFilter("all")}
 					>
 						<span>Tổng số dòng</span>
 						<strong>{preview.rows.length}</strong>
 					</button>
 					<button
-						className={`ready ${filter === "ready" ? "is-active" : ""}`}
+						className="ready"
 						type="button"
+						aria-pressed={filter === "ready"}
 						onClick={() => setFilter("ready")}
 					>
-						<CheckCircle2 size={16} />
+						<CheckCircle2 className="icon-size-16" />
 						<span>Sẵn sàng nhập</span>
 						<strong>{preview.readyCount}</strong>
 					</button>
 					<button
-						className={`duplicate ${filter === "duplicate" ? "is-active" : ""}`}
+						className="duplicate"
 						type="button"
+						aria-pressed={filter === "duplicate"}
 						onClick={() => setFilter("duplicate")}
 					>
-						<Copy size={16} />
+						<Copy className="icon-size-16" />
 						<span>Dòng trùng</span>
 						<strong>{preview.duplicateCount}</strong>
 					</button>
 					<button
-						className={`invalid ${filter === "invalid" ? "is-active" : ""}`}
+						className="invalid"
 						type="button"
+						aria-pressed={filter === "invalid"}
 						onClick={() => setFilter("invalid")}
 					>
-						<AlertCircle size={16} />
+						<AlertCircle className="icon-size-16" />
 						<span>Cần kiểm tra</span>
 						<strong>{preview.invalidCount}</strong>
 					</button>
 				</div>
-				<p className="customer-import-rule">
-					Hệ thống chỉ nhập các dòng “Sẵn sàng”. Mã đã tồn tại, mã lặp trong
-					file hoặc dòng thiếu dữ liệu bắt buộc sẽ được bỏ qua.
-				</p>
-				<div className="customer-import-table-wrap">
-					<table className="customer-import-table">
+				<Notice tone="info">
+					Các dòng hợp lệ được thêm vào danh mục. Mã MISA đã có sẽ được bỏ qua.
+				</Notice>
+				<div className="import-preview-table-wrap">
+					<table className="import-preview-table customer-import-preview-table">
 						<thead>
 							<tr>
 								<th>Dòng</th>
 								<th>Khách hàng</th>
-								<th>Nhóm</th>
 								<th>Tỉnh/thành phố</th>
 								<th>Kết quả kiểm tra</th>
 							</tr>
@@ -128,11 +130,10 @@ export function CustomerImportDialog({
 											{row.draft.address || "Chưa có địa chỉ"}
 										</span>
 									</td>
-									<td>{customerGroupLabels[row.draft.group]}</td>
 									<td>{row.draft.province || "Chưa xác định"}</td>
 									<td>
 										<StatusPill
-											className="customer-import-status"
+											className="import-preview-status"
 											tone={
 												row.status === "ready"
 													? "success"
@@ -154,7 +155,7 @@ export function CustomerImportDialog({
 						</tbody>
 					</table>
 					{visibleRows.length === 0 && (
-						<div className="customer-import-empty">
+						<div className="import-preview-empty">
 							Không có dòng nào trong nhóm đang chọn.
 						</div>
 					)}

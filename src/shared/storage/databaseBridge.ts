@@ -3,6 +3,9 @@ export interface DatabaseEnvelope {
 	data: unknown;
 }
 
+export const BROWSER_SALES_DATABASE = "cong-no-misa-sales";
+export const ACCOUNTS_STORAGE_KEY = "cong-no.accounts.v1";
+
 interface DatabaseResponse<T> {
 	ok: boolean;
 	value?: T;
@@ -14,32 +17,49 @@ export interface DatabaseStatus {
 	schemaVersion: number;
 }
 
-interface MktDatabaseBridge {
+export interface AppBranding {
+	displayName: string;
+	tagline: string;
+	logoDataUrl: string | null;
+}
+
+interface CongNoDatabaseBridge {
+	exportBusinessBackup: () => Promise<DatabaseResponse<unknown>>;
+	changeBusinessData: (change: unknown) => Promise<DatabaseResponse<boolean>>;
 	readDataset: (key: string) => DatabaseResponse<DatabaseEnvelope | null>;
+	readDatasetAsync?: (
+		key: string,
+	) => Promise<DatabaseResponse<DatabaseEnvelope | null>>;
+	datasetStamp?: (key: string) => Promise<DatabaseResponse<string | null>>;
 	writeDataset: (
 		key: string,
 		version: number,
 		data: unknown,
 	) => DatabaseResponse<boolean>;
-	queryProducts: (options: unknown) => DatabaseResponse<unknown>;
-	readProductDetail: (productId: string) => DatabaseResponse<unknown>;
-	writeMisaDetails: (
-		version: number,
-		rows: unknown[],
-	) => DatabaseResponse<boolean>;
-	queryMisaDetails: (options: unknown) => DatabaseResponse<unknown>;
-	queryMisaRange: (options: unknown) => DatabaseResponse<unknown>;
+	writeReceiptLedger: (
+		revision: string,
+		data: unknown,
+		salesBookImportedAt?: string,
+	) => DatabaseResponse<boolean> | Promise<DatabaseResponse<boolean>>;
+	writeMisaSalesBook: (
+		expectedImportedAt: string | null,
+		data: unknown,
+	) => DatabaseResponse<boolean> | Promise<DatabaseResponse<boolean>>;
+	clearAllData: (branding: AppBranding) => DatabaseResponse<boolean>;
+	appendActivity: (entry: unknown) => DatabaseResponse<boolean>;
+	writeAccounts: (expected: unknown[], accounts: unknown[]) => DatabaseResponse<boolean>;
+	readActivities: () => DatabaseResponse<unknown>;
 	status: () => DatabaseResponse<DatabaseStatus>;
 }
 
 declare global {
 	interface Window {
-		mktDatabase?: MktDatabaseBridge;
+		congNoDatabase?: CongNoDatabaseBridge;
 	}
 }
 
-export function getDatabaseBridge(): MktDatabaseBridge | undefined {
-	return typeof window === "undefined" ? undefined : window.mktDatabase;
+export function getDatabaseBridge(): CongNoDatabaseBridge | undefined {
+	return typeof window === "undefined" ? undefined : window.congNoDatabase;
 }
 
 export function getDatabaseStatus(): DatabaseStatus | undefined {

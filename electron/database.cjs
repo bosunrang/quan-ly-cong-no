@@ -1,185 +1,313 @@
+const { randomUUID } = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
+const { deleteBusinessGroups, makeBusinessBackup, restoreBusinessData } = require('../src/domain/settings/business-data.rules.mjs');
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 12;
 const DATASET_KEYS = {
-  customers: 'mkt-cost.customers.v2',
-  employees: 'mkt-cost.sales-employees.v2',
-  products: 'mkt-cost.products.v7',
-  settings: 'mkt-cost.settings.v2',
-  misaDetails: 'mkt-cost.misa-details.v1',
+  customers: 'cong-no.customers.v2',
+  employees: 'cong-no.sales-employees.v2',
+  settings: 'cong-no.settings.v2',
 };
 
-function migrateSchema(database) {
+function snapshotBeforeUpgrade(database, databasePath, currentVersion) {
+  if (!databasePath || databasePath === ':memory:' || currentVersion < 1 || currentVersion >= SCHEMA_VERSION) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  // Bản sao nhất quán (gồm cả WAL) để có thể quay lại nếu nâng cấp gặp sự cố.
+  database.prepare('VACUUM INTO ?').run(`${databasePath}.truoc-nang-cap-v${currentVersion}-${stamp}.sqlite`);
+}
+
+function migrateSchema(database, databasePath, { snapshot = true } = {}) {
   database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;');
   const row = database.prepare('PRAGMA user_version').get();
   const currentVersion = Number(row?.user_version ?? 0);
   if (currentVersion > SCHEMA_VERSION) throw new Error(`Cơ sở dữ liệu phiên bản ${currentVersion} mới hơn ứng dụng.`);
+  if (snapshot) snapshotBeforeUpgrade(database, databasePath, currentVersion);
   if (currentVersion < 1) {
-    database.exec(`
-      CREATE TABLE IF NOT EXISTS dataset_versions (
-        dataset_key TEXT PRIMARY KEY,
-        version INTEGER NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS app_datasets (
-        dataset_key TEXT PRIMARY KEY,
-        version INTEGER NOT NULL,
-        payload_json TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS customers (
-        id TEXT PRIMARY KEY,
-        misa_code TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        customer_group TEXT NOT NULL CHECK (customer_group IN ('state','private')),
-        tax_code TEXT NOT NULL,
-        province TEXT NOT NULL,
-        address TEXT NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('active','paused')),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        sort_order INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS customer_assignments (
-        id TEXT PRIMARY KEY,
-        customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-        employee_id TEXT NOT NULL,
-        employee_name TEXT NOT NULL,
-        province TEXT NOT NULL,
-        source TEXT NOT NULL CHECK (source = 'direct'),
-        effective_from TEXT NOT NULL,
-        effective_to TEXT,
-        sort_order INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS customer_recipients (
-        id TEXT PRIMARY KEY,
-        customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-        full_name TEXT NOT NULL,
-        position TEXT NOT NULL,
-        phone TEXT NOT NULL,
-        effective_from TEXT NOT NULL,
-        effective_to TEXT,
-        is_primary INTEGER NOT NULL CHECK (is_primary IN (0,1)),
-        active INTEGER NOT NULL CHECK (active IN (0,1)),
-        sort_order INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS sales_employees (
-        id TEXT PRIMARY KEY,
-        code TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        phone TEXT NOT NULL,
-        email TEXT NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('active','inactive')),
-        created_at TEXT NOT NULL,
-        sort_order INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS products (
-        id TEXT PRIMARY KEY,
-        code TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        product_group TEXT NOT NULL,
-        unit TEXT NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('active','paused')),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        sort_order INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS product_policies (
-        id TEXT PRIMARY KEY,
-        product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-        customer_id TEXT NOT NULL,
-        calculation_type TEXT NOT NULL CHECK (calculation_type IN ('fixed','percent')),
-        value REAL NOT NULL,
-        effective_from TEXT NOT NULL,
-        effective_to TEXT,
-        status TEXT NOT NULL CHECK (status IN ('active','paused')),
-        note TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        sort_order INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS policy_recipient_allocations (
-        policy_id TEXT NOT NULL REFERENCES product_policies(id) ON DELETE CASCADE,
-        recipient_id TEXT NOT NULL,
-        amount REAL NOT NULL,
-        sort_order INTEGER NOT NULL,
-        PRIMARY KEY (policy_id, recipient_id)
-      );
-      CREATE TABLE IF NOT EXISTS app_settings (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        company_name TEXT NOT NULL,
-        company_address TEXT NOT NULL,
-        display_name TEXT NOT NULL,
-        tagline TEXT NOT NULL,
-        logo_data_url TEXT
-      );
-      CREATE INDEX IF NOT EXISTS idx_customer_assignments_customer ON customer_assignments(customer_id, sort_order);
-      CREATE INDEX IF NOT EXISTS idx_customer_recipients_customer ON customer_recipients(customer_id, sort_order);
-      CREATE INDEX IF NOT EXISTS idx_product_policies_product ON product_policies(product_id, sort_order);
-      CREATE INDEX IF NOT EXISTS idx_product_policies_customer ON product_policies(customer_id);
-      PRAGMA user_version = 1;
-    `);
+    withTransaction(database, () => {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS dataset_versions (
+          dataset_key TEXT PRIMARY KEY,
+          version INTEGER NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS app_datasets (
+          dataset_key TEXT PRIMARY KEY,
+          version INTEGER NOT NULL,
+          payload_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS customers (
+          id TEXT PRIMARY KEY,
+          misa_code TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL,
+          customer_group TEXT NOT NULL CHECK (customer_group IN ('state','private')),
+          tax_code TEXT NOT NULL,
+          province TEXT NOT NULL,
+          address TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('active','paused')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          sort_order INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS customer_assignments (
+          id TEXT PRIMARY KEY,
+          customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+          employee_id TEXT NOT NULL,
+          employee_name TEXT NOT NULL,
+          province TEXT NOT NULL,
+          source TEXT NOT NULL CHECK (source = 'direct'),
+          effective_from TEXT NOT NULL,
+          effective_to TEXT,
+          sort_order INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS customer_recipients (
+          id TEXT PRIMARY KEY,
+          customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+          full_name TEXT NOT NULL,
+          position TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          effective_from TEXT NOT NULL,
+          effective_to TEXT,
+          is_primary INTEGER NOT NULL CHECK (is_primary IN (0,1)),
+          active INTEGER NOT NULL CHECK (active IN (0,1)),
+          sort_order INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sales_employees (
+          id TEXT PRIMARY KEY,
+          code TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          email TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('active','inactive')),
+          created_at TEXT NOT NULL,
+          sort_order INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS products (
+          id TEXT PRIMARY KEY,
+          code TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL,
+          product_group TEXT NOT NULL,
+          unit TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('active','paused')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          sort_order INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS product_policies (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          customer_id TEXT NOT NULL,
+          calculation_type TEXT NOT NULL CHECK (calculation_type IN ('fixed','percent')),
+          value REAL NOT NULL,
+          effective_from TEXT NOT NULL,
+          effective_to TEXT,
+          status TEXT NOT NULL CHECK (status IN ('active','paused')),
+          note TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          sort_order INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS policy_recipient_allocations (
+          policy_id TEXT NOT NULL REFERENCES product_policies(id) ON DELETE CASCADE,
+          recipient_id TEXT NOT NULL,
+          amount REAL NOT NULL,
+          sort_order INTEGER NOT NULL,
+          PRIMARY KEY (policy_id, recipient_id)
+        );
+        CREATE TABLE IF NOT EXISTS app_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          company_name TEXT NOT NULL,
+          company_address TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          tagline TEXT NOT NULL,
+          logo_data_url TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_customer_assignments_customer ON customer_assignments(customer_id, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_customer_recipients_customer ON customer_recipients(customer_id, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_product_policies_product ON product_policies(product_id, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_product_policies_customer ON product_policies(customer_id);
+        PRAGMA user_version = 1;
+      `);
+    });
   }
   if (currentVersion < 2) {
-    database.exec(`
-      ALTER TABLE products ADD COLUMN search_text TEXT NOT NULL DEFAULT '';
-      CREATE INDEX IF NOT EXISTS idx_products_group_sort ON products(product_group, sort_order);
-      CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
-      CREATE INDEX IF NOT EXISTS idx_product_policies_effective
-        ON product_policies(status, effective_from, effective_to, product_id, customer_id);
-    `);
-    const updateSearch = database.prepare('UPDATE products SET search_text = ? WHERE id = ?');
-    for (const product of database.prepare('SELECT id, code, name FROM products').all()) {
-      updateSearch.run(`${product.code} ${product.name}`.toLocaleLowerCase('vi-VN'), product.id);
-    }
-    database.exec('PRAGMA user_version = 2;');
+    withTransaction(database, () => {
+      database.exec(`
+        ALTER TABLE products ADD COLUMN search_text TEXT NOT NULL DEFAULT '';
+        CREATE INDEX IF NOT EXISTS idx_products_group_sort ON products(product_group, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+        CREATE INDEX IF NOT EXISTS idx_product_policies_effective
+          ON product_policies(status, effective_from, effective_to, product_id, customer_id);
+      `);
+      const updateSearch = database.prepare('UPDATE products SET search_text = ? WHERE id = ?');
+      for (const product of database.prepare('SELECT id, code, name FROM products').all()) {
+        updateSearch.run(`${product.code} ${product.name}`.toLocaleLowerCase('vi-VN'), product.id);
+      }
+      database.exec('PRAGMA user_version = 2;');
+    });
   }
   if (currentVersion < 3) {
-    database.exec(`
-      CREATE TABLE IF NOT EXISTS misa_details (
-        id TEXT PRIMARY KEY,
-        unit_id TEXT NOT NULL,
-        row_number INTEGER NOT NULL,
-        transaction_date TEXT,
-        document_number TEXT NOT NULL,
-        description TEXT NOT NULL,
-        unit TEXT NOT NULL,
-        quantity REAL,
-        unit_price REAL,
-        general_description TEXT NOT NULL,
-        debt_account TEXT NOT NULL,
-        contra_account TEXT NOT NULL,
-        debit REAL,
-        credit REAL,
-        balance_debit REAL,
-        balance_credit REAL,
-        document_kind TEXT NOT NULL CHECK (document_kind IN ('sale','receipt','adjustment','opening')),
-        search_text TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_misa_details_unit_row ON misa_details(unit_id, row_number);
-      CREATE INDEX IF NOT EXISTS idx_misa_details_unit_kind ON misa_details(unit_id, document_kind, row_number);
-      PRAGMA user_version = 3;
-    `);
+    withTransaction(database, () => {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS misa_details (
+          id TEXT PRIMARY KEY,
+          unit_id TEXT NOT NULL,
+          row_number INTEGER NOT NULL,
+          transaction_date TEXT,
+          document_number TEXT NOT NULL,
+          description TEXT NOT NULL,
+          unit TEXT NOT NULL,
+          quantity REAL,
+          unit_price REAL,
+          general_description TEXT NOT NULL,
+          debt_account TEXT NOT NULL,
+          contra_account TEXT NOT NULL,
+          debit REAL,
+          credit REAL,
+          balance_debit REAL,
+          balance_credit REAL,
+          document_kind TEXT NOT NULL CHECK (document_kind IN ('sale','receipt','adjustment','opening')),
+          search_text TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_misa_details_unit_row ON misa_details(unit_id, row_number);
+        CREATE INDEX IF NOT EXISTS idx_misa_details_unit_kind ON misa_details(unit_id, document_kind, row_number);
+        PRAGMA user_version = 3;
+      `);
+    });
   }
   if (currentVersion < 4) {
-    database.exec(`
-      ALTER TABLE misa_details ADD COLUMN product_code TEXT NOT NULL DEFAULT '';
-      CREATE INDEX IF NOT EXISTS idx_misa_details_date_kind
-        ON misa_details(transaction_date, document_kind, unit_id, row_number);
-      PRAGMA user_version = 4;
-    `);
+    withTransaction(database, () => {
+      database.exec(`
+        ALTER TABLE misa_details ADD COLUMN product_code TEXT NOT NULL DEFAULT '';
+        CREATE INDEX IF NOT EXISTS idx_misa_details_date_kind
+          ON misa_details(transaction_date, document_kind, unit_id, row_number);
+        PRAGMA user_version = 4;
+      `);
+    });
   }
   if (currentVersion < 5) {
-    database.exec(`
-      ALTER TABLE product_policies ADD COLUMN retained_amount REAL NOT NULL DEFAULT 0;
-      PRAGMA user_version = 5;
-    `);
+    withTransaction(database, () => {
+      database.exec(`
+        ALTER TABLE product_policies ADD COLUMN retained_amount REAL NOT NULL DEFAULT 0;
+        PRAGMA user_version = 5;
+      `);
+    });
   }
   if (currentVersion < 6) {
-    database.exec(`
-      ALTER TABLE policy_recipient_allocations ADD COLUMN retained_amount REAL NOT NULL DEFAULT 0;
-      PRAGMA user_version = 6;
-    `);
+    withTransaction(database, () => {
+      database.exec(`
+        ALTER TABLE policy_recipient_allocations ADD COLUMN retained_amount REAL NOT NULL DEFAULT 0;
+        PRAGMA user_version = 6;
+      `);
+    });
+  }
+  if (currentVersion < 7) {
+    database.exec('PRAGMA secure_delete = ON;');
+    withTransaction(database, () => {
+      database.exec(`
+        DELETE FROM policy_recipient_allocations;
+        DELETE FROM product_policies;
+        DELETE FROM customer_recipients;
+        DELETE FROM app_datasets WHERE dataset_key IN ('mkt-cost.reconciliation.v1', 'mkt-cost.reconciliation.v2');
+        DELETE FROM dataset_versions WHERE dataset_key IN ('mkt-cost.reconciliation.v1', 'mkt-cost.reconciliation.v2');
+        PRAGMA user_version = 7;
+      `);
+    });
+    database.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+  }
+  if (currentVersion < 8) {
+    // Keep the child tables and their foreign keys while extending customer_group.
+    database.exec('PRAGMA foreign_keys = OFF;');
+    try {
+      withTransaction(database, () => {
+        database.exec(`
+          CREATE TABLE customers_new (
+            id TEXT PRIMARY KEY,
+            misa_code TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            customer_group TEXT NOT NULL CHECK (customer_group IN ('state','private','unknown')),
+            tax_code TEXT NOT NULL,
+            province TEXT NOT NULL,
+            address TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('active','paused')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            sort_order INTEGER NOT NULL
+          );
+          INSERT INTO customers_new SELECT * FROM customers;
+          DROP TABLE customers;
+          ALTER TABLE customers_new RENAME TO customers;
+          PRAGMA user_version = 8;
+        `);
+      });
+    } finally {
+      database.exec('PRAGMA foreign_keys = ON;');
+    }
+  }
+  if (currentVersion < 9) {
+    withTransaction(database, () => {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS activity_log (
+          id TEXT PRIMARY KEY,
+          occurred_at TEXT NOT NULL,
+          payload_json TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS activity_log_by_time ON activity_log(occurred_at DESC, id DESC);
+        PRAGMA user_version = 9;
+      `);
+    });
+  }
+  if (currentVersion < 10) {
+    withTransaction(database, () => {
+      database.exec(`
+        ALTER TABLE sales_employees ADD COLUMN linked_account_id TEXT;
+        CREATE UNIQUE INDEX sales_employees_linked_account
+          ON sales_employees(linked_account_id) WHERE linked_account_id IS NOT NULL;
+        PRAGMA user_version = 10;
+      `);
+    });
+  }
+  if (currentVersion < 11) {
+    withTransaction(database, () => {
+      // Idempotent: an interrupted or partially created schema can be migrated again.
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS app_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          company_name TEXT NOT NULL,
+          company_address TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          tagline TEXT NOT NULL,
+          logo_data_url TEXT
+        );
+      `);
+      const columns = database.prepare('PRAGMA table_info(app_settings)').all();
+      if (!columns.some(({ name }) => name === 'seller_json'))
+        database.exec('ALTER TABLE app_settings ADD COLUMN seller_json TEXT;');
+      database.exec('PRAGMA user_version = 11;');
+    });
+  }
+  if (currentVersion < 12) {
+    // Bỏ hẳn bảng của app chiết khấu cũ và đổi tiền tố khóa dữ liệu mkt-cost.* sang cong-no.*.
+    withTransaction(database, () => {
+      database.exec(`
+        DROP TABLE IF EXISTS policy_recipient_allocations;
+        DROP TABLE IF EXISTS product_policies;
+        DROP TABLE IF EXISTS products;
+        DROP TABLE IF EXISTS misa_details;
+        DROP TABLE IF EXISTS customer_recipients;
+      `);
+      const keys = ['customers.v2', 'sales-employees.v2', 'settings.v2', 'accounts.v1', 'misa-sales-book.v1', 'receipt-ledger.v1'];
+      for (const table of ['app_datasets', 'dataset_versions']) {
+        const rename = database.prepare(`UPDATE ${table} SET dataset_key = ? WHERE dataset_key = ?`);
+        for (const key of keys) rename.run(`cong-no.${key}`, `mkt-cost.${key}`);
+        // Các khóa mkt-cost còn lại là dữ liệu app cũ (sản phẩm, tổng hợp MISA cũ...).
+        database.exec(`DELETE FROM ${table} WHERE dataset_key LIKE 'mkt-cost.%'`);
+      }
+      database.exec('PRAGMA user_version = 12;');
+    });
   }
 }
 
@@ -190,7 +318,8 @@ function withTransaction(database, action) {
     database.exec('COMMIT');
     return result;
   } catch (error) {
-    database.exec('ROLLBACK');
+    // Keep the original failure even if SQLite already rolled the transaction back.
+    try { database.exec('ROLLBACK'); } catch { /* no active transaction */ }
     throw error;
   }
 }
@@ -206,18 +335,14 @@ function readVersion(database, key) {
 }
 
 function writeCustomers(database, version, customers) {
-  return withTransaction(database, () => {
-    database.exec('DELETE FROM customer_assignments; DELETE FROM customer_recipients; DELETE FROM customers;');
+    database.exec('DELETE FROM customer_assignments; DELETE FROM customers;');
     const customerStatement = database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const assignmentStatement = database.prepare('INSERT INTO customer_assignments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    const recipientStatement = database.prepare('INSERT INTO customer_recipients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     customers.forEach((customer, customerIndex) => {
       customerStatement.run(customer.id, customer.misaCode, customer.name, customer.group, customer.taxCode, customer.province, customer.address, customer.status, customer.createdAt, customer.updatedAt, customerIndex);
       customer.assignments.forEach((assignment, index) => assignmentStatement.run(assignment.id, customer.id, assignment.employeeId, assignment.employeeName, assignment.province, assignment.source, assignment.effectiveFrom, assignment.effectiveTo, index));
-      customer.recipients.forEach((recipient, index) => recipientStatement.run(recipient.id, customer.id, recipient.fullName, recipient.position, recipient.phone, recipient.effectiveFrom, recipient.effectiveTo, recipient.isPrimary ? 1 : 0, recipient.active ? 1 : 0, index));
     });
     writeVersion(database, DATASET_KEYS.customers, version);
-  });
 }
 
 function groupByCustomer(rows) {
@@ -233,277 +358,111 @@ function groupByCustomer(rows) {
 function readCustomers(database, version) {
   const customers = database.prepare('SELECT * FROM customers ORDER BY sort_order').all();
   const assignments = database.prepare('SELECT * FROM customer_assignments ORDER BY customer_id, sort_order').all();
-  const recipients = database.prepare('SELECT * FROM customer_recipients ORDER BY customer_id, sort_order').all();
   const assignmentsByCustomer = groupByCustomer(assignments);
-  const recipientsByCustomer = groupByCustomer(recipients);
   return { version, data: customers.map((customer) => ({
     id: customer.id, misaCode: customer.misa_code, name: customer.name, group: customer.customer_group,
     taxCode: customer.tax_code, province: customer.province, address: customer.address, status: customer.status,
     assignments: (assignmentsByCustomer.get(customer.id) ?? []).map((item) => ({ id: item.id, employeeId: item.employee_id, employeeName: item.employee_name, province: item.province, source: item.source, effectiveFrom: item.effective_from, effectiveTo: item.effective_to })),
-    recipients: (recipientsByCustomer.get(customer.id) ?? []).map((item) => ({ id: item.id, fullName: item.full_name, position: item.position, phone: item.phone, effectiveFrom: item.effective_from, effectiveTo: item.effective_to, isPrimary: Boolean(item.is_primary), active: Boolean(item.active) })),
     createdAt: customer.created_at, updatedAt: customer.updated_at,
   })) };
 }
 
 function writeEmployees(database, version, employees) {
-  return withTransaction(database, () => {
-    database.exec('DELETE FROM sales_employees;');
-    const statement = database.prepare('INSERT INTO sales_employees VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    employees.forEach((employee, index) => statement.run(employee.id, employee.code, employee.name, employee.phone, employee.email, employee.status, employee.createdAt, index));
-    writeVersion(database, DATASET_KEYS.employees, version);
-  });
+  const links = employees.map((employee) => employee.linkedAccountId).filter((id) => id !== undefined);
+  if (links.length) {
+    const accounts = readGeneric(database, 'cong-no.accounts.v1')?.data ?? [];
+    const accountIds = new Set(accounts.map(({ id }) => id));
+    if (links.some((id) => !accountIds.has(id))) {
+      throw Object.assign(new Error('Tài khoản liên kết không còn tồn tại.'), { status: 400 });
+    }
+    if (new Set(links).size !== links.length) {
+      throw Object.assign(new Error('Tài khoản này đã liên kết với nhân viên khác.'), { status: 409 });
+    }
+  }
+  database.exec('DELETE FROM sales_employees;');
+  const statement = database.prepare(`
+    INSERT INTO sales_employees
+      (id, code, name, phone, email, status, created_at, sort_order, linked_account_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  employees.forEach((employee, index) => statement.run(
+    employee.id, employee.code, employee.name, employee.phone, employee.email,
+    employee.status, employee.createdAt, index, employee.linkedAccountId ?? null,
+  ));
+  writeVersion(database, DATASET_KEYS.employees, version);
 }
 
 function readEmployees(database, version) {
-  const data = database.prepare('SELECT * FROM sales_employees ORDER BY sort_order').all().map((item) => ({ id: item.id, code: item.code, name: item.name, phone: item.phone, email: item.email, status: item.status, createdAt: item.created_at }));
+  const data = database.prepare('SELECT * FROM sales_employees ORDER BY sort_order').all().map((item) => ({
+    id: item.id, code: item.code, name: item.name, phone: item.phone, email: item.email,
+    status: item.status, createdAt: item.created_at,
+    ...(item.linked_account_id ? { linkedAccountId: item.linked_account_id } : {}),
+  }));
   return { version, data };
 }
 
-function writeProducts(database, version, catalog) {
-  return withTransaction(database, () => {
-    database.exec('DELETE FROM policy_recipient_allocations; DELETE FROM product_policies; DELETE FROM products;');
-    const productStatement = database.prepare(`INSERT INTO products
-      (id, code, name, product_group, unit, status, created_at, updated_at, sort_order, search_text)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const policyStatement = database.prepare(`INSERT INTO product_policies
-      (id, product_id, customer_id, calculation_type, value, effective_from, effective_to, status, note, created_at, updated_at, sort_order, retained_amount)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const allocationStatement = database.prepare(`INSERT INTO policy_recipient_allocations
-      (policy_id, recipient_id, amount, sort_order, retained_amount)
-      VALUES (?, ?, ?, ?, ?)`);
-    catalog.products.forEach((product, index) => productStatement.run(
-      product.id, product.code, product.name, product.group, product.unit, product.status,
-      product.createdAt, product.updatedAt, index,
-      `${product.code} ${product.name}`.toLocaleLowerCase('vi-VN'),
-    ));
-    catalog.policies.forEach((policy, policyIndex) => {
-      policyStatement.run(policy.id, policy.productId, policy.customerId, policy.calculationType, policy.value, policy.effectiveFrom, policy.effectiveTo, policy.status, policy.note, policy.createdAt, policy.updatedAt, policyIndex, policy.retainedAmount ?? 0);
-      policy.recipientAllocations.forEach((allocation, index) => allocationStatement.run(policy.id, allocation.recipientId, allocation.amount, index, allocation.retainedAmount ?? 0));
-    });
-    writeVersion(database, DATASET_KEYS.products, version);
+const sellerText = (value) => (typeof value === 'string' ? value.slice(0, 500) : '');
+
+function sellerJson(settings) {
+  const fields = ['bankAccounts', 'accountingContact', 'signatoryName', 'signatoryTitle'];
+  // Dữ liệu cũ chưa có trường bên bán: giữ NULL để giao diện điền giá trị chuyển đổi.
+  if (fields.every((field) => settings[field] === undefined)) return null;
+  return JSON.stringify({
+    bankAccounts: Array.isArray(settings.bankAccounts)
+      ? settings.bankAccounts.filter((item) => typeof item === 'string').slice(0, 3).map(sellerText)
+      : [],
+    accountingContact: sellerText(settings.accountingContact),
+    signatoryName: sellerText(settings.signatoryName),
+    signatoryTitle: sellerText(settings.signatoryTitle),
   });
 }
 
-function mapProduct(item) {
-  return {
-    id: item.id, code: item.code, name: item.name, group: item.product_group, unit: item.unit,
-    status: item.status, createdAt: item.created_at, updatedAt: item.updated_at,
-  };
-}
-
-function mapPolicy(item, allocationsByPolicy) {
-  return {
-    id: item.id, productId: item.product_id, customerId: item.customer_id,
-    recipientAllocations: allocationsByPolicy.get(item.id) ?? [],
-    calculationType: item.calculation_type, value: item.value, retainedAmount: item.retained_amount ?? 0, effectiveFrom: item.effective_from,
-    effectiveTo: item.effective_to, status: item.status, note: item.note,
-    createdAt: item.created_at, updatedAt: item.updated_at,
-  };
-}
-
-function readProducts(database, version) {
-  const products = database.prepare('SELECT * FROM products ORDER BY sort_order').all().map(mapProduct);
-  const allocations = database.prepare('SELECT * FROM policy_recipient_allocations ORDER BY policy_id, sort_order').all();
-  const allocationsByPolicy = new Map();
-  for (const allocation of allocations) {
-    const values = allocationsByPolicy.get(allocation.policy_id) ?? [];
-    values.push({ recipientId: allocation.recipient_id, amount: allocation.amount, retainedAmount: allocation.retained_amount ?? 0 });
-    allocationsByPolicy.set(allocation.policy_id, values);
-  }
-  const policies = database.prepare('SELECT * FROM product_policies ORDER BY sort_order').all()
-    .map((item) => mapPolicy(item, allocationsByPolicy));
-  return { version, data: { products, policies } };
-}
-
-function normalizeProductQuery(options = {}) {
-  const pageSize = [25, 50, 100].includes(Number(options.pageSize)) ? Number(options.pageSize) : 25;
-  return {
-    query: typeof options.query === 'string' ? options.query.trim().slice(0, 200).toLocaleLowerCase('vi-VN') : '',
-    group: typeof options.group === 'string' && options.group !== 'all' ? options.group.slice(0, 200) : null,
-    page: Math.max(1, Math.trunc(Number(options.page) || 1)),
-    pageSize,
-    today: /^\d{4}-\d{2}-\d{2}$/.test(options.today) ? options.today : new Date().toISOString().slice(0, 10),
-    soonDate: /^\d{4}-\d{2}-\d{2}$/.test(options.soonDate) ? options.soonDate : new Date().toISOString().slice(0, 10),
-    activeCustomerCount: Math.max(0, Math.trunc(Number(options.activeCustomerCount) || 0)),
-  };
-}
-
-function queryProducts(database, options) {
-  if (!readVersion(database, DATASET_KEYS.products)) return { initialized: false };
-  const normalized = normalizeProductQuery(options);
-  const filterSql = `(? = '' OR instr(search_text, ?) > 0)
-    AND (? IS NULL OR product_group = ?)`;
-  const filterParams = [normalized.query, normalized.query, normalized.group, normalized.group];
-  const filteredCount = Number(database.prepare(`SELECT COUNT(*) AS count FROM products WHERE ${filterSql}`).get(...filterParams).count);
-  const pageCount = Math.max(1, Math.ceil(filteredCount / normalized.pageSize));
-  const page = Math.min(normalized.page, pageCount);
-  const offset = (page - 1) * normalized.pageSize;
-  const rows = database.prepare(`
-    SELECT products.*, COALESCE(current_policy.coverage_count, 0) AS coverage_count
-    FROM products
-    LEFT JOIN (
-      SELECT product_id, COUNT(DISTINCT customer_id) AS coverage_count
-      FROM product_policies
-      WHERE status = 'active' AND effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)
-      GROUP BY product_id
-    ) AS current_policy ON current_policy.product_id = products.id
-    WHERE ${filterSql}
-    ORDER BY products.sort_order
-    LIMIT ? OFFSET ?
-  `).all(normalized.today, normalized.today, ...filterParams, normalized.pageSize, offset);
-
-  const productTotals = database.prepare(`SELECT COUNT(*) AS total,
-    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active FROM products`).get();
-  const policyTotals = database.prepare(`SELECT COUNT(*) AS total,
-    COUNT(DISTINCT customer_id) AS customers,
-    SUM(CASE WHEN effective_to IS NOT NULL AND effective_to BETWEEN ? AND ? THEN 1 ELSE 0 END) AS expiring
-    FROM product_policies
-    WHERE status = 'active' AND effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)`)
-    .get(normalized.today, normalized.soonDate, normalized.today, normalized.today);
-  const missingAssignmentsRow = database.prepare(`SELECT COALESCE(SUM(MAX(0, ? - coverage)), 0) AS missing
-    FROM (
-      SELECT products.id, COUNT(DISTINCT product_policies.customer_id) AS coverage
-      FROM products
-      LEFT JOIN product_policies ON product_policies.product_id = products.id
-        AND product_policies.status = 'active'
-        AND product_policies.effective_from <= ?
-        AND (product_policies.effective_to IS NULL OR product_policies.effective_to >= ?)
-      WHERE products.status = 'active'
-      GROUP BY products.id
-    )`).get(normalized.activeCustomerCount, normalized.today, normalized.today);
-  const missingAssignments = Number(missingAssignmentsRow.missing ?? 0);
-  const groups = database.prepare(`SELECT DISTINCT product_group FROM products
-    WHERE product_group <> '' ORDER BY product_group COLLATE NOCASE`).all().map((row) => row.product_group);
-
-  return {
-    initialized: true,
-    products: rows.map(mapProduct),
-    coverageByProduct: Object.fromEntries(rows.map((row) => [row.id, Number(row.coverage_count)])),
-    groups,
-    filteredCount,
-    totalCount: Number(productTotals.total),
-    page,
-    pageCount,
-    firstVisible: filteredCount === 0 ? 0 : offset + 1,
-    lastVisible: Math.min(offset + normalized.pageSize, filteredCount),
-    summary: {
-      activeProducts: Number(productTotals.active ?? 0),
-      currentPolicies: Number(policyTotals.total ?? 0),
-      currentCustomers: Number(policyTotals.customers ?? 0),
-      missingAssignments,
-      expiringSoon: Number(policyTotals.expiring ?? 0),
-    },
-  };
-}
-
-function readProductDetail(database, productId) {
-  if (typeof productId !== 'string' || productId.length > 160) throw new Error('Mã định danh sản phẩm không hợp lệ.');
-  const productRow = database.prepare('SELECT * FROM products WHERE id = ?').get(productId);
-  if (!productRow) return null;
-  const policyRows = database.prepare('SELECT * FROM product_policies WHERE product_id = ? ORDER BY sort_order').all(productId);
-  const allocationsByPolicy = new Map();
-  if (policyRows.length) {
-    const allocationStatement = database.prepare('SELECT * FROM policy_recipient_allocations WHERE policy_id = ? ORDER BY sort_order');
-    for (const policy of policyRows) {
-      allocationsByPolicy.set(policy.id, allocationStatement.all(policy.id).map((item) => ({ recipientId: item.recipient_id, amount: item.amount, retainedAmount: item.retained_amount ?? 0 })));
-    }
-  }
-  return { products: [mapProduct(productRow)], policies: policyRows.map((item) => mapPolicy(item, allocationsByPolicy)) };
+function insertSettings(database, settings) {
+  database.prepare(`INSERT INTO app_settings
+    (id, company_name, company_address, display_name, tagline, logo_data_url, seller_json)
+    VALUES (1, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, company_address = excluded.company_address,
+      display_name = excluded.display_name, tagline = excluded.tagline, logo_data_url = excluded.logo_data_url,
+      seller_json = excluded.seller_json`)
+    .run(settings.companyName, settings.companyAddress, settings.displayName, settings.tagline,
+      settings.logoDataUrl, sellerJson(settings));
 }
 
 function writeSettings(database, version, settings) {
-  return withTransaction(database, () => {
-    database.prepare(`INSERT INTO app_settings VALUES (1, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, company_address = excluded.company_address, display_name = excluded.display_name, tagline = excluded.tagline, logo_data_url = excluded.logo_data_url`)
-      .run(settings.companyName, settings.companyAddress, settings.displayName, settings.tagline, settings.logoDataUrl);
-    writeVersion(database, DATASET_KEYS.settings, version);
-  });
+  insertSettings(database, settings);
+  writeVersion(database, DATASET_KEYS.settings, version);
 }
 
 function readSettings(database, version) {
   const item = database.prepare('SELECT * FROM app_settings WHERE id = 1').get();
-  return { version, data: { companyName: item.company_name, companyAddress: item.company_address, displayName: item.display_name, tagline: item.tagline, logoDataUrl: item.logo_data_url } };
+  let seller = {};
+  try {
+    if (item.seller_json) seller = JSON.parse(item.seller_json);
+  } catch {
+    seller = {};
+  }
+  return { version, data: { companyName: item.company_name, companyAddress: item.company_address, ...seller, displayName: item.display_name, tagline: item.tagline, logoDataUrl: item.logo_data_url } };
 }
 
-function normalizeSearch(value) {
-  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
+let lastDatasetStamp = 0;
 
-function writeMisaDetails(database, version, rows) {
-  if (!Array.isArray(rows)) throw new Error('Dữ liệu chi tiết MISA không hợp lệ.');
-  return withTransaction(database, () => {
-    database.exec('DELETE FROM misa_details;');
-    const statement = database.prepare(`INSERT INTO misa_details (
-      id, unit_id, row_number, transaction_date, document_number, product_code, description, unit,
-      quantity, unit_price, general_description, debt_account, contra_account,
-      debit, credit, balance_debit, balance_credit, document_kind, search_text
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const row of rows) {
-      statement.run(
-        row.id, row.unitId, row.rowNumber, row.date, row.documentNumber, row.productCode ?? '', row.description,
-        row.unit, row.quantity, row.unitPrice, row.generalDescription, row.debtAccount,
-        row.contraAccount, row.debit, row.credit, row.balanceDebit, row.balanceCredit,
-        row.documentKind,
-        normalizeSearch(`${row.documentNumber} ${row.description} ${row.generalDescription}`),
-      );
-    }
-    writeVersion(database, DATASET_KEYS.misaDetails, version);
-    return true;
-  });
-}
-
-function mapMisaDetail(row) {
-  return {
-    id: row.id, unitId: row.unit_id, rowNumber: Number(row.row_number),
-    date: row.transaction_date, documentNumber: row.document_number,
-    productCode: row.product_code ?? '', description: row.description, unit: row.unit, quantity: row.quantity,
-    unitPrice: row.unit_price, generalDescription: row.general_description,
-    debtAccount: row.debt_account, contraAccount: row.contra_account,
-    debit: row.debit, credit: row.credit,
-    balanceDebit: row.balance_debit, balanceCredit: row.balance_credit,
-    documentKind: row.document_kind,
-  };
-}
-
-function queryMisaDetails(database, options = {}) {
-  const unitId = typeof options.unitId === 'string' ? options.unitId.slice(0, 600) : '';
-  if (!unitId) throw new Error('Chưa chọn đơn vị MISA.');
-  const kinds = ['all', 'sale', 'receipt', 'adjustment'];
-  const documentKind = kinds.includes(options.documentKind) ? options.documentKind : 'all';
-  const query = normalizeSearch(typeof options.query === 'string' ? options.query.slice(0, 200) : '');
-  const pageSize = [25, 50, 100].includes(Number(options.pageSize)) ? Number(options.pageSize) : 25;
-  const requestedPage = Math.max(1, Math.trunc(Number(options.page) || 1));
-  const filterSql = `unit_id = ? AND document_kind <> 'opening' AND (? = 'all' OR document_kind = ?)
-    AND (? = '' OR instr(search_text, ?) > 0)`;
-  const params = [unitId, documentKind, documentKind, query, query];
-  const filteredCount = Number(database.prepare(`SELECT COUNT(*) AS count FROM misa_details WHERE ${filterSql}`).get(...params).count);
-  const pageCount = Math.max(1, Math.ceil(filteredCount / pageSize));
-  const page = Math.min(requestedPage, pageCount);
-  const offset = (page - 1) * pageSize;
-  const rows = database.prepare(`SELECT * FROM misa_details WHERE ${filterSql}
-    ORDER BY row_number LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
-  return {
-    rows: rows.map(mapMisaDetail), filteredCount, page, pageCount,
-    firstVisible: filteredCount ? offset + 1 : 0,
-    lastVisible: Math.min(offset + pageSize, filteredCount),
-  };
-}
-
-function queryMisaRange(database, options = {}) {
-  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-  const dateFrom = typeof options.dateFrom === 'string' && datePattern.test(options.dateFrom) ? options.dateFrom : '';
-  const dateTo = typeof options.dateTo === 'string' && datePattern.test(options.dateTo) ? options.dateTo : '';
-  if (!dateFrom || !dateTo || dateTo < dateFrom) throw new Error('Khoảng ngày đối soát không hợp lệ.');
-  return database.prepare(`SELECT * FROM misa_details
-    WHERE transaction_date BETWEEN ? AND ? AND document_kind <> 'opening'
-    ORDER BY transaction_date, row_number`).all(dateFrom, dateTo).map(mapMisaDetail);
+// updated_at tăng nghiêm ngặt cho mỗi lần ghi để máy trạm dùng làm dấu "dữ liệu đã đổi"
+// mà không phải tải lại toàn bộ sổ (xem datasetStamp).
+function nextDatasetStamp(database, key) {
+  const row = database.prepare('SELECT updated_at FROM app_datasets WHERE dataset_key = ?').get(key);
+  lastDatasetStamp = Math.max(Date.now(), (Date.parse(row?.updated_at ?? '') || 0) + 1, lastDatasetStamp + 1);
+  return new Date(lastDatasetStamp).toISOString();
 }
 
 function writeGeneric(database, key, version, data) {
   database.prepare(`INSERT INTO app_datasets (dataset_key, version, payload_json, updated_at) VALUES (?, ?, ?, ?)
     ON CONFLICT(dataset_key) DO UPDATE SET version = excluded.version, payload_json = excluded.payload_json, updated_at = excluded.updated_at`)
-    .run(key, version, JSON.stringify(data), new Date().toISOString());
+    .run(key, version, JSON.stringify(data), nextDatasetStamp(database, key));
+}
+
+function datasetStamp(database, key) {
+  const row = database.prepare('SELECT version, updated_at FROM app_datasets WHERE dataset_key = ?').get(key);
+  return row ? `${row.version}:${row.updated_at}` : null;
 }
 
 function readGeneric(database, key) {
@@ -511,32 +470,187 @@ function readGeneric(database, key) {
   return row ? { version: row.version, data: JSON.parse(row.payload_json) } : undefined;
 }
 
-function openDatabase(databasePath) {
-  const database = new DatabaseSync(databasePath);
-  migrateSchema(database);
+function clearAllData(database, branding) {
+  return withTransaction(database, () => {
+    database.exec(`
+      DELETE FROM customer_assignments;
+      DELETE FROM customers;
+      DELETE FROM sales_employees;
+      DELETE FROM app_settings;
+      DELETE FROM app_datasets WHERE dataset_key <> 'cong-no.accounts.v1';
+      DELETE FROM dataset_versions;
+    `);
+    if (branding) {
+      insertSettings(database, {
+        companyName: '', companyAddress: '', displayName: branding.displayName,
+        tagline: branding.tagline, logoDataUrl: branding.logoDataUrl,
+      });
+      writeVersion(database, DATASET_KEYS.settings, 2);
+    }
+    return true;
+  });
+}
+
+const businessKeys = {
+  salesBook: 'cong-no.misa-sales-book.v1',
+  ledger: 'cong-no.receipt-ledger.v1',
+};
+
+function readBusinessData(database) {
+  function directory(key, read, fallback) {
+    const version = readVersion(database, key);
+    return version ? read(database, version.version).data : fallback;
+  }
   return {
+    customers: directory(DATASET_KEYS.customers, readCustomers, []),
+    employees: directory(DATASET_KEYS.employees, readEmployees, []),
+    salesBook: readGeneric(database, businessKeys.salesBook)?.data ?? null,
+    ledger: readGeneric(database, businessKeys.ledger)?.data ?? null,
+    settings: directory(DATASET_KEYS.settings, readSettings, null),
+  };
+}
+
+function changeBusinessData(database, change, companyId, expected, onChange) {
+  return withTransaction(database, () => {
+    const current = readBusinessData(database);
+    if (expected !== undefined && JSON.stringify(current) !== expected) {
+      throw Object.assign(new Error('Dữ liệu vừa thay đổi. Kiểm tra lại rồi thử lại.'), { status: 409 });
+    }
+    let next;
+    if (change?.type === 'restore') {
+      const accounts = readGeneric(database, 'cong-no.accounts.v1')?.data ?? [];
+      next = restoreBusinessData(change.backup, current, companyId, new Set(accounts.map(({ id }) => id)));
+    } else if (change?.type === 'delete') {
+      next = deleteBusinessGroups(current, change.groups);
+    } else {
+      throw Object.assign(new Error('Thao tác dữ liệu không hợp lệ.'), { status: 400 });
+    }
+    if (next.customers !== current.customers) writeCustomers(database, 2, next.customers);
+    if (next.employees !== current.employees) writeEmployees(database, 2, next.employees);
+    for (const [key, dataset] of Object.entries(businessKeys)) {
+      if (next[key] === current[key]) continue;
+      if (next[key] === null) database.prepare('DELETE FROM app_datasets WHERE dataset_key = ?').run(dataset);
+      else writeGeneric(database, dataset, 1, next[key]);
+    }
+    if (next.settings !== current.settings) {
+      if (next.settings) writeSettings(database, 2, next.settings);
+      else {
+        database.exec('DELETE FROM app_settings');
+        database.prepare('DELETE FROM dataset_versions WHERE dataset_key = ?').run(DATASET_KEYS.settings);
+      }
+    }
+    onChange?.();
+    return true;
+  });
+}
+
+// Bản sao lưu từ phiên bản cũ được nâng cấp trên một bản chép tạm rồi mới đọc,
+// để khóa dữ liệu và cấu trúc khớp phiên bản hiện tại; tệp sao lưu gốc giữ nguyên.
+function openUpgradedCopy(databasePath) {
+  const copy = path.join(os.tmpdir(), `cong-no-sao-luu-${randomUUID()}.sqlite`);
+  fs.copyFileSync(databasePath, copy);
+  let opened;
+  try {
+    opened = openDatabase(copy, { snapshot: false });
+  } catch (error) {
+    fs.rmSync(copy, { force: true });
+    throw error;
+  }
+  const close = opened.close;
+  opened.close = () => {
+    close();
+    for (const suffix of ['', '-wal', '-shm']) fs.rmSync(copy + suffix, { force: true });
+  };
+  return opened;
+}
+
+function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) {
+  if (readOnly) {
+    const probe = new DatabaseSync(databasePath, { readOnly: true });
+    let version;
+    try { ({ user_version: version } = probe.prepare('PRAGMA user_version').get()); } finally { probe.close(); }
+    if (version < 8 || version > SCHEMA_VERSION) throw new Error('Phiên bản bản sao lưu SQLite không tương thích.');
+    if (version < SCHEMA_VERSION) return openUpgradedCopy(databasePath);
+  }
+  const database = new DatabaseSync(databasePath, { readOnly });
+  try {
+    if (!readOnly) migrateSchema(database, databasePath, { snapshot });
+  } catch (error) {
+    database.close();
+    throw error;
+  }
+  return {
+    datasetStamp(key) { return datasetStamp(database, key); },
     readDataset(key) {
       const versionRow = readVersion(database, key);
       if (key === DATASET_KEYS.customers && versionRow) return readCustomers(database, versionRow.version);
       if (key === DATASET_KEYS.employees && versionRow) return readEmployees(database, versionRow.version);
-      if (key === DATASET_KEYS.products && versionRow) return readProducts(database, versionRow.version);
       if (key === DATASET_KEYS.settings && versionRow) return readSettings(database, versionRow.version);
       return readGeneric(database, key);
     },
     writeDataset(key, version, data) {
       if (!Number.isInteger(version) || version < 1) throw new Error('Phiên bản dataset không hợp lệ.');
-      if (key === DATASET_KEYS.customers) writeCustomers(database, version, data);
-      else if (key === DATASET_KEYS.employees) writeEmployees(database, version, data);
-      else if (key === DATASET_KEYS.products) writeProducts(database, version, data);
-      else if (key === DATASET_KEYS.settings) writeSettings(database, version, data);
+      if (key === DATASET_KEYS.customers) withTransaction(database, () => writeCustomers(database, version, data));
+      else if (key === DATASET_KEYS.employees) withTransaction(database, () => writeEmployees(database, version, data));
+      else if (key === DATASET_KEYS.settings) withTransaction(database, () => writeSettings(database, version, data));
       else writeGeneric(database, key, version, data);
       return true;
     },
-    queryProducts(options) { return queryProducts(database, options); },
-    readProductDetail(productId) { return readProductDetail(database, productId); },
-    writeMisaDetails(version, rows) { return writeMisaDetails(database, version, rows); },
-    queryMisaDetails(options) { return queryMisaDetails(database, options); },
-    queryMisaRange(options) { return queryMisaRange(database, options); },
+    exportBusinessBackup(companyId = null) {
+      return makeBusinessBackup(readBusinessData(database), companyId);
+    },
+    changeBusinessData(change, companyId = null, expected, onChange) {
+      return changeBusinessData(database, change, companyId, expected, onChange);
+    },
+    writeDirectory(customers, employees) {
+      return withTransaction(database, () => {
+        writeCustomers(database, 2, customers);
+        writeEmployees(database, 2, employees);
+        return true;
+      });
+    },
+    writeAccounts(expected, accounts) {
+      return withTransaction(database, () => {
+        const key = 'cong-no.accounts.v1';
+        const current = readGeneric(database, key);
+        if ((current && current.version !== 1) ||
+            JSON.stringify(current?.data ?? []) !== JSON.stringify(expected)) return false;
+        writeGeneric(database, key, 1, accounts);
+        return true;
+      });
+    },
+    writeReceiptLedger(revision, data, salesBookImportedAt) {
+      return withTransaction(database, () => {
+        const key = 'cong-no.receipt-ledger.v1';
+        const current = readGeneric(database, key);
+        if (current && current.version !== 1) throw new Error('Phiên bản sổ đối soát không hợp lệ.');
+        if ((current?.data?.revision ?? '') !== revision) return false;
+        if (salesBookImportedAt !== undefined &&
+            readGeneric(database, 'cong-no.misa-sales-book.v1')?.data?.importedAt !== salesBookImportedAt) return false;
+        writeGeneric(database, key, 1, data);
+        return true;
+      });
+    },
+    writeMisaSalesBook(expectedImportedAt, data) {
+      return withTransaction(database, () => {
+        const key = 'cong-no.misa-sales-book.v1';
+        const current = readGeneric(database, key);
+        if (current && current.version !== 1) throw new Error('Phiên bản sổ bán hàng không hợp lệ.');
+        if ((current?.data?.importedAt ?? null) !== expectedImportedAt) return false;
+        writeGeneric(database, key, 1, data);
+        return true;
+      });
+    },
+    clearAllData(branding) { return clearAllData(database, branding); },
+    appendActivity(entry) {
+      database.prepare('INSERT INTO activity_log VALUES (?, ?, ?)')
+        .run(entry.id, entry.time, JSON.stringify(entry));
+      return true;
+    },
+    readActivities() {
+      return database.prepare('SELECT payload_json FROM activity_log ORDER BY occurred_at DESC, id DESC')
+        .all().map((row) => JSON.parse(row.payload_json));
+    },
     status() {
       const row = database.prepare('PRAGMA user_version').get();
       return { backend: 'sqlite', schemaVersion: Number(row?.user_version ?? 0) };

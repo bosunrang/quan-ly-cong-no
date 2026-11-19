@@ -6,8 +6,9 @@ export function createEmployee(draft: EmployeeDraft): SalesEmployee {
 		id: createId("NV"),
 		code: draft.code.trim(),
 		name: draft.name.trim(),
-		phone: draft.phone.trim(),
-		email: draft.email.trim(),
+		phone: "",
+		email: "",
+		linkedAccountId: draft.linkedAccountId,
 		status: draft.status,
 		createdAt: new Date().toISOString(),
 	};

@@ -1,21 +1,15 @@
-import { Eye, FilterX, Search } from "lucide-react";
+import { FilterX, Search, SlidersHorizontal } from "lucide-react";
 import { useEffect, useRef } from "react";
 import {
-	customerGroupLabels,
 	customerStatusLabels,
 	type Customer,
-	type CustomerGroup,
 	type CustomerStatus,
 } from "../../../domain/customers/customer.model";
+import { currentAssignment } from "../../../domain/customers/customer.selectors";
 import type { SalesEmployee } from "../../../domain/employees/employee.model";
-import {
-	currentAssignment,
-	currentRecipient,
-} from "../../../domain/customers/customer.selectors";
 import { PaginationControls } from "../../../shared/ui/Pagination/PaginationControls";
 import { StatusPill } from "../../../shared/ui/StatusPill";
 
-export type GroupFilter = CustomerGroup | "all";
 export type StatusFilter = CustomerStatus | "all";
 
 interface CustomerDirectoryPanelProps {
@@ -28,13 +22,11 @@ interface CustomerDirectoryPanelProps {
 	employees: SalesEmployee[];
 	provinces: string[];
 	query: string;
-	group: GroupFilter;
 	province: string;
 	employee: string;
 	status: StatusFilter;
 	filtersActive: boolean;
 	onQueryChange: (value: string) => void;
-	onGroupChange: (value: GroupFilter) => void;
 	onProvinceChange: (value: string) => void;
 	onEmployeeChange: (value: string) => void;
 	onStatusChange: (value: StatusFilter) => void;
@@ -55,13 +47,11 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 		employees,
 		provinces,
 		query,
-		group,
 		province,
 		employee,
 		status,
 		filtersActive,
 		onQueryChange,
-		onGroupChange,
 		onProvinceChange,
 		onEmployeeChange,
 		onStatusChange,
@@ -86,22 +76,13 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 			<div className="data-toolbar customer-toolbar">
 				<label className="table-search">
 					<span className="visually-hidden">Tìm khách hàng</span>
-					<Search size={16} />
+					<Search className="icon-size-16" />
 					<input
 						value={query}
 						onChange={(event) => onQueryChange(event.target.value)}
 						placeholder="Tìm mã MISA, khách hàng, MST, người phụ trách..."
 					/>
 				</label>
-				<select
-					aria-label="Lọc nhóm khách hàng"
-					value={group}
-					onChange={(event) => onGroupChange(event.target.value as GroupFilter)}
-				>
-					<option value="all">Tất cả nhóm</option>
-					<option value="state">Nhà nước</option>
-					<option value="private">Tư nhân</option>
-				</select>
 				<select
 					aria-label="Lọc tỉnh thành"
 					value={province}
@@ -142,7 +123,7 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 						onClick={onReset}
 						title="Xóa bộ lọc"
 					>
-						<FilterX size={16} />
+						<FilterX className="icon-size-16" />
 					</button>
 				)}
 			</div>
@@ -151,10 +132,8 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 					<thead>
 						<tr>
 							<th>Khách hàng</th>
-							<th>Nhóm</th>
 							<th>Tỉnh/thành</th>
 							<th>Nhân viên phụ trách</th>
-							<th>Người nhận chiết khấu</th>
 							<th>Trạng thái</th>
 							<th />
 						</tr>
@@ -162,22 +141,15 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 					<tbody>
 						{customers.map((customer) => {
 							const assignment = currentAssignment(customer);
-							const recipient = currentRecipient(customer);
-							const activeRecipientCount = customer.recipients.filter(
-								(item) => item.active,
-							).length;
 							return (
 								<tr key={customer.id}>
 									<td>
-										<strong>{customer.name}</strong>
+										<strong className="table-customer-name">
+											{customer.name}
+										</strong>
 										<span className="cell-meta">
 											{customer.misaCode}
 											{customer.taxCode ? ` · MST ${customer.taxCode}` : ""}
-										</span>
-									</td>
-									<td>
-										<span className={`customer-group-badge ${customer.group}`}>
-											{customerGroupLabels[customer.group]}
 										</span>
 									</td>
 									<td>
@@ -197,25 +169,6 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 										)}
 									</td>
 									<td>
-										{recipient ? (
-											<>
-												<strong>
-													{recipient.fullName}
-													{activeRecipientCount > 1 && (
-														<span className="recipient-more-count">
-															+{activeRecipientCount - 1}
-														</span>
-													)}
-												</strong>
-												<span className="cell-meta">
-													{recipient.position || "Chưa có chức vụ"} · Mặc định
-												</span>
-											</>
-										) : (
-											<span className="missing-value">Chưa thiết lập</span>
-										)}
-									</td>
-									<td>
 										<StatusPill
 											tone={
 												customer.status === "active" ? "success" : "neutral"
@@ -231,7 +184,7 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 											onClick={() => onOpen(customer.id)}
 											aria-label={`Mở hồ sơ ${customer.name}`}
 										>
-											<Eye size={16} />
+											<SlidersHorizontal className="icon-size-16" />
 										</button>
 									</td>
 								</tr>

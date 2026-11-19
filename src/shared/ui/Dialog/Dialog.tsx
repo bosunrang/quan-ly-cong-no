@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import type { FormEventHandler, ReactNode } from "react";
+import { useDialogKeyboard } from "./useDialogKeyboard";
 
 type DialogTone = "default" | "warning" | "danger";
 
@@ -14,6 +15,7 @@ interface DialogProps {
 	className?: string;
 	tone?: DialogTone;
 	onSubmit?: FormEventHandler<HTMLFormElement>;
+	disableClose?: boolean;
 }
 
 export function Dialog({
@@ -27,19 +29,24 @@ export function Dialog({
 	className = "",
 	tone = "default",
 	onSubmit,
+	disableClose = false,
 }: DialogProps) {
 	const Root: "form" | "section" = onSubmit ? "form" : "section";
+	const keyboard = useDialogKeyboard(onClose, disableClose, tone !== "default");
 
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: Backdrop click closes the modal; the dialog itself remains the semantic interactive surface.
 		<div
 			className="dialog-overlay"
 			role="presentation"
-			onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+			onMouseDown={(event) =>
+				!disableClose && event.target === event.currentTarget && onClose()
+			}
 		>
 			<Root
+				{...keyboard}
 				className={`dialog-shell ${className}`.trim()}
-				role="dialog"
+				role={tone === "danger" ? "alertdialog" : "dialog"}
 				aria-modal="true"
 				aria-labelledby={ariaLabelledBy}
 				onSubmit={onSubmit}
@@ -53,10 +60,11 @@ export function Dialog({
 					<button
 						className="drawer-close"
 						type="button"
+						disabled={disableClose}
 						onClick={onClose}
 						aria-label="Đóng"
 					>
-						<X size={18} />
+						<X className="icon-size-18" />
 					</button>
 				</header>
 				{children}

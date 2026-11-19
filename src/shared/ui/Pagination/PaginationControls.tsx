@@ -20,24 +20,26 @@ export function PaginationControls({
 	return (
 		<div className="pagination-controls">
 			<button
+				className="row-action"
 				type="button"
 				onClick={() => onPageChange(currentPage - 1)}
 				disabled={currentPage <= 1}
 				aria-label={previousLabel}
 			>
-				<ChevronLeft size={16} />
+				<ChevronLeft className="icon-size-16" />
 			</button>
 			<span>
 				{showPageWord && "Trang "}
 				<strong>{currentPage}</strong> / {pageCount}
 			</span>
 			<button
+				className="row-action"
 				type="button"
 				onClick={() => onPageChange(currentPage + 1)}
 				disabled={currentPage >= pageCount}
 				aria-label={nextLabel}
 			>
-				<ChevronRight size={16} />
+				<ChevronRight className="icon-size-16" />
 			</button>
 		</div>
 	);

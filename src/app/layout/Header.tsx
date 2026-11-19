@@ -1,12 +1,32 @@
-import { ChevronDown, CloudOff, Menu } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
+import {
+	roleLabels,
+	type AccountRole,
+} from "../../domain/access/accounts.model";
 
 interface HeaderProps {
 	title: string;
 	subtitle: string;
 	onMenuClick: () => void;
+	name: string;
+	role: AccountRole;
+	onLogout?: () => void;
 }
 
-export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
+export function Header({
+	title,
+	subtitle,
+	onMenuClick,
+	name,
+	role,
+	onLogout,
+}: HeaderProps) {
+	const initials = name
+		.split(/\s+/)
+		.slice(-2)
+		.map((word) => word[0])
+		.join("")
+		.toLocaleUpperCase("vi");
 	return (
 		<header className="topbar">
 			<div className="topbar-title-wrap">
@@ -16,7 +36,7 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
 					onClick={onMenuClick}
 					aria-label="Mở điều hướng"
 				>
-					<Menu size={20} />
+					<Menu className="icon-size-20" />
 				</button>
 				<div>
 					<h1>{title}</h1>
@@ -26,15 +46,25 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
 
 			<div className="topbar-actions">
 				<div className="profile-menu">
-					<div className="avatar">QA</div>
-					<div className="profile-copy">
-						<strong>Quản trị viên</strong>
-						<span>
-							<CloudOff size={12} /> Chưa đồng bộ
-						</span>
+					<div className="avatar" aria-hidden="true">
+						{initials}
 					</div>
-					<ChevronDown size={15} />
+					<div className="profile-copy">
+						<strong>{name}</strong>
+						<span>{roleLabels[role]}</span>
+					</div>
 				</div>
+				{onLogout && (
+					<button
+						className="row-action"
+						type="button"
+						aria-label="Đăng xuất"
+						title="Đăng xuất"
+						onClick={onLogout}
+					>
+						<LogOut className="icon-size-16" aria-hidden="true" />
+					</button>
+				)}
 			</div>
 		</header>
 	);

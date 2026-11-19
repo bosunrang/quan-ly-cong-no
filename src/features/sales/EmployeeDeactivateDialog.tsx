@@ -1,4 +1,5 @@
-import { AlertTriangle, History, UserX } from "lucide-react";
+import { Notice } from "../../shared/ui/Notice";
+import { UserX } from "lucide-react";
 import { useState } from "react";
 import type { SalesEmployee } from "../../domain/employees/employee.model";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
@@ -32,7 +33,7 @@ export function EmployeeDeactivateDialog({
 			ariaLabelledBy="employee-delete-title"
 			eyebrow="QUẢN LÝ NHÂN VIÊN"
 			title="Ngừng hoạt động"
-			icon={<UserX size={19} />}
+			icon={<UserX className="icon-size-19" />}
 			tone="warning"
 			className="employee-delete-dialog"
 			onClose={onClose}
@@ -42,23 +43,20 @@ export function EmployeeDeactivateDialog({
 						Hủy
 					</button>
 					<button
-						className="button danger"
+						className="button warning"
 						type="button"
 						disabled={invalidDate}
 						onClick={() => onConfirm(effectiveTo)}
 					>
-						<UserX size={16} /> Ngừng hoạt động
+						<UserX className="icon-size-16" /> Ngừng hoạt động
 					</button>
 				</>
 			}
 		>
-			<div className="employee-delete-body">
+			<div className="dialog-body">
 				<div className="employee-delete-target">
 					<strong>{employee.name}</strong>
-					<span>
-						{employee.code} ·{" "}
-						{employee.phone || employee.email || "Chưa có thông tin liên hệ"}
-					</span>
+					<span>{employee.code}</span>
 				</div>
 				{activeAssignmentCount > 0 && (
 					<>
@@ -71,37 +69,26 @@ export function EmployeeDeactivateDialog({
 								onChange={setEffectiveTo}
 							/>
 						</label>
-						<div className="delete-rule-card warning">
-							<AlertTriangle size={19} />
-							<div>
-								<strong>
-									{activeAssignmentCount} đơn vị sẽ trở về “Chưa phân công”
-								</strong>
-								<span>
-									Các lượt đang hoạt động sẽ được đóng vào ngày đã chọn; sau đó
-									có thể giao lại cho nhân viên khác.
-								</span>
-							</div>
-						</div>
+						<Notice
+							tone="warning"
+							title={`${activeAssignmentCount} đơn vị sẽ trở về “Chưa phân công”`}
+						>
+							Các lượt đang hoạt động sẽ được đóng vào ngày đã chọn; sau đó có
+							thể giao lại cho nhân viên khác.
+						</Notice>
 						{invalidDate && (
-							<p className="assignment-error">
+							<Notice tone="danger" announce>
 								Ngày kết thúc không được trước ngày bắt đầu của lượt phân công
 								gần nhất.
-							</p>
+							</Notice>
 						)}
 					</>
 				)}
-				<div className="delete-rule-card">
-					<History size={19} />
-					<div>
-						<strong>Hồ sơ và lịch sử được giữ lại</strong>
-						<span>
-							{historyCount > 0
-								? `${historyCount} lượt phân công liên quan vẫn được lưu để tra cứu và đối soát.`
-								: "Nhân viên sẽ được chuyển sang trạng thái ngừng hoạt động và có thể kích hoạt lại sau."}
-						</span>
-					</div>
-				</div>
+				<Notice tone="info" title="Hồ sơ và lịch sử được giữ lại">
+					{historyCount > 0
+						? `${historyCount} lượt phân công liên quan vẫn được lưu để tra cứu và đối soát.`
+						: "Nhân viên sẽ được chuyển sang trạng thái ngừng hoạt động và có thể kích hoạt lại sau."}
+				</Notice>
 			</div>
 		</Dialog>
 	);

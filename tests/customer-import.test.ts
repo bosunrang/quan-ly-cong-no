@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Customer } from "../src/domain/customers/customer.model";
-import { parseCustomerRows } from "../src/features/customers/customer.import";
+import {
+	parseCustomerRows,
+	parseCustomerWorkbook,
+} from "../src/features/customers/customer.import";
 
 type SheetData = Parameters<typeof parseCustomerRows>[1];
 
@@ -29,13 +31,78 @@ describe("customer import", () => {
 		expect(preview.rows[0]).toMatchObject({
 			status: "ready",
 			provinceInferred: true,
-			draft: { province: "Hà Nội" },
+			draft: { province: "Hà Nội", group: "state" },
 		});
 		expect(preview.rows[1].message).toContain("dòng 2");
 	});
 
+	it("bỏ qua cột người nhận chi phí của file cũ và bảo toàn quy tắc mã trùng", () => {
+		const existing = [{ misaCode: "KH-001" }];
+		const sheet: SheetData = [
+			[...headers, "Người nhận chi phí"],
+			[
+				"KH-001",
+				"Đơn vị A",
+				"Nhà nước",
+				"Hà Nội",
+				"Hà Nội",
+				" Nguyễn   Văn A ",
+			],
+		];
+
+		const preview = parseCustomerRows("customers.xlsx", sheet, existing);
+
+		expect(preview.readyCount).toBe(0);
+		expect(preview.duplicateCount).toBe(1);
+		expect(preview.rows[0]).toMatchObject({
+			status: "duplicate",
+			draft: { province: "Hà Nội" },
+		});
+	});
+
+	it("đọc lại file CSV theo đúng cấu trúc xuất danh mục", async () => {
+		const csv = [
+			[
+				"Mã khách hàng",
+				"Tên khách hàng",
+				"Địa chỉ",
+				"Tỉnh/Thành phố",
+				"Mã số thuế",
+				"Nhân viên phụ trách",
+				"Trạng thái",
+			],
+			[
+				"KH-CSV",
+				"Đơn vị, có dấu phẩy",
+				"Số 1, Hà Nội",
+				"Hà Nội",
+				"0101",
+				"Nguyễn Văn A",
+				"Đang hoạt động",
+			],
+		]
+			.map((row) =>
+				row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(","),
+			)
+			.join("\r\n");
+		const preview = await parseCustomerWorkbook(
+			new File([`\uFEFF${csv}`], "danh-muc-khach-hang.csv", {
+				type: "text/csv",
+			}),
+			[],
+		);
+
+		expect(preview.readyCount).toBe(1);
+		expect(preview.rows[0].draft).toMatchObject({
+			name: "Đơn vị, có dấu phẩy",
+			address: "Số 1, Hà Nội",
+			province: "Hà Nội",
+			group: "unknown",
+		});
+	});
+
 	it("phát hiện mã đã tồn tại trong danh mục", () => {
-		const existing = [{ misaCode: "KH-001" }] as Customer[];
+		const existing = [{ misaCode: "KH-001" }];
 		const sheet: SheetData = [
 			headers,
 			["kh-001", "Đơn vị A", "Nhà nước", "Hà Nội", "Hà Nội"],
@@ -44,12 +111,12 @@ describe("customer import", () => {
 		const preview = parseCustomerRows("customers.xlsx", sheet, existing);
 
 		expect(preview.rows[0].status).toBe("duplicate");
-		expect(preview.rows[0].message).toContain("đã có trong hệ thống");
+		expect(preview.rows[0].message).toContain("đã có trong danh mục");
 	});
 
 	it("từ chối file thiếu cột bắt buộc", () => {
 		expect(() =>
 			parseCustomerRows("customers.xlsx", [["Mã khách hàng"]], []),
-		).toThrow("cần đủ 5 cột");
+		).toThrow("cần đủ 4 cột");
 	});
 });

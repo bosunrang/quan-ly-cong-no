@@ -1,7 +1,5 @@
-export interface LegacyStorageSource<T> {
-	key: string;
-	migrate: (value: unknown) => T | undefined;
-}
+import { getDatabaseBridge } from "./databaseBridge";
+import { lanEndpoint, readLanDirectory, writeLanDirectory } from "./lanStorage";
 
 interface VersionedStorageOptions<T> {
 	key: string;
@@ -9,7 +7,6 @@ interface VersionedStorageOptions<T> {
 	version: number;
 	fallback: () => T;
 	isValid: (value: unknown) => value is T;
-	legacy?: LegacyStorageSource<T>[];
 }
 
 interface StoredEnvelope<T> {
@@ -26,7 +23,7 @@ type DatabaseReadResult =
 	| { status: "unavailable" | "missing" | "invalid" }
 	| { status: "valid"; value: unknown };
 
-const STORAGE_ISSUE_EVENT = "mkt-cost:storage-issue";
+const STORAGE_ISSUE_EVENT = "cong-no:storage-issue";
 let pendingStorageIssue: string | undefined;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -92,7 +89,7 @@ function readDatabase(key: string, label: string): DatabaseReadResult {
 	const response = bridge.readDataset(key);
 	if (!response.ok) {
 		reportStorageIssue(
-			`Không thể đọc ${label} từ SQLite. App sẽ thử dùng bản dự phòng trên trình duyệt.`,
+			`Không thể đọc ${label} từ SQLite. Dữ liệu chưa bị thay đổi.`,
 			response.error,
 		);
 		return { status: "invalid" };
@@ -121,6 +118,12 @@ function invalidSchema(key: string, raw: string, label: string): void {
 export function readVersionedLocalStorage<T>(
 	options: VersionedStorageOptions<T>,
 ): T {
+	if (lanEndpoint()) {
+		const envelope = readLanDirectory(options.key);
+		if (envelope?.version === options.version && options.isValid(envelope.data))
+			return envelope.data;
+		throw new Error(`Dữ liệu ${options.label} trên máy chủ không đúng cấu trúc.`);
+	}
 	const database = readDatabase(options.key, options.label);
 	if (database.status === "valid") {
 		const envelope = database.value;
@@ -131,10 +134,15 @@ export function readVersionedLocalStorage<T>(
 		) {
 			return envelope.data;
 		}
-		reportStorageIssue(
-			`Dữ liệu ${options.label} trong SQLite không đúng cấu trúc. App sẽ thử dùng bản dự phòng.`,
-		);
 	}
+	// SQLite là nguồn dữ liệu duy nhất khi có. Không dùng bản sao trong trình duyệt
+	// thay thế, vì bản sao có thể đã cũ và sẽ bị ghi đè ngược vào SQLite ở lần lưu sau.
+	if (database.status === "valid" || database.status === "invalid")
+		throw new Error(
+			database.status === "valid"
+				? `Dữ liệu ${options.label} trong SQLite không đúng cấu trúc. Dữ liệu chưa bị thay đổi; hãy khôi phục từ bản sao lưu.`
+				: `Không thể đọc ${options.label} từ SQLite. Dữ liệu chưa bị thay đổi.`,
+		);
 
 	const current = readJson(options.key, options.label);
 	if (current.status === "valid") {
@@ -156,22 +164,6 @@ export function readVersionedLocalStorage<T>(
 		invalidSchema(options.key, current.raw, options.label);
 	}
 
-	for (const legacy of options.legacy ?? []) {
-		const stored = readJson(legacy.key, options.label);
-		if (stored.status !== "valid") continue;
-		const migrated = legacy.migrate(stored.value);
-		if (migrated !== undefined && options.isValid(migrated)) {
-			writeVersionedLocalStorage(
-				options.key,
-				options.version,
-				migrated,
-				options.label,
-			);
-			return migrated;
-		}
-		invalidSchema(legacy.key, stored.raw, options.label);
-	}
-
 	const fallback = options.fallback();
 	if (database.status !== "unavailable")
 		writeVersionedLocalStorage(
@@ -190,6 +182,17 @@ export function writeVersionedLocalStorage<T>(
 	label: string,
 ): boolean {
 	if (typeof window === "undefined") return false;
+	if (lanEndpoint()) {
+		try {
+			return writeLanDirectory(key, version, data);
+		} catch (error) {
+			reportStorageIssue(
+				error instanceof Error ? error.message : `Không thể lưu ${label} trên máy chủ.`,
+				error,
+			);
+			return false;
+		}
+	}
 	const envelope: StoredEnvelope<T> = { version, data };
 	const bridge = getDatabaseBridge();
 	if (bridge) {
@@ -201,13 +204,18 @@ export function writeVersionedLocalStorage<T>(
 			);
 			return false;
 		}
+		// Bản cũ trên trình duyệt (từ trước khi dùng SQLite) được cất sang khóa dự phòng
+		// riêng để không bao giờ được đọc lại thay cho dữ liệu SQLite.
 		try {
-			window.localStorage.setItem(key, JSON.stringify(envelope));
+			const previous = window.localStorage.getItem(key);
+			if (previous !== null) {
+				const backupKey = `${key}.backup-before-sqlite`;
+				if (window.localStorage.getItem(backupKey) === null)
+					window.localStorage.setItem(backupKey, previous);
+				window.localStorage.removeItem(key);
+			}
 		} catch (error) {
-			console.error(
-				`Đã lưu ${label} vào SQLite nhưng không thể cập nhật bản dự phòng trình duyệt.`,
-				error,
-			);
+			console.error(`Không thể cất bản cũ của ${label} trên trình duyệt.`, error);
 		}
 		return true;
 	}
@@ -222,4 +230,3 @@ export function writeVersionedLocalStorage<T>(
 		return false;
 	}
 }
-import { getDatabaseBridge } from "./databaseBridge";

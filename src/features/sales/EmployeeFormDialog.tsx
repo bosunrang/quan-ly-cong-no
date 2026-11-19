@@ -1,5 +1,7 @@
-import { AlertCircle, Pencil, Save, UserRoundPlus } from "lucide-react";
+import { Notice } from "../../shared/ui/Notice";
+import { Pencil, Save, UserRoundPlus } from "lucide-react";
 import { useState } from "react";
+import type { AccountProfile } from "../../domain/access/accounts.model";
 import type {
 	EmployeeDraft,
 	SalesEmployee,
@@ -8,6 +10,7 @@ import { Dialog } from "../../shared/ui/Dialog/Dialog";
 
 interface EmployeeFormDialogProps {
 	employees: SalesEmployee[];
+	linkableAccounts?: readonly AccountProfile[];
 	employee?: SalesEmployee;
 	assignedCount?: number;
 	onClose: () => void;
@@ -16,6 +19,7 @@ interface EmployeeFormDialogProps {
 
 export function EmployeeFormDialog({
 	employees,
+	linkableAccounts,
 	employee,
 	assignedCount = 0,
 	onClose,
@@ -26,13 +30,23 @@ export function EmployeeFormDialog({
 			? {
 					code: employee.code,
 					name: employee.name,
-					phone: employee.phone,
-					email: employee.email,
+					linkedAccountId: employee.linkedAccountId,
 					status: employee.status,
 				}
-			: { code: "", name: "", phone: "", email: "", status: "active" },
+			: { code: "", name: "", status: "active" },
 	);
 	const [error, setError] = useState("");
+	const accountsInUse = new Set(
+		employees
+			.filter((item) => item.id !== employee?.id)
+			.map((item) => item.linkedAccountId),
+	);
+	const availableAccounts = linkableAccounts?.filter(
+		(account) => !accountsInUse.has(account.id),
+	);
+	const missingAccount =
+		draft.linkedAccountId &&
+		!availableAccounts?.some((account) => account.id === draft.linkedAccountId);
 	const update = <K extends keyof EmployeeDraft>(
 		key: K,
 		value: EmployeeDraft[K],
@@ -57,15 +71,32 @@ export function EmployeeFormDialog({
 			setError("Mã nhân viên đã tồn tại.");
 			return;
 		}
+		if (linkableAccounts && draft.linkedAccountId) {
+			if (accountsInUse.has(draft.linkedAccountId)) {
+				setError("Tài khoản này đã liên kết với nhân viên khác.");
+				return;
+			}
+			if (missingAccount) {
+				setError("Tài khoản không còn trong danh sách. Hãy chọn lại.");
+				return;
+			}
+		}
 		if (onSave(draft)) onClose();
+		else setError("Không lưu được nhân viên. Kiểm tra dữ liệu rồi thử lại.");
 	};
 
 	return (
 		<Dialog
 			ariaLabelledBy="employee-dialog-title"
-			eyebrow="NHÂN VIÊN KINH DOANH"
+			eyebrow="NHÂN VIÊN"
 			title={employee ? "Chỉnh sửa nhân viên" : "Thêm nhân viên"}
-			icon={employee ? <Pencil size={19} /> : <UserRoundPlus size={19} />}
+			icon={
+				employee ? (
+					<Pencil className="icon-size-19" />
+				) : (
+					<UserRoundPlus className="icon-size-19" />
+				)
+			}
 			className="employee-dialog"
 			onClose={onClose}
 			onSubmit={submit}
@@ -75,17 +106,17 @@ export function EmployeeFormDialog({
 						Hủy
 					</button>
 					<button className="button primary" type="submit">
-						<Save size={16} /> {employee ? "Lưu thay đổi" : "Thêm nhân viên"}
+						<Save className="icon-size-16" />{" "}
+						{employee ? "Lưu thay đổi" : "Thêm nhân viên"}
 					</button>
 				</>
 			}
 		>
 			<div className="dialog-body">
 				{error && (
-					<div className="form-alert">
-						<AlertCircle size={17} />
-						<span>{error}</span>
-					</div>
+					<Notice tone="danger" announce>
+						{error}
+					</Notice>
 				)}
 				<div className="dialog-grid">
 					<label>
@@ -93,7 +124,7 @@ export function EmployeeFormDialog({
 						<input
 							value={draft.code}
 							onChange={(event) => update("code", event.target.value)}
-							placeholder="Ví dụ: NVKD-005"
+							placeholder="Ví dụ: NV-005"
 						/>
 					</label>
 					<label>
@@ -119,34 +150,41 @@ export function EmployeeFormDialog({
 						placeholder="Nhập tên nhân viên"
 					/>
 				</label>
-				<div className="dialog-grid">
-					<label>
-						Số điện thoại
-						<input
-							value={draft.phone}
-							onChange={(event) => update("phone", event.target.value)}
-							placeholder="Nhập số điện thoại"
-						/>
-					</label>
-					<label>
-						Email
-						<input
-							type="email"
-							value={draft.email}
-							onChange={(event) => update("email", event.target.value)}
-							placeholder="ten@congty.vn"
-						/>
-					</label>
-				</div>
-				<p className="dialog-note">
-					Tỉnh/thành không được gắn cố định cho nhân viên. Bạn sẽ chọn từng đơn
-					vị cụ thể để phân công ở màn hình chính.
-				</p>
+				<label>
+					Tài khoản liên kết
+					<select
+						value={draft.linkedAccountId ?? ""}
+						disabled={!linkableAccounts}
+						title={
+							!linkableAccounts
+								? "Chỉ quản trị viên được thay đổi liên kết."
+								: undefined
+						}
+						onChange={(event) =>
+							update("linkedAccountId", event.target.value || undefined)
+						}
+					>
+						<option value="">Chưa liên kết</option>
+						{missingAccount && (
+							<option value={draft.linkedAccountId}>
+								{linkableAccounts
+									? "Tài khoản không còn trong danh sách"
+									: "Đã liên kết"}
+							</option>
+						)}
+						{availableAccounts?.map((account) => (
+							<option key={account.id} value={account.id}>
+								{account.name} · {account.username}
+								{account.active ? "" : " · Đã khóa"}
+							</option>
+						))}
+					</select>
+				</label>
 				{assignedCount > 0 && (
-					<p className="assignment-warning">
+					<Notice tone="warning">
 						Nhân viên đang phụ trách {assignedCount} đơn vị. Cần chuyển giao hết
 						trước khi chuyển sang trạng thái ngừng hoạt động.
-					</p>
+					</Notice>
 				)}
 			</div>
 		</Dialog>

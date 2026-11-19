@@ -10,28 +10,20 @@ import {
 	writeVersionedLocalStorage,
 } from "../../shared/storage/localStorage";
 
-const SETTINGS_STORAGE_KEY = "mkt-cost.settings.v2";
+export const SETTINGS_STORAGE_KEY = "cong-no.settings.v2";
 const STORAGE_VERSION = 2;
-const LEGACY_STORAGE_KEY = "mkt-cost.settings";
 const MAX_LOGO_DATA_URL_LENGTH = 1_500_000;
 
 export function readSettings(): AppSettings {
-	return readVersionedLocalStorage({
-		key: SETTINGS_STORAGE_KEY,
-		label: "cài đặt ứng dụng",
-		version: STORAGE_VERSION,
-		fallback: () => ({ ...defaultSettings }),
-		isValid: isAppSettings,
-		legacy: [
-			{
-				key: LEGACY_STORAGE_KEY,
-				migrate: (value) =>
-					value && typeof value === "object" && !Array.isArray(value)
-						? normalizeSettings(value)
-						: undefined,
-			},
-		],
-	});
+	return normalizeSettings(
+		readVersionedLocalStorage({
+			key: SETTINGS_STORAGE_KEY,
+			label: "cài đặt ứng dụng",
+			version: STORAGE_VERSION,
+			fallback: () => ({ ...defaultSettings }),
+			isValid: isAppSettings,
+		}),
+	);
 }
 
 export function writeSettings(settings: AppSettings): boolean {

@@ -1,4 +1,5 @@
-import { AlertTriangle, Building2, Trash2 } from "lucide-react";
+import { Notice } from "../../shared/ui/Notice";
+import { Building2, Trash2 } from "lucide-react";
 import type { Customer } from "../../domain/customers/customer.model";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 
@@ -18,7 +19,7 @@ export function CustomerDeleteDialog({
 			ariaLabelledBy="customer-delete-title"
 			eyebrow="QUẢN LÝ KHÁCH HÀNG"
 			title="Xóa khách hàng"
-			icon={<Trash2 size={19} />}
+			icon={<Trash2 className="icon-size-19" />}
 			tone="danger"
 			className="customer-delete-dialog"
 			onClose={onClose}
@@ -28,7 +29,7 @@ export function CustomerDeleteDialog({
 						Hủy
 					</button>
 					<button className="button danger" type="button" onClick={onConfirm}>
-						<Trash2 size={16} /> Xóa khách hàng
+						<Trash2 className="icon-size-16" /> Xóa khách hàng
 					</button>
 				</>
 			}
@@ -36,7 +37,7 @@ export function CustomerDeleteDialog({
 			<div className="customer-delete-body">
 				<div className="customer-delete-target">
 					<span>
-						<Building2 size={18} />
+						<Building2 className="icon-size-18" />
 					</span>
 					<div>
 						<strong>{customer.name}</strong>
@@ -49,26 +50,14 @@ export function CustomerDeleteDialog({
 						</small>
 					</div>
 				</div>
-				<div className="customer-delete-warning">
-					<AlertTriangle size={19} />
-					<div>
-						<strong>Xóa toàn bộ dữ liệu nằm trong hồ sơ</strong>
-						<span>
-							{customer.recipients.length} người nhận chiết khấu và{" "}
-							{customer.assignments.length} lượt phân công liên quan sẽ bị xóa
-							cùng khách hàng.
-						</span>
-					</div>
-				</div>
-				<div className="customer-delete-danger">
-					<Trash2 size={19} />
-					<div>
-						<strong>Thao tác không thể khôi phục</strong>
-						<span>
-							Hãy kiểm tra đúng tên khách hàng và mã MISA trước khi xác nhận.
-						</span>
-					</div>
-				</div>
+				<Notice tone="warning" title="Xóa dữ liệu liên kết với hồ sơ">
+					Lịch sử phân công và thông tin liên kết trong hồ sơ sẽ bị xóa cùng
+					khách hàng. Khách hàng đã có chứng từ thu trong sổ đối soát không thể
+					xóa.
+				</Notice>
+				<Notice tone="danger" title="Thao tác không thể khôi phục">
+					Hãy kiểm tra đúng tên khách hàng và mã MISA trước khi xác nhận.
+				</Notice>
 			</div>
 		</Dialog>
 	);

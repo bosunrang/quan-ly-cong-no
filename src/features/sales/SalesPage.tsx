@@ -1,13 +1,18 @@
+import { useTransientNotice } from "../../shared/hooks/useTransientNotice";
+import { Notice } from "../../shared/ui/Notice";
 import { useEffect, useMemo, useState } from "react";
 import type { Customer } from "../../domain/customers/customer.model";
-import { activeSalesAssignment } from "../../domain/assignments/assignment.service";
+import type { AccountProfile } from "../../domain/access/accounts.model";
+import {
+	activeSalesAssignment,
+	canAssignCustomer,
+} from "../../domain/assignments/assignment.service";
 import { AssignmentDialog } from "./AssignmentDialog";
 import { EmployeeFormDialog } from "./EmployeeFormDialog";
 import { EmployeeDeactivateDialog } from "./EmployeeDeactivateDialog";
 import { EmployeeDeleteDialog } from "./EmployeeDeleteDialog";
 import { UnassignDialog } from "./UnassignDialog";
 import { useSalesAssignments } from "./useSalesAssignments";
-import { SalesStats } from "./components/SalesStats";
 import { EmployeePanel } from "./components/EmployeePanel";
 import {
 	CustomerPoolPanel,
@@ -15,8 +20,13 @@ import {
 } from "./components/CustomerPoolPanel";
 import { AssignedCustomerPanel } from "./components/AssignedCustomerPanel";
 import { usePagination } from "../../shared/hooks/usePagination";
+import { SalesCustomerDetailDrawer } from "./components/SalesCustomerDetailDrawer";
 
-export function SalesPage() {
+export function SalesPage({
+	linkableAccounts,
+}: {
+	linkableAccounts?: readonly AccountProfile[];
+}) {
 	const {
 		customers,
 		employees,
@@ -37,13 +47,17 @@ export function SalesPage() {
 	const [employeeQuery, setEmployeeQuery] = useState("");
 	const [customerQuery, setCustomerQuery] = useState("");
 	const [scope, setScope] = useState<CustomerScope>("unassigned");
-	const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+	const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(
+		() => new Set(),
+	);
 	const [assignmentOpen, setAssignmentOpen] = useState(false);
+	const [assignmentError, setAssignmentError] = useState("");
 	const [employeeEditorId, setEmployeeEditorId] = useState<string | "new">();
 	const [employeeDeactivateId, setEmployeeDeactivateId] = useState<string>();
 	const [employeeDeleteId, setEmployeeDeleteId] = useState<string>();
 	const [unassignCustomerId, setUnassignCustomerId] = useState<string>();
-	const [notice, setNotice] = useState("");
+	const [detailCustomerId, setDetailCustomerId] = useState<string>();
+	const { notice, showNotice, dismissNotice } = useTransientNotice(2600);
 
 	const selectedEmployee =
 		employees.find((employee) => employee.id === selectedEmployeeId) ??
@@ -105,6 +119,13 @@ export function SalesPage() {
 		setCurrentPage: setCustomerPage,
 		resetPage: resetCustomerPage,
 	} = usePagination(visibleCustomers);
+	const eligibleCustomers = useMemo(
+		() =>
+			visibleCustomers.filter((customer) =>
+				canAssignCustomer(customer, selectedEmployee),
+			),
+		[visibleCustomers, selectedEmployee],
+	);
 	const ownedCustomers = useMemo(
 		() =>
 			selectedEmployee
@@ -132,8 +153,7 @@ export function SalesPage() {
 			};
 		const owned = customers.filter(
 			(customer) =>
-				activeSalesAssignment(customer)?.employeeId ===
-				employeeToDeactivate.id,
+				activeSalesAssignment(customer)?.employeeId === employeeToDeactivate.id,
 		);
 		const latestStart = owned
 			.map((customer) => activeSalesAssignment(customer)?.effectiveFrom)
@@ -202,20 +222,23 @@ export function SalesPage() {
 		[customers, employeeEditorId],
 	);
 	const selectedCustomers = useMemo(
-		() =>
-			customers.filter((customer) => selectedCustomerIds.includes(customer.id)),
+		() => customers.filter((customer) => selectedCustomerIds.has(customer.id)),
 		[customers, selectedCustomerIds],
 	);
 	const customerToUnassign = unassignCustomerId
 		? customers.find((customer) => customer.id === unassignCustomerId)
+		: undefined;
+	const detailCustomer = detailCustomerId
+		? customers.find((customer) => customer.id === detailCustomerId)
 		: undefined;
 	const assignmentToEnd = customerToUnassign
 		? activeSalesAssignment(customerToUnassign)
 		: undefined;
 	const transferCount = useMemo(
 		() =>
-			selectedCustomers.filter((customer) => Boolean(activeSalesAssignment(customer)))
-				.length,
+			selectedCustomers.filter((customer) =>
+				Boolean(activeSalesAssignment(customer)),
+			).length,
 		[selectedCustomers],
 	);
 	const customerFilterKey = `${customerQuery}|${province}|${scope}|${selectedEmployeeId}`;
@@ -225,57 +248,48 @@ export function SalesPage() {
 		resetCustomerPage();
 	}, [customerFilterKey, resetCustomerPage]);
 
-	const showNotice = (message: string, duration = 2600) => {
-		setNotice(message);
-		window.setTimeout(() => setNotice(""), duration);
-	};
 	const chooseEmployee = (employeeId: string) => {
 		setSelectedEmployeeId(employeeId);
-		setSelectedCustomerIds([]);
+		setSelectedCustomerIds(new Set());
 		setScope("unassigned");
 	};
 	const toggleCustomer = (customer: Customer) => {
-		if (
-			selectedEmployee?.status !== "active" ||
-			customer.status !== "active" ||
-			activeSalesAssignment(customer)?.employeeId === selectedEmployeeId
-		)
-			return;
-		setSelectedCustomerIds((current) =>
-			current.includes(customer.id)
-				? current.filter((id) => id !== customer.id)
-				: [...current, customer.id],
-		);
+		if (!canAssignCustomer(customer, selectedEmployee)) return;
+		setSelectedCustomerIds((current) => {
+			const next = new Set(current);
+			if (!next.delete(customer.id)) next.add(customer.id);
+			return next;
+		});
 	};
 	const confirmAssignment = (effectiveFrom: string) => {
 		if (!selectedEmployee) return;
-		if (
-			!assignCustomers(selectedCustomerIds, selectedEmployee.id, effectiveFrom)
-		)
+		const result = assignCustomers(
+			selectedCustomers,
+			selectedEmployee,
+			effectiveFrom,
+		);
+		if ("error" in result) {
+			setAssignmentError(result.error);
 			return;
+		}
 		setAssignmentOpen(false);
-		setSelectedCustomerIds([]);
+		setSelectedCustomerIds(new Set());
 		showNotice(
-			`Đã phân công ${selectedCustomers.length} đơn vị cho ${selectedEmployee.name}.`,
+			`Đã phân công ${result.count} khách hàng cho ${selectedEmployee.name}.`,
 		);
 	};
 
 	return (
 		<div className="page-stack sales-page">
 			{notice && (
-				<div className="settings-toast" role="status">
-					{notice}
-				</div>
+				<Notice tone={notice.tone} floating announce onDismiss={dismissNotice}>
+					{notice.text}
+				</Notice>
 			)}
-			<SalesStats
-				customers={customers}
-				employees={employees}
-				selectedEmployee={selectedEmployee}
-				selectedAssignmentCount={ownedCustomers.length}
-			/>
 			<section className="sales-board" aria-label="Bảng phân công khách hàng">
 				<EmployeePanel
 					employees={visibleEmployees}
+					linkableAccounts={linkableAccounts}
 					assignmentCountByEmployee={assignmentCountByEmployee}
 					selectedEmployeeId={selectedEmployee?.id}
 					query={employeeQuery}
@@ -308,27 +322,53 @@ export function SalesPage() {
 					scope={scope}
 					selectedIds={selectedCustomerIds}
 					transferCount={transferCount}
+					eligibleCount={eligibleCustomers.length}
 					onProvinceChange={(value) => {
 						setProvince(value);
-						setSelectedCustomerIds([]);
+						setSelectedCustomerIds(new Set());
 					}}
-					onQueryChange={setCustomerQuery}
-					onScopeChange={setScope}
+					onQueryChange={(value) => {
+						setCustomerQuery(value);
+						setSelectedCustomerIds(new Set());
+					}}
+					onScopeChange={(value) => {
+						if (value === scope) return;
+						setScope(value);
+						setSelectedCustomerIds(new Set());
+					}}
 					onPageChange={setCustomerPage}
 					onToggle={toggleCustomer}
-					onAssign={() => setAssignmentOpen(true)}
+					onSelectAll={() =>
+						setSelectedCustomerIds(
+							new Set(eligibleCustomers.map(({ id }) => id)),
+						)
+					}
+					onClearSelection={() => setSelectedCustomerIds(new Set())}
+					onAssign={() => {
+						setAssignmentError("");
+						setAssignmentOpen(true);
+					}}
 				/>
 				<AssignedCustomerPanel
 					ownerKey={selectedEmployee?.id ?? ""}
 					employeeName={selectedEmployee?.name}
 					customers={ownedCustomers}
+					onOpen={setDetailCustomerId}
 					onUnassign={setUnassignCustomerId}
 				/>
 			</section>
 
+			{detailCustomer && (
+				<SalesCustomerDetailDrawer
+					customer={detailCustomer}
+					onClose={() => setDetailCustomerId(undefined)}
+				/>
+			)}
+
 			{employeeEditorId && (
 				<EmployeeFormDialog
 					employees={employees}
+					linkableAccounts={linkableAccounts}
 					employee={
 						employeeEditorId === "new"
 							? undefined
@@ -367,7 +407,7 @@ export function SalesPage() {
 							return;
 						if (selectedEmployeeId === employeeToDeactivate.id)
 							setSelectedEmployeeId(nextEmployee?.id ?? "");
-						setSelectedCustomerIds([]);
+						setSelectedCustomerIds(new Set());
 						setEmployeeDeactivateId(undefined);
 						showNotice(
 							`Đã chuyển ${employeeName} sang ngừng hoạt động. ${affectedCount ? `${affectedCount} đơn vị đã chuyển về chưa phân công; lịch sử vẫn được giữ lại.` : "Lịch sử phân công vẫn được giữ lại."}`,
@@ -396,7 +436,7 @@ export function SalesPage() {
 						if (!deleteEmployee(employeeToDelete.id, effectiveTo)) return;
 						if (selectedEmployeeId === employeeToDelete.id)
 							setSelectedEmployeeId(nextEmployee?.id ?? "");
-						setSelectedCustomerIds([]);
+						setSelectedCustomerIds(new Set());
 						setEmployeeDeleteId(undefined);
 						showNotice(
 							`Đã xóa hồ sơ ${employeeName}. ${affectedCount ? `${affectedCount} đơn vị đã chuyển về chưa phân công; lịch sử phân công vẫn được giữ.` : "Lịch sử phân công vẫn được giữ."}`,
@@ -431,6 +471,7 @@ export function SalesPage() {
 				<AssignmentDialog
 					customers={selectedCustomers}
 					employee={selectedEmployee}
+					error={assignmentError}
 					onClose={() => setAssignmentOpen(false)}
 					onConfirm={confirmAssignment}
 				/>

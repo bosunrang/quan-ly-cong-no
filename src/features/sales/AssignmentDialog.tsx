@@ -1,16 +1,21 @@
+import { Notice } from "../../shared/ui/Notice";
 import { ArrowRightLeft, Building2, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import type { Customer } from "../../domain/customers/customer.model";
 import type { SalesEmployee } from "../../domain/employees/employee.model";
-import { activeSalesAssignment } from "../../domain/assignments/assignment.service";
+import {
+	activeSalesAssignment,
+	latestAssignmentBoundary,
+} from "../../domain/assignments/assignment.service";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { StatusPill } from "../../shared/ui/StatusPill";
-import { formatDateOnly, todayLocal } from "../../shared/lib/date";
+import { formatDateOnly, isIsoDate, todayLocal } from "../../shared/lib/date";
 
 interface AssignmentDialogProps {
 	customers: Customer[];
 	employee: SalesEmployee;
+	error: string;
 	onClose: () => void;
 	onConfirm: (effectiveFrom: string) => void;
 }
@@ -18,6 +23,7 @@ interface AssignmentDialogProps {
 export function AssignmentDialog({
 	customers,
 	employee,
+	error,
 	onClose,
 	onConfirm,
 }: AssignmentDialogProps) {
@@ -26,21 +32,16 @@ export function AssignmentDialog({
 		const assignment = activeSalesAssignment(customer);
 		return assignment && assignment.employeeId !== employee.id;
 	}).length;
-	const conflictingAssignment = customers
-		.map(activeSalesAssignment)
-		.find(
-			(assignment) =>
-				assignment &&
-				assignment.employeeId !== employee.id &&
-				effectiveFrom <= assignment.effectiveFrom,
-		);
+	const boundary = customers.map(latestAssignmentBoundary).sort().at(-1) ?? "";
+	const validDate = isIsoDate(effectiveFrom);
+	const conflictingDate = validDate && effectiveFrom <= boundary;
 
 	return (
 		<Dialog
 			ariaLabelledBy="assignment-dialog-title"
 			eyebrow="XÁC NHẬN PHÂN CÔNG"
-			title={`Giao ${customers.length} đơn vị cho ${employee.name}`}
-			icon={<ArrowRightLeft size={19} />}
+			title={`Giao ${customers.length} khách hàng cho ${employee.name}`}
+			icon={<ArrowRightLeft className="icon-size-19" />}
 			className="assignment-dialog"
 			onClose={onClose}
 			footer={
@@ -51,30 +52,38 @@ export function AssignmentDialog({
 					<button
 						className="button primary"
 						type="button"
-						disabled={Boolean(conflictingAssignment)}
+						disabled={!validDate || conflictingDate || !customers.length}
 						onClick={() => onConfirm(effectiveFrom)}
 					>
-						<CheckCircle2 size={16} /> Xác nhận phân công
+						<CheckCircle2 className="icon-size-16" /> Xác nhận phân công
 					</button>
 				</>
 			}
 		>
 			<div className="dialog-body">
+				{error && (
+					<Notice tone="danger" announce>
+						{error}
+					</Notice>
+				)}
 				<div className="assignment-summary">
 					<div>
-						<Building2 size={18} />
+						<Building2 className="icon-size-18" />
 						<span>
-							<strong>{customers.length}</strong> đơn vị được chọn
+							<strong>{customers.length - transferCount}</strong> phân công mới
 						</span>
 					</div>
 					<div>
-						<ArrowRightLeft size={18} />
+						<ArrowRightLeft className="icon-size-18" />
 						<span>
-							<strong>{transferCount}</strong> đơn vị cần chuyển giao
+							<strong>{transferCount}</strong> chuyển người phụ trách
 						</span>
 					</div>
 				</div>
-				<label htmlFor="assignment-effective-from">
+				<label
+					className="assignment-date-field"
+					htmlFor="assignment-effective-from"
+				>
 					Ngày bắt đầu phụ trách
 					<DateInput
 						id="assignment-effective-from"
@@ -106,17 +115,16 @@ export function AssignmentDialog({
 					})}
 				</div>
 				{transferCount > 0 && (
-					<p className="assignment-warning">
+					<Notice tone="warning">
 						Lịch sử của nhân viên cũ sẽ được đóng vào ngày liền trước ngày bắt
 						đầu mới.
-					</p>
+					</Notice>
 				)}
-				{conflictingAssignment && (
-					<p className="assignment-error">
-						Ngày bắt đầu mới phải sau ngày{" "}
-						{formatDateOnly(conflictingAssignment.effectiveFrom)}, là ngày phân
-						công hiện tại bắt đầu.
-					</p>
+				{conflictingDate && (
+					<Notice tone="danger" announce>
+						Ngày bắt đầu mới phải sau ngày {formatDateOnly(boundary)} để giữ
+						đúng lịch sử phân công.
+					</Notice>
 				)}
 			</div>
 		</Dialog>

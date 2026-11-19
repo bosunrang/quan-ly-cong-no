@@ -1,90 +1,105 @@
-# Kiến trúc MKT Cost
+# Kiến trúc Quản lý công nợ
 
-Ứng dụng được tổ chức theo module nghiệp vụ. Component giao diện không tự đọc/ghi dữ liệu và không chứa cấu hình toàn cục.
+Ứng dụng quản lý công nợ phải thu của khách hàng từ Sổ chi tiết bán hàng MISA: nhập sổ bán hàng,
+ghi và phân bổ khoản thu, theo dõi công nợ, lập biên bản đối chiếu. React + TypeScript + Vite trong
+vỏ Electron, có máy chủ LAN cho nhiều máy dùng chung. Mã tổ chức theo module nghiệp vụ; component
+giao diện không tự đọc/ghi dữ liệu.
 
 ## Cấu trúc chuẩn
 
 ```text
 src/
-  app/                 # Điều phối ứng dụng, cấu hình trang và routing
-    layout/            # Header, Sidebar và app shell
-  domain/              # Model và quy tắc nghiệp vụ, không phụ thuộc React/CSS
-    customers/         # Customer aggregate, selector, seed và repository
-    employees/         # Employee aggregate, factory, seed và repository
-    assignments/       # Quy tắc giao, chuyển và kết thúc phụ trách
-    settings/          # Cấu hình nhận diện và repository cấu hình
-  features/            # Module màn hình độc lập
-    dashboard/         # Màn hình tổng quan và style thuộc dashboard
-    customers/         # Hồ sơ và người nhận chiết khấu
-      components/      # Các khối giao diện con của trang
-      customer.import  # Adapter đọc/kiểm tra dữ liệu khách hàng từ Excel
-    sales/             # Điều phối nhân viên và phân công từng đơn vị
-      components/      # Ba bước phân công và thẻ thống kê
-    misa/              # Nhập Excel, chọn đơn vị và xem chi tiết bán hàng/công nợ MISA
-    products/          # Danh mục, phân trang, nhập Excel và chính sách chiết khấu
-      components/      # Bảng danh mục và các khối giao diện con
-    reconciliation/    # Đối soát thu tiền và điều kiện chi
-    settings/          # Màn hình và hook điều phối cài đặt
+  app/                 Điều phối ứng dụng, cấu hình trang, điều hướng, đăng nhập
+    layout/            Header, Sidebar và app shell
+  domain/              Model và quy tắc nghiệp vụ, không phụ thuộc React/CSS
+    access/            Tài khoản, mật khẩu, thẻ truy cập
+    assignments/       Quy tắc giao, chuyển và kết thúc phụ trách
+    customers/         Hồ sơ khách hàng, tỉnh/thành, repository
+    employees/         Nhân viên kinh doanh, repository
+    misa/              Sổ bán hàng MISA và cách gom thành chứng từ/công nợ
+    payments/          Sổ khoản thu: phân bổ, đảo phiếu, công nợ theo hóa đơn
+    settings/          Cài đặt, thông tin bên bán, sao lưu/khôi phục
+  features/            Module màn hình độc lập
+    dashboard/         Tổng quan công nợ
+    misa/              Nhập và đối chiếu lại Sổ chi tiết bán hàng
+    receivables/       Công nợ phải thu theo khách hàng và hóa đơn
+    payments/          Ghi khoản thu và phân bổ vào hóa đơn
+    reports/           Biên bản đối chiếu công nợ (in, Excel)
+    customers/         Danh mục khách hàng, nhập Excel
+    sales/             Nhân viên và phân công khách hàng
+    accounts/          Người dùng và quyền
+    activity/          Nhật ký sử dụng
+    settings/          Thông tin doanh nghiệp, dữ liệu, sao lưu
   shared/
-    ui/                # Component giao diện dùng chung: Dialog, DateInput...
+    hooks/             Hook dùng chung (phân trang, thông báo, lỗi lưu trữ)
+    lib/               Ngày tháng, đọc Excel (Web Worker), tiện ích nhỏ
+    storage/           Lớp lưu trữ: SQLite qua IPC, máy chủ LAN, trình duyệt, bộ đệm sổ
+    ui/                Component dùng chung: Dialog, DateInput, StatusPill, Notice...
   styles/
-    index.css          # Điểm nhập CSS duy nhất, quy định thứ tự cascade
-    foundation/        # Font, token, reset/base và typography
-    layout/            # App shell và responsive toàn ứng dụng
-    shared/            # Style của component/dạng dữ liệu dùng chung
-electron/              # Lớp desktop, SQLite và cầu nối IPC bảo mật
+    index.css          Điểm nhập CSS duy nhất, quy định thứ tự cascade
+    foundation/        Font, token, reset/base và typography
+    layout/            App shell và responsive toàn ứng dụng
+    shared/            Style của component dùng chung
+electron/              Vỏ desktop, SQLite (database.cjs), cầu nối IPC, chế độ máy chủ LAN
+server/                Máy chủ LAN: phân quyền, đăng nhập, sao lưu tự động (chạy được không cần Electron)
+tests/                 Vitest cho src; node --test cho SQLite và máy chủ LAN
 ```
 
 ## Quy tắc bắt buộc
 
-1. Màu, cỡ chữ và kích thước shell phải lấy từ `styles/foundation/tokens.css`; không viết mã màu riêng trong component mới.
+1. Màu, cỡ chữ và kích thước shell lấy từ `styles/foundation/tokens.css`; không viết mã màu riêng trong component mới.
 2. Model, repository và quy tắc nghiệp vụ nằm trong `domain`; UI và state màn hình nằm trong `features`.
 3. UI chỉ nhận dữ liệu và callback qua props hoặc hook của feature; không gọi trực tiếp `localStorage`, SQLite hay API.
-4. Dữ liệu MISA được nhập vào model chuẩn trước khi tính chiết khấu; không tính trực tiếp trên dòng Excel thô.
-5. Công thức chiết khấu nằm trong một service có kiểm thử, không lặp lại ở dashboard, báo cáo hoặc màn hình đối soát.
-6. Mọi thay đổi dữ liệu production phải đi qua repository để có thể chuyển từ lưu nội bộ sang máy chủ mà không sửa UI.
-7. Duyệt/chốt kỳ phải tạo nhật ký. Xóa cứng danh mục phải có hộp thoại xác nhận và dọn sạch dữ liệu phụ thuộc trong cùng một use case.
-8. CSS thuộc riêng feature phải đặt cạnh feature đó; CSS nền toàn cục chỉ được import qua `styles/index.css`.
-9. Tỉnh/thành chỉ là thuộc tính để lọc khách hàng; phân công bán hàng luôn gắn trực tiếp từng đơn vị với một nhân viên và có lịch sử hiệu lực.
-10. Feature không được import model, logic hoặc CSS của feature khác. Phần dùng chung phải chuyển vào `domain` hoặc `shared` trước.
-11. Page chỉ điều phối state và use case. Khối giao diện có trách nhiệm riêng phải tách vào thư mục `components`; không để một page phình thành bảng, form và dialog cùng lúc.
-12. Khóa lưu trữ và migration thuộc repository. Refactor UI/domain không được tự ý đổi khóa để tránh mất dữ liệu người dùng.
-13. Import Excel phải đi qua adapter kiểm tra tiêu đề, trường bắt buộc và mã trùng; người dùng luôn xem trước kết quả trước khi ghi repository.
-14. Trạng thái dạng nhãn phải dùng `shared/ui/StatusPill` với đúng một trong năm ngữ nghĩa: `success` (hoàn tất/đang hoạt động), `warning` (chờ/chưa đủ), `info` (đã xử lý), `neutral` (tạm dừng/chưa thiết lập) và `danger` (lỗi/không hợp lệ). Feature không tự đặt màu, viền hoặc kích thước cho nhãn trạng thái.
+4. Mọi phép tính tiền (công nợ, phân bổ, số dư đối chiếu) nằm trong `domain` và có kiểm thử; dashboard, báo cáo và màn hình thu tiền dùng chung, không tự tính lại.
+5. Dữ liệu MISA được đọc qua adapter kiểm tra tiêu đề và định dạng số trước khi vào model chuẩn; nhập lại theo từng chứng từ, người dùng xem trước rồi mới ghi.
+6. Chứng từ đã có khoản thu phân bổ không bị thay hay gỡ khi nhập lại sổ.
+7. Ghi sổ bán hàng và sổ khoản thu dùng kiểm tra phiên bản (`importedAt`, `revision`) để không ghi đè thay đổi của máy khác.
+8. Ẩn menu không phải là phân quyền: máy chủ LAN kiểm tra thẻ truy cập và cấu trúc dữ liệu trước khi đọc/ghi.
+9. CSS riêng của feature đặt cạnh feature đó; CSS nền chỉ import qua `styles/index.css`.
+10. Feature không import model, logic hoặc CSS của feature khác. Phần dùng chung chuyển vào `domain` hoặc `shared`.
+11. Page chỉ điều phối state và use case; khối giao diện có trách nhiệm riêng tách vào `components`.
+12. Khóa lưu trữ (`cong-no.*`) và migration thuộc repository/`electron/database.cjs`. Không đổi khóa khi refactor; nếu bắt buộc phải đổi thì làm bằng bước migration (như v12).
+13. Schema SQLite đổi bằng bước migration mới, chạy trong transaction; không sửa bước đã chạy. App tạo bản sao tệp trước mỗi lần nâng cấp.
+14. Trạng thái dạng nhãn dùng `shared/ui/StatusPill` với đúng năm ngữ nghĩa: `success`, `warning`, `info`, `neutral`, `danger`.
 
 ## Hướng phụ thuộc
 
 ```text
 app ──> features ──> domain
  │          │           │
- └────────> shared <─────┘
+ └────────> shared <────┘
 
 domain  -X-> features
 feature -X-> feature khác
 shared  -X-> features/domain nghiệp vụ
 ```
 
-`domain` phải chạy được mà không cần React. `shared/ui` chỉ chứa giao diện tổng quát, không biết khách hàng hay nhân viên là gì.
+`domain` phải chạy được không cần React. `shared/ui` chỉ chứa giao diện tổng quát.
 
-## Hướng dữ liệu dự kiến
+## Luồng dữ liệu
 
 ```text
-Excel/MISA -> Import adapter -> Model chuẩn -> Repository -> Service đối soát
-                                                   |              |
-                                                   +-> Dashboard <-+
-                                                   +-> Báo cáo
-                                                   +-> Nhật ký
+Excel MISA ─> Web Worker đọc ô ─> adapter kiểm tra ─> xem trước theo chứng từ ─> Sổ bán hàng
+                                                                                     │
+Khoản thu ─> phân bổ vào hóa đơn ─> Sổ khoản thu ─────────────────────────────────────┤
+                                                                                     v
+                                     Công nợ phải thu · Dashboard · Biên bản đối chiếu
 ```
 
-Ứng dụng desktop dùng SQLite tích hợp trong Electron qua preload/IPC giới hạn. Repository vẫn giữ cùng giao diện đọc/ghi; bản chạy trên trình duyệt dùng `localStorage` làm môi trường thử và bản dự phòng.
+Có ba nơi lưu dữ liệu, chọn tự động trong `shared/storage`:
 
-Schema SQLite phiên bản 6 chuẩn hóa khách hàng, người nhận, phân công, nhân viên, sản phẩm, chính sách, phân bổ người nhận (gồm mức chiết khấu và chi phí giữ lại riêng từng người) và chi tiết MISA. Danh sách sản phẩm được tìm kiếm, lọc, thống kê và phân trang trực tiếp trong SQLite; chi tiết chính sách chỉ được đọc khi mở một sản phẩm. Dòng chứng từ MISA được lưu riêng và chỉ truy vấn theo đơn vị đang chọn để không tải toàn bộ file lên bảng cùng lúc. Đối soát vẫn dùng dataset có phiên bản.
+- **Desktop:** SQLite trong Electron qua preload/IPC. Sổ bán hàng và sổ khoản thu đọc/ghi bất đồng bộ.
+- **Máy chủ LAN:** máy trạm gọi `server/lan.cjs` qua HTTP; mỗi công ty một tệp SQLite.
+- **Trình duyệt:** `localStorage`/IndexedDB, chỉ dùng khi phát triển giao diện.
 
-Các module `customers`, `employees`, `orders`, `products`, `misa` và `reconciliation` hiện có repository riêng. Page không được import seed trực tiếp. Dashboard đọc dữ liệu qua service tổng hợp và ánh xạ mã khách hàng về hồ sơ cùng phân công hiện tại, vì vậy thay đổi danh mục được phản ánh trên các màn hình liên quan khi mở lại.
+Sổ bán hàng và sổ khoản thu được giữ trong bộ đệm dùng chung (`datasetCache`); máy trạm chỉ tải lại
+khi dấu thay đổi của sổ khác bản đang giữ. Hướng chuyển sang một đường dữ liệu duy nhất qua máy chủ
+(như app cước phí) nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md](docs/KE-HOACH-CHUYEN-KIEN-TRUC.md).
 
-## Lưu trữ cục bộ hiện tại
+## Lưu trữ và an toàn dữ liệu
 
-- Dữ liệu được ghi theo envelope `{ version, data }`; mỗi repository quản lý phiên bản schema riêng.
-- Repository tự đọc và chuyển dữ liệu từ các khóa cũ, đồng thời giữ nguyên khóa cũ làm bản dự phòng.
-- Dữ liệu JSON lỗi hoặc sai schema được sao lưu sang khóa `.corrupt.<timestamp>` trước khi app dùng dữ liệu mặc định.
-- Lỗi đọc/ghi được đưa lên cảnh báo toàn ứng dụng. UI chỉ cập nhật state và báo thành công sau khi repository xác nhận đã ghi dữ liệu.
+- Dữ liệu ghi theo envelope `{ version, data }`; SQLite là nguồn duy nhất khi có, không dùng bản sao trên trình duyệt thay thế.
+- Lỗi đọc dữ liệu báo lên toàn ứng dụng và không ghi đè gì. UI chỉ báo thành công sau khi repository xác nhận đã ghi.
+- Sao lưu tự động 14 bản theo ngày, và bản JSON trước mỗi thao tác xóa/khôi phục.
+- Schema hiện tại: 12. Bước v12 bỏ các bảng của app chiết khấu cũ và đổi khóa `mkt-cost.*` sang `cong-no.*`.
+  Bản sao lưu SQLite cũ được nâng cấp trên bản chép tạm khi đọc, tệp sao lưu gốc giữ nguyên.

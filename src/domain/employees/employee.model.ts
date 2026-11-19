@@ -8,6 +8,7 @@ export interface SalesEmployee {
 	name: string;
 	phone: string;
 	email: string;
+	linkedAccountId?: string;
 	status: EmployeeStatus;
 	createdAt: string;
 }
@@ -15,8 +16,7 @@ export interface SalesEmployee {
 export interface EmployeeDraft {
 	code: string;
 	name: string;
-	phone: string;
-	email: string;
+	linkedAccountId?: string;
 	status: EmployeeStatus;
 }
 
@@ -29,6 +29,9 @@ export function isSalesEmployee(value: unknown): value is SalesEmployee {
 		typeof employee.name === "string" &&
 		typeof employee.phone === "string" &&
 		typeof employee.email === "string" &&
+		(employee.linkedAccountId === undefined ||
+			(typeof employee.linkedAccountId === "string" &&
+				employee.linkedAccountId.length > 0)) &&
 		(employee.status === "active" || employee.status === "inactive") &&
 		isIsoTimestamp(employee.createdAt)
 	);

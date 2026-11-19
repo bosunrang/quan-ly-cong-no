@@ -1,631 +1,461 @@
+import { Notice } from "../../shared/ui/Notice";
+import { Database, Search, Upload, Users } from "lucide-react";
 import {
-	AlertCircle,
-	BadgeDollarSign,
-	Building2,
-	CheckCircle2,
-	Database,
-	FileSpreadsheet,
-	HandCoins,
-	Search,
-	Scale,
-	Upload,
-} from "lucide-react";
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+	type ChangeEvent,
+	useDeferredValue,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import { readCustomers } from "../../domain/customers/customer.repository";
 import {
-	isMisaUnitDiscountEligible,
-	type MisaDataset,
-	type MisaDetailPage,
-	type MisaDocumentKind,
-	type MisaImportResult,
-	type MisaUnitSummary,
-} from "../../domain/misa/misa.model";
+	readCustomers,
+	writeCustomers,
+} from "../../domain/customers/customer.repository";
+import { createCustomerFromImport } from "../../domain/customers/customer.service";
+import type { MisaSalesBook } from "../../domain/misa/misa.sales-book";
 import {
-	queryMisaDetails,
-	readMisaDataset,
-	writeMisaDataset,
-} from "../../domain/misa/misa.repository";
-import { formatDateOnly, formatTimestamp } from "../../shared/lib/date";
+	readMisaSalesBook,
+	writeMisaSalesBook,
+} from "../../domain/misa/misa.sales-book.repository";
+import { allocatedDocumentNumbers } from "../../domain/payments/receipt-ledger";
+import { readReceiptLedger } from "../../domain/payments/receipt-ledger.repository";
+import { usePagination } from "../../shared/hooks/usePagination";
+import { formatTimestamp } from "../../shared/lib/date";
+import { captureActivity } from "../../shared/storage/activityLog";
+import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
-import { StatusPill, type StatusTone } from "../../shared/ui/StatusPill";
-import { MisaImportPreviewDialog } from "./MisaImportPreviewDialog";
-import { parseMisaWorkbook } from "./misa.import";
+import { MisaSalesImportDialog } from "./MisaSalesImportDialog";
+import { MisaSalesTable } from "./MisaSalesTable";
+import { planMisaCustomerSupplement } from "./misa.customer-supplement";
+import {
+	matchesSalesLine,
+	parseMisaSalesWorkbook,
+	type MisaSalesImportPreview,
+} from "./misa.sales-import";
+import {
+	planMisaSalesImport,
+	type SalesImportOptions,
+} from "./misa.sales-merge";
 
-type DetailFilter = MisaDocumentKind | "all";
-
-const number = new Intl.NumberFormat("vi-VN");
-const currency = new Intl.NumberFormat("vi-VN", {
-	style: "currency",
-	currency: "VND",
-	maximumFractionDigits: 0,
-});
-const emptyPage: MisaDetailPage = {
-	rows: [],
-	filteredCount: 0,
-	page: 1,
-	pageCount: 1,
-	firstVisible: 0,
-	lastVisible: 0,
-};
-
-const documentLabels: Record<
-	MisaDocumentKind,
-	{ label: string; tone: StatusTone }
-> = {
-	sale: { label: "Đơn bán", tone: "neutral" },
-	receipt: { label: "Thu tiền", tone: "success" },
-	adjustment: { label: "Điều chỉnh", tone: "warning" },
-};
-
-function defaultUnitId(dataset: MisaDataset | null): string {
-	if (!dataset?.units.length) return "";
-	return (
-		dataset.units.find((unit) => unit.customerId)?.id ?? dataset.units[0].id
-	);
-}
-
-function formatOptionalNumber(value: number | null): string {
-	return value === null ? "—" : number.format(value);
-}
-
-function formatOptionalCurrency(value: number | null): string {
-	return value === null ? "—" : currency.format(value);
-}
-
-function finiteAmount(value: number): number {
-	return Number.isFinite(value) ? value : 0;
-}
-
-function MisaOverview({ dataset }: { dataset: MisaDataset }) {
-	const matchedCount = dataset.units.filter((unit) => unit.customerId).length;
-	return (
-		<section className="misa-overview" aria-label="Tổng quan dữ liệu MISA">
-			<article>
-				<div className="misa-stat-icon neutral">
-					<Building2 size={18} />
-				</div>
-				<span>Tổng đơn vị</span>
-				<strong>{number.format(dataset.units.length)}</strong>
-			</article>
-			<article>
-				<div className="misa-stat-icon success">
-					<CheckCircle2 size={18} />
-				</div>
-				<span>Đã khớp danh mục</span>
-				<strong>{number.format(matchedCount)}</strong>
-			</article>
-			<article>
-				<div className="misa-stat-icon warning">
-					<AlertCircle size={18} />
-				</div>
-				<span>Chưa khớp</span>
-				<strong>{number.format(dataset.units.length - matchedCount)}</strong>
-			</article>
-			<article>
-				<div className="misa-stat-icon info">
-					<FileSpreadsheet size={18} />
-				</div>
-				<span>Dòng nghiệp vụ</span>
-				<strong>{number.format(dataset.sourceRowCount)}</strong>
-			</article>
-		</section>
-	);
-}
-
-function SelectedUnitSummary({ unit }: { unit: MisaUnitSummary }) {
-	const salesAmount = finiteAmount(unit.salesAmount);
-	const receiptAmount = finiteAmount(unit.receiptAmount);
-	const difference = salesAmount - receiptAmount;
-	const isEligible = isMisaUnitDiscountEligible({
-		salesAmount,
-		receiptAmount,
-	});
-	return (
-		<div className="misa-selected-summary">
-			<div className="misa-summary-card">
-				<span className="misa-summary-icon">
-					<FileSpreadsheet size={17} />
-				</span>
-				<div>
-					<span>Đơn bán</span>
-					<strong>{number.format(unit.salesDocumentCount)}</strong>
-					<small>{number.format(unit.salesLineCount)} dòng hàng</small>
-				</div>
-			</div>
-			<div className="misa-summary-card sales">
-				<span className="misa-summary-icon">
-					<BadgeDollarSign size={17} />
-				</span>
-				<div>
-					<span>Doanh số bán</span>
-					<strong>{currency.format(salesAmount)}</strong>
-					<small>Cập nhật {formatDateOnly(unit.lastTransactionDate)}</small>
-				</div>
-			</div>
-			<div className="misa-summary-card receipts">
-				<span className="misa-summary-icon">
-					<HandCoins size={17} />
-				</span>
-				<div>
-					<span>Đã thu</span>
-					<strong>{currency.format(receiptAmount)}</strong>
-					<small>{number.format(unit.receiptDocumentCount)} chứng từ thu</small>
-				</div>
-			</div>
-			<div
-				className={`misa-summary-card ${difference > 0 ? "is-warning" : "is-balanced"}`}
-			>
-				<span className="misa-summary-icon">
-					<Scale size={17} />
-				</span>
-				<div>
-					<span>Chênh lệch</span>
-					<strong>{currency.format(Math.abs(difference))}</strong>
-					<small>
-						{difference > 0
-							? "Còn thiếu"
-							: difference < 0
-								? "Thu vượt doanh số"
-								: "Đã cân bằng"}
-					</small>
-				</div>
-			</div>
-			<div
-				className={`misa-summary-card ${isEligible ? "is-eligible" : "is-warning"}`}
-			>
-				<span className="misa-summary-icon">
-					{isEligible ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
-				</span>
-				<div className="misa-selected-match">
-					<span>Điều kiện chiết khấu</span>
-					{isEligible ? (
-						<StatusPill tone="success">Đủ điều kiện chi</StatusPill>
-					) : (
-						<StatusPill tone="warning">Chưa đủ điều kiện</StatusPill>
-					)}
-				</div>
-			</div>
-		</div>
-	);
-}
-
+const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 12 });
+const documentOrder = new Intl.Collator("vi-VN", { numeric: true });
 export function MisaDataPage() {
-	const inputRef = useRef<HTMLInputElement>(null);
-	const [customers] = useState(readCustomers);
-	const [dataset, setDataset] = useState<MisaDataset | null>(() =>
-		readMisaDataset(),
+	const input = useRef<HTMLInputElement>(null);
+	const supplementInput = useRef<HTMLInputElement>(null);
+	const [book, setBook] = useState<MisaSalesBook | null>(null);
+	const [preview, setPreview] = useState<MisaSalesImportPreview>();
+	const [allocatedDocuments, setAllocatedDocuments] = useState<Set<string>>();
+	const [importChoices, setImportChoices] = useState<
+		Pick<SalesImportOptions, "applyChanges" | "removeMissing">
+	>({});
+	const [pending, setPending] = useState<"load" | "parse" | "save" | null>(
+		"load",
 	);
-	const [selectedUnitId, setSelectedUnitId] = useState("");
-	const [documentFilter, setDocumentFilter] = useState<DetailFilter>("all");
-	const [unitQuery, setUnitQuery] = useState("");
-	const [unitProvince, setUnitProvince] = useState("all");
-	const [page, setPage] = useState(1);
-	const [pageSize, setPageSize] = useState(25);
-	const [detailPage, setDetailPage] = useState<MisaDetailPage>(emptyPage);
-	const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-	const [isImporting, setIsImporting] = useState(false);
-	const [isSavingImport, setIsSavingImport] = useState(false);
-	const [importPreview, setImportPreview] = useState<MisaImportResult>();
 	const [error, setError] = useState("");
-	const customerById = useMemo(
-		() => new Map(customers.map((customer) => [customer.id, customer])),
-		[customers],
-	);
-	const provinceOptions = useMemo(
+	const [success, setSuccess] = useState("");
+	const [supplement, setSupplement] = useState<{
+		source: MisaSalesImportPreview;
+		plan: ReturnType<typeof planMisaCustomerSupplement>;
+	}>();
+	const [query, setQuery] = useState("");
+	// Ô tìm kiếm cập nhật ngay; danh sách lọc lại sau đó để gõ phím không bị khựng.
+	const searchQuery = useDeferredValue(query);
+	const sortedRows = useMemo(
 		() =>
-			[
-				...new Set(
-					(dataset?.units ?? []).flatMap((unit) => {
-						const province = unit.customerId
-							? customerById.get(unit.customerId)?.province
-							: undefined;
-						return province ? [province] : [];
-					}),
-				),
-			].sort((left, right) => left.localeCompare(right, "vi-VN")),
-		[customerById, dataset?.units],
+			[...(book?.rows ?? [])].sort(
+				(left, right) =>
+					right.date.localeCompare(left.date) ||
+					documentOrder.compare(right.documentNumber, left.documentNumber) ||
+					left.rowNumber - right.rowNumber,
+			),
+		[book],
 	);
-	const filteredUnits = useMemo(() => {
-		const normalizedQuery = normalizeVietnamese(unitQuery);
-		return (dataset?.units ?? []).filter((unit) => {
-			const customer = unit.customerId
-				? customerById.get(unit.customerId)
-				: undefined;
-			const matchesQuery =
-				!normalizedQuery ||
-				normalizeVietnamese(
-					`${unit.name} ${unit.customerCode ?? ""} ${customer?.misaCode ?? ""}`,
-				).includes(normalizedQuery);
-			const matchesProvince =
-				unitProvince === "all" || customer?.province === unitProvince;
-			return matchesQuery && matchesProvince;
-		});
-	}, [customerById, dataset?.units, unitProvince, unitQuery]);
-
-	const selectedUnit = useMemo(
-		() => filteredUnits.find((unit) => unit.id === selectedUnitId),
-		[filteredUnits, selectedUnitId],
+	const filteredRows = useMemo(() => {
+		const needle = normalizeVietnamese(searchQuery);
+		return needle
+			? sortedRows.filter((row) => matchesSalesLine(row, needle))
+			: sortedRows;
+	}, [sortedRows, searchQuery]);
+	const pagination = usePagination(filteredRows, 25);
+	const busy = pending !== null;
+	const importPlan = useMemo(
+		() =>
+			preview
+				? planMisaSalesImport(book, preview, {
+						...importChoices,
+						allocatedDocuments,
+					})
+				: null,
+		[book, preview, importChoices, allocatedDocuments],
 	);
 
 	useEffect(() => {
-		if (filteredUnits.some((unit) => unit.id === selectedUnitId)) return;
-		setSelectedUnitId(filteredUnits[0]?.id ?? "");
-		setPage(1);
-	}, [filteredUnits, selectedUnitId]);
-
-	useEffect(() => {
-		if (!selectedUnitId || !dataset?.detailsAvailable) {
-			setDetailPage(emptyPage);
-			return;
-		}
 		let active = true;
-		setIsLoadingDetails(true);
-		queryMisaDetails({
-			unitId: selectedUnitId,
-			query: "",
-			documentKind: documentFilter,
-			page,
-			pageSize,
-		})
+		readMisaSalesBook()
 			.then((result) => {
-				if (!active) return;
-				setDetailPage(result);
-				if (result.page !== page) setPage(result.page);
-				setError("");
+				if (active) setBook(result);
 			})
-			.catch((reason) => {
-				if (!active) return;
-				setDetailPage(emptyPage);
-				setError(
-					reason instanceof Error
-						? reason.message
-						: "Không thể đọc chi tiết MISA.",
-				);
+			.catch((reason: unknown) => {
+				if (active)
+					setError(
+						reason instanceof Error
+							? reason.message
+							: "Không thể đọc dữ liệu đã lưu.",
+					);
 			})
 			.finally(() => {
-				if (active) setIsLoadingDetails(false);
+				if (active) setPending(null);
 			});
 		return () => {
 			active = false;
 		};
-	}, [
-		dataset?.detailsAvailable,
-		documentFilter,
-		page,
-		pageSize,
-		selectedUnitId,
-	]);
+	}, []);
 
-	async function handleFile(event: ChangeEvent<HTMLInputElement>) {
+	async function handleFile(
+		event: ChangeEvent<HTMLInputElement>,
+		addCustomers = false,
+	) {
 		const file = event.target.files?.[0];
+		event.target.value = "";
 		if (!file) return;
-		setIsImporting(true);
 		setError("");
+		setSuccess("");
+		setPending("parse");
 		try {
-			setImportPreview(await parseMisaWorkbook(file, readCustomers()));
+			const [source, saved, ledger] = await Promise.all([
+				parseMisaSalesWorkbook(file),
+				readMisaSalesBook(),
+				addCustomers ? undefined : readReceiptLedger(),
+			]);
+			setBook(saved);
+			if (ledger) setAllocatedDocuments(allocatedDocumentNumbers(ledger));
+			setImportChoices({});
+			if (addCustomers && saved) {
+				setSupplement({
+					source,
+					plan: planMisaCustomerSupplement(saved, source, readCustomers()),
+				});
+			} else if (!addCustomers) {
+				setPreview(source);
+			} else {
+				throw new Error("Chưa có sổ bán hàng MISA để bổ sung khách hàng.");
+			}
+		} catch (reason) {
+			setError(
+				reason instanceof Error ? reason.message : "Không thể đọc file MISA.",
+			);
+		} finally {
+			setPending(null);
+		}
+	}
+
+	async function confirmSupplement() {
+		if (!supplement || !book || busy) return;
+		const log = captureActivity();
+		setError("");
+		setPending("save");
+		try {
+			const saved = await readMisaSalesBook();
+			if (!saved || saved.importedAt !== book.importedAt) {
+				throw new Error(
+					"Sổ bán hàng đã thay đổi. Hãy chọn lại file MISA để đối chiếu.",
+				);
+			}
+			const customers = readCustomers();
+			const plan = planMisaCustomerSupplement(
+				saved,
+				supplement.source,
+				customers,
+			);
+			// Saving the catalog first makes a retry safe if the sales-book write fails.
+			if (
+				plan.additions.length &&
+				!writeCustomers([
+					...customers,
+					...plan.additions.map(createCustomerFromImport),
+				])
+			) {
+				throw new Error("Không thể lưu danh mục khách hàng.");
+			}
+			if (plan.additions.length)
+				void log(
+					"data",
+					"Bổ sung khách hàng từ MISA",
+					`${plan.additions.length} khách hàng · ${supplement.source.book.fileName}`,
+				);
+			const updated = plan.linkedRows
+				? await writeMisaSalesBook(plan.book, saved.importedAt)
+				: saved;
+			if (plan.linkedRows)
+				void log(
+					"data",
+					"Ghép mã khách hàng MISA",
+					`${plan.linkedRows} dòng · ${saved.fileName}`,
+				);
+			setBook(updated);
+			setSupplement(undefined);
+			setSuccess(
+				`Đã thêm ${number.format(plan.additions.length)} khách hàng, dùng ${number.format(plan.matched)} hồ sơ đã có và đối chiếu ${number.format(plan.matchedRows)} dòng bán hàng theo mã MISA.`,
+			);
 		} catch (reason) {
 			setError(
 				reason instanceof Error
 					? reason.message
-					: "Không thể đọc file MISA đã chọn.",
+					: "Không thể bổ sung khách hàng MISA.",
 			);
 		} finally {
-			setIsImporting(false);
-			event.target.value = "";
+			setPending(null);
 		}
 	}
 
 	async function confirmImport() {
-		if (!importPreview) return;
-		setIsSavingImport(true);
+		if (!preview || !importPlan?.hasChanges || busy) return;
+		const log = captureActivity();
+		setError("");
+		setPending("save");
 		try {
-			if (!(await writeMisaDataset(importPreview)))
-				throw new Error("Không thể lưu dữ liệu MISA vào bộ nhớ của ứng dụng.");
-			const { rows: _rows, ...summary } = importPreview;
-			setDataset(summary);
-			setSelectedUnitId(defaultUnitId(summary));
-			setDocumentFilter("all");
-			setUnitQuery("");
-			setUnitProvince("all");
-			setPage(1);
-			setError("");
+			let plan = importPlan;
+			if (plan.removedCount) {
+				// Kiểm tra lại phân bổ ngay trước khi thay hoặc gỡ chứng từ đã lưu.
+				const latest = allocatedDocumentNumbers(await readReceiptLedger());
+				plan = planMisaSalesImport(book, preview, {
+					...importChoices,
+					allocatedDocuments: latest,
+				});
+				if (
+					plan.removedCount !== importPlan.removedCount ||
+					plan.addedCount !== importPlan.addedCount
+				) {
+					setAllocatedDocuments(latest);
+					throw new Error(
+						"Phân bổ khoản thu vừa thay đổi. Hãy xem lại bản xem trước trước khi nhập.",
+					);
+				}
+			}
+			const updated = await writeMisaSalesBook(
+				plan.book,
+				book?.importedAt ?? null,
+			);
+			const summary = [
+				`${plan.addedCount} dòng thêm`,
+				plan.updatedVouchers
+					? `${plan.updatedVouchers} chứng từ cập nhật theo file`
+					: "",
+				plan.missing.removedVouchers
+					? `${plan.missing.removedVouchers} chứng từ gỡ khỏi sổ`
+					: "",
+			]
+				.filter(Boolean)
+				.join(" · ");
+			void log(
+				"data",
+				"Nhập sổ bán hàng MISA",
+				`${updated.fileName} · ${summary}`,
+			);
+			setBook(updated);
+			setPreview(undefined);
+			setSuccess(`Đã nhập sổ bán hàng: ${summary}.`);
+			setQuery("");
+			pagination.resetPage();
 		} catch (reason) {
+			await readMisaSalesBook()
+				.then(setBook)
+				.catch(() => {});
 			setError(
 				reason instanceof Error
 					? reason.message
-					: "Không thể lưu dữ liệu MISA đã chọn.",
+					: "Không thể lưu dữ liệu MISA.",
 			);
 		} finally {
-			setIsSavingImport(false);
-			setImportPreview(undefined);
+			setPending(null);
 		}
 	}
 
 	return (
 		<div className="page-stack misa-data-page">
-			<section className="panel misa-import-card">
-				<div className="misa-import-icon">
-					<Database size={22} />
+			<section className="panel data-source-card">
+				<div className="data-source-icon">
+					<Database className="icon-size-22" />
 				</div>
-				<div className="misa-import-copy">
-					<h2>Dữ liệu bán hàng và công nợ MISA</h2>
-					{dataset ? (
+				<div className="data-source-copy">
+					<h2>Sổ chi tiết bán hàng</h2>
+					{book ? (
 						<p>
-							<strong>{dataset.fileName}</strong>
-							<span>·</span>Kỳ {formatDateOnly(dataset.periodFrom)} –{" "}
-							{formatDateOnly(dataset.periodTo)}
-							<span>·</span>Nhập {formatTimestamp(dataset.importedAt)}
+							{number.format(book.rows.length)} dòng · Nhập gần nhất{" "}
+							<strong>{book.fileName}</strong> ·{" "}
+							{formatTimestamp(book.importedAt)}
 						</p>
 					) : (
-						<p>Chọn file Chi tiết công nợ phải thu xuất từ MISA.</p>
+						<p>Chọn file Excel Sổ chi tiết bán hàng xuất từ MISA.</p>
 					)}
 				</div>
 				<input
-					ref={inputRef}
+					ref={input}
 					className="visually-hidden"
 					type="file"
-					accept=".xlsx,.xls"
+					accept=".xlsx"
 					onChange={handleFile}
 				/>
-				<button
-					className="button primary"
-					type="button"
-					disabled={isImporting}
-					onClick={() => inputRef.current?.click()}
-				>
-					<Upload size={16} />
-					{isImporting
-						? "Đang đọc dữ liệu..."
-						: dataset
-							? "Nhập file khác"
-							: "Chọn file MISA"}
-				</button>
-			</section>
-
-			{error && (
-				<div className="misa-error" role="alert">
-					<AlertCircle size={17} />
-					<span>{error}</span>
-				</div>
-			)}
-
-			{dataset ? (
-				<>
-					<MisaOverview dataset={dataset} />
-					<section className="panel data-panel misa-detail-panel">
-						<div className="misa-unit-toolbar">
-							<label className="misa-filter-field misa-unit-search">
-								<span>Tìm đơn vị</span>
-								<div className="misa-filter-control">
-									<Search size={16} />
-									<input
-										value={unitQuery}
-										placeholder="Tên đơn vị hoặc mã MISA..."
-										onChange={(event) => setUnitQuery(event.target.value)}
-									/>
-								</div>
-							</label>
-							<label className="misa-filter-field misa-province-select">
-								<span>Tỉnh/thành</span>
-								<select
-									value={unitProvince}
-									onChange={(event) => setUnitProvince(event.target.value)}
-								>
-									<option value="all">Tất cả tỉnh/thành</option>
-									{provinceOptions.map((province) => (
-										<option key={province} value={province}>
-											{province}
-										</option>
-									))}
-								</select>
-							</label>
-							<label className="misa-filter-field misa-unit-select">
-								<span>Đơn vị đang xem</span>
-								<div className="misa-filter-control">
-									<Building2 size={17} />
-									<select
-										value={selectedUnitId}
-										disabled={!filteredUnits.length}
-										onChange={(event) => {
-											setSelectedUnitId(event.target.value);
-											setPage(1);
-										}}
-									>
-										{!filteredUnits.length && (
-											<option value="">Không có đơn vị phù hợp</option>
-										)}
-										{filteredUnits.map((unit) => (
-											<option key={unit.id} value={unit.id}>
-												{unit.name}
-												{unit.customerCode ? ` · ${unit.customerCode}` : ""}
-											</option>
-										))}
-									</select>
-								</div>
-							</label>
-							<label className="misa-filter-field misa-kind-select">
-								<span>Loại chứng từ</span>
-								<select
-									value={documentFilter}
-									onChange={(event) => {
-										setDocumentFilter(event.target.value as DetailFilter);
-										setPage(1);
-									}}
-								>
-									<option value="all">Tất cả dữ liệu</option>
-									<option value="sale">Đơn hàng bán</option>
-									<option value="receipt">Thu tiền</option>
-									<option value="adjustment">Điều chỉnh</option>
-								</select>
-							</label>
-							<div className="misa-filter-result">
-								<span>Kết quả lọc</span>
-								<strong>
-									{number.format(filteredUnits.length)} <small>đơn vị</small>
-								</strong>
-							</div>
-						</div>
-
-						{selectedUnit && <SelectedUnitSummary unit={selectedUnit} />}
-
-						{!dataset.detailsAvailable ? (
-							<div className="misa-reimport-note">
-								<AlertCircle size={18} />
-								<div>
-									<strong>Cần nhập lại file MISA một lần</strong>
-									<span>
-										Bản dữ liệu trước chỉ lưu tổng hợp. Nhập lại file để bổ sung
-										ngày, đơn hàng, số lượng, đơn giá và toàn bộ chứng từ.
-									</span>
-								</div>
-								<button
-									className="button primary"
-									type="button"
-									onClick={() => inputRef.current?.click()}
-								>
-									Nhập lại file
-								</button>
-							</div>
-						) : (
-							<>
-								<div className="table-scroll misa-detail-table">
-									<table>
-										<thead>
-											<tr>
-												<th>Ngày</th>
-												<th>Số chứng từ</th>
-												<th>Diễn giải</th>
-												<th>ĐVT</th>
-												<th className="numeric">Số lượng</th>
-												<th className="numeric">Đơn giá</th>
-												<th className="numeric">Phát sinh Nợ</th>
-												<th className="numeric">Phát sinh Có</th>
-												<th className="numeric">Số dư Nợ</th>
-												<th className="numeric">Số dư Có</th>
-											</tr>
-										</thead>
-										<tbody>
-											{detailPage.rows.map((row) => {
-												const document = documentLabels[row.documentKind];
-												return (
-													<tr key={row.id}>
-														<td>{formatDateOnly(row.date)}</td>
-														<td className="misa-document-cell">
-															<strong>{row.documentNumber || "—"}</strong>
-															<StatusPill tone={document.tone}>
-																{document.label}
-															</StatusPill>
-														</td>
-														<td className="misa-description-cell">
-															<strong>{row.description || "—"}</strong>
-															{row.generalDescription &&
-																row.generalDescription !== row.description && (
-																	<span className="cell-meta">
-																		{row.generalDescription}
-																	</span>
-																)}
-														</td>
-														<td>{row.unit || "—"}</td>
-														<td className="numeric">
-															{formatOptionalNumber(row.quantity)}
-														</td>
-														<td className="numeric">
-															{formatOptionalCurrency(row.unitPrice)}
-														</td>
-														<td className="numeric">
-															{formatOptionalCurrency(row.debit)}
-														</td>
-														<td className="numeric">
-															{formatOptionalCurrency(row.credit)}
-														</td>
-														<td className="numeric">
-															{formatOptionalCurrency(row.balanceDebit)}
-														</td>
-														<td className="numeric">
-															{formatOptionalCurrency(row.balanceCredit)}
-														</td>
-													</tr>
-												);
-											})}
-										</tbody>
-									</table>
-									{isLoadingDetails && (
-										<div className="misa-table-state">
-											Đang tải dữ liệu đơn vị...
-										</div>
-									)}
-									{!isLoadingDetails && detailPage.filteredCount === 0 && (
-										<div className="empty-state">
-											Không có dữ liệu phù hợp trong đơn vị này.
-										</div>
-									)}
-								</div>
-								<footer className="misa-table-footer">
-									<span>
-										Hiển thị{" "}
-										<strong>
-											{detailPage.firstVisible}–{detailPage.lastVisible}
-										</strong>{" "}
-										/ {number.format(detailPage.filteredCount)} dòng
-									</span>
-									<div>
-										<label>
-											Hiển thị
-											<select
-												aria-label="Số dòng MISA mỗi trang"
-												value={pageSize}
-												onChange={(event) => {
-													setPageSize(Number(event.target.value));
-													setPage(1);
-												}}
-											>
-												<option value={25}>25</option>
-												<option value={50}>50</option>
-												<option value={100}>100</option>
-											</select>
-										</label>
-										<PaginationControls
-											currentPage={detailPage.page}
-											pageCount={detailPage.pageCount}
-											onPageChange={setPage}
-											previousLabel="Trang dữ liệu trước"
-											nextLabel="Trang dữ liệu sau"
-											showPageWord
-										/>
-									</div>
-								</footer>
-							</>
-						)}
-					</section>
-				</>
-			) : (
-				<section className="panel misa-empty-state">
-					<div>
-						<FileSpreadsheet size={27} />
-					</div>
-					<h2>Chưa có dữ liệu MISA</h2>
-					<p>
-						Sau khi nhập Excel, hệ thống sẽ lưu toàn bộ chứng từ và cho phép xem
-						riêng dữ liệu của từng đơn vị.
-					</p>
-					<button
-						className="button secondary"
-						type="button"
-						onClick={() => inputRef.current?.click()}
-					>
-						<Upload size={16} /> Chọn file Excel
-					</button>
-				</section>
-			)}
-			{importPreview && (
-				<MisaImportPreviewDialog
-					preview={importPreview}
-					existingDataset={dataset}
-					isSaving={isSavingImport}
-					onClose={() => setImportPreview(undefined)}
-					onConfirm={() => void confirmImport()}
+				<input
+					ref={supplementInput}
+					className="visually-hidden"
+					type="file"
+					accept=".xlsx"
+					onChange={(event) => void handleFile(event, true)}
 				/>
+				<div className="misa-book-actions">
+					{book && (
+						<button
+							className="button secondary"
+							type="button"
+							disabled={busy}
+							onClick={() => supplementInput.current?.click()}
+						>
+							<Users className="icon-size-16" /> Bổ sung khách hàng từ MISA
+						</button>
+					)}
+					<button
+						className="button primary"
+						type="button"
+						disabled={busy}
+						onClick={() => input.current?.click()}
+					>
+						<Upload className="icon-size-16" />
+						{pending === "parse" ? "Đang đọc file..." : "Chọn file MISA"}
+					</button>
+				</div>
+			</section>
+			{success && (
+				<Notice tone="success" announce onDismiss={() => setSuccess("")}>
+					{success}
+				</Notice>
+			)}
+			{error && !preview && !supplement && (
+				<Notice tone="danger" announce>
+					{error}
+				</Notice>
+			)}
+			{book ? (
+				<section className="panel data-panel misa-detail-panel">
+					<div className="panel-header">
+						<label className="misa-filter-field misa-sales-search">
+							<span>Tìm dòng bán hàng</span>
+							<div className="misa-filter-control">
+								<Search className="icon-size-16" />
+								<input
+									type="search"
+									placeholder="Chứng từ, hóa đơn, khách hàng hoặc tên hàng"
+									value={query}
+									onChange={(event) => {
+										setQuery(event.target.value);
+										pagination.resetPage();
+									}}
+								/>
+							</div>
+						</label>
+					</div>
+					<MisaSalesTable rows={pagination.pageItems} />
+					{!filteredRows.length && (
+						<div className="empty-state">Không tìm thấy dòng phù hợp.</div>
+					)}
+					<footer className="misa-table-footer">
+						<span>
+							{number.format(pagination.firstVisible)}–
+							{number.format(pagination.lastVisible)} /{" "}
+							{number.format(filteredRows.length)} dòng
+						</span>
+						<PaginationControls
+							currentPage={pagination.currentPage}
+							pageCount={pagination.pageCount}
+							onPageChange={pagination.setCurrentPage}
+							previousLabel="Trang trước"
+							nextLabel="Trang sau"
+						/>
+					</footer>
+				</section>
+			) : (
+				!busy &&
+				!error && (
+					<div className="panel empty-state">
+						Chưa có dữ liệu bán hàng MISA.
+					</div>
+				)
+			)}
+			{preview && importPlan && (
+				<MisaSalesImportDialog
+					preview={preview}
+					plan={importPlan}
+					existingCount={book?.rows.length ?? 0}
+					choices={importChoices}
+					onChoicesChange={setImportChoices}
+					isSaving={pending === "save"}
+					error={error}
+					onConfirm={() => void confirmImport()}
+					onClose={() => {
+						setPreview(undefined);
+						setError("");
+					}}
+				/>
+			)}
+			{supplement && (
+				<Dialog
+					ariaLabelledBy="misa-customer-supplement"
+					eyebrow="DANH MỤC KHÁCH HÀNG"
+					title="Bổ sung khách hàng từ MISA"
+					icon={<Users className="icon-size-19" />}
+					disableClose={busy}
+					onClose={() => {
+						setSupplement(undefined);
+						setError("");
+					}}
+					footer={
+						<>
+							<button
+								className="button secondary"
+								type="button"
+								disabled={busy}
+								onClick={() => {
+									setSupplement(undefined);
+									setError("");
+								}}
+							>
+								Hủy
+							</button>
+							<button
+								className="button primary"
+								type="button"
+								disabled={busy}
+								onClick={() => void confirmSupplement()}
+							>
+								{busy ? "Đang lưu..." : "Xác nhận bổ sung và ghép mã"}
+							</button>
+						</>
+					}
+				>
+					<div className="dialog-body">
+						{error && (
+							<Notice tone="danger" announce>
+								{error}
+							</Notice>
+						)}
+						<p>
+							<strong>{number.format(supplement.plan.additions.length)}</strong>{" "}
+							khách hàng mới ·{" "}
+							<strong>{number.format(supplement.plan.matched)}</strong> mã đã có
+							trong danh mục
+						</p>
+						<p>
+							Ghép {number.format(supplement.plan.matchedRows)} dòng bán hàng
+							theo mã MISA. Hồ sơ và phân công hiện có được giữ nguyên.
+						</p>
+						<p>
+							Khu vực của hồ sơ mới lấy từ địa chỉ. Hồ sơ mới ở nhóm Chưa phân
+							loại và chờ phân công nhân viên.
+						</p>
+					</div>
+				</Dialog>
 			)}
 		</div>
 	);

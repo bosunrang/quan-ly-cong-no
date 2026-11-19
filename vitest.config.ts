@@ -7,7 +7,7 @@ export default defineConfig({
 			jsdom: { url: "http://localhost/" },
 		},
 		setupFiles: ["tests/setup.ts"],
-		include: ["tests/**/*.test.ts"],
+		include: ["tests/**/*.test.{ts,tsx}"],
 		coverage: {
 			provider: "v8",
 			reporter: ["text", "html", "json-summary"],

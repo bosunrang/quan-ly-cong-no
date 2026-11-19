@@ -1,11 +1,10 @@
 export type PageId =
 	| "dashboard"
-	| "reconcile"
 	| "misa"
-	| "products"
 	| "customers"
 	| "sales"
-	| "periods"
+	| "receivables"
+	| "payments"
 	| "reports"
 	| "users"
 	| "audit"

@@ -1,37 +1,51 @@
 import { isSalesEmployeeList, type SalesEmployee } from "./employee.model";
-import { seedSalesEmployees } from "./employee.seed";
+import { readAccounts } from "../access/accounts.repository";
 import {
 	readVersionedLocalStorage,
+	reportStorageIssue,
 	writeVersionedLocalStorage,
 } from "../../shared/storage/localStorage";
+import { getDatabaseBridge } from "../../shared/storage/databaseBridge";
+import { lanEndpoint } from "../../shared/storage/lanStorage";
 
-const STORAGE_KEY = "mkt-cost.sales-employees.v2";
+export const EMPLOYEE_STORAGE_KEY = "cong-no.sales-employees.v2";
 const STORAGE_VERSION = 2;
-const LEGACY_STORAGE_KEY = "mkt-cost.sales-employees.v1";
-
-function cloneSeed(): SalesEmployee[] {
-	return structuredClone(seedSalesEmployees);
-}
 
 export function readSalesEmployees(): SalesEmployee[] {
 	return readVersionedLocalStorage({
-		key: STORAGE_KEY,
-		label: "nhân viên kinh doanh",
+		key: EMPLOYEE_STORAGE_KEY,
+		label: "nhân viên",
 		version: STORAGE_VERSION,
-		fallback: cloneSeed,
+		fallback: () => [],
 		isValid: isSalesEmployeeList,
-		legacy: [
-			{
-				key: LEGACY_STORAGE_KEY,
-				migrate: (value) => (isSalesEmployeeList(value) ? value : undefined),
-			},
-		],
 	});
 }
 
 export function writeSalesEmployees(employees: SalesEmployee[]): boolean {
+	if (!lanEndpoint() && !getDatabaseBridge()) {
+		const links = employees
+			.map((employee) => employee.linkedAccountId)
+			.filter((id) => id !== undefined);
+		if (links.length) {
+			let accountIds: Set<string>;
+			try {
+				accountIds = new Set(readAccounts().map(({ id }) => id));
+			} catch (error) {
+				reportStorageIssue("Không thể kiểm tra tài khoản liên kết.", error);
+				return false;
+			}
+			if (links.some((id) => !accountIds.has(id))) {
+				reportStorageIssue("Tài khoản liên kết không còn tồn tại.");
+				return false;
+			}
+			if (new Set(links).size !== links.length) {
+				reportStorageIssue("Tài khoản này đã liên kết với nhân viên khác.");
+				return false;
+			}
+		}
+	}
 	return writeVersionedLocalStorage(
-		STORAGE_KEY,
+		EMPLOYEE_STORAGE_KEY,
 		STORAGE_VERSION,
 		employees,
 		"dữ liệu nhân viên",

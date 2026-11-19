@@ -1,15 +1,14 @@
 import {
 	BarChart3,
-	Boxes,
 	Building2,
-	CircleDollarSign,
-	ClipboardCheck,
+	ChartNoAxesCombined,
 	Database,
-	FileBarChart,
 	History,
 	MapPinned,
+	Receipt,
 	Settings,
 	Users,
+	Wallet,
 	type LucideIcon,
 } from "lucide-react";
 import type { PageId } from "../types";
@@ -28,36 +27,35 @@ export interface NavGroup {
 export const navGroups: NavGroup[] = [
 	{
 		label: "Tổng quan",
-		items: [
-			{ id: "dashboard", label: "Dashboard", icon: BarChart3 },
-			{ id: "reconcile", label: "Đối soát chiết khấu", icon: ClipboardCheck },
-		],
+		items: [{ id: "dashboard", label: "Dashboard", icon: BarChart3 }],
 	},
 	{
 		label: "Dữ liệu",
 		items: [{ id: "misa", label: "Dữ liệu MISA", icon: Database }],
 	},
 	{
-		label: "Danh mục",
+		label: "Nghiệp vụ",
 		items: [
-			{ id: "products", label: "Sản phẩm & chính sách", icon: Boxes },
-			{ id: "customers", label: "Khách hàng", icon: Building2 },
-			{ id: "sales", label: "Nhân viên & khu vực", icon: MapPinned },
+			{ id: "receivables", label: "Công nợ phải thu", icon: Wallet },
+			{ id: "payments", label: "Đối soát khoản thu", icon: Receipt },
+			{ id: "reports", label: "Báo cáo", icon: ChartNoAxesCombined },
 		],
 	},
 	{
-		label: "Quản lý",
+		label: "Danh mục",
 		items: [
-			{ id: "periods", label: "Kỳ chiết khấu", icon: CircleDollarSign },
-			{ id: "reports", label: "Báo cáo", icon: FileBarChart },
+			{ id: "customers", label: "Khách hàng", icon: Building2 },
+			{ id: "sales", label: "Nhân viên & khu vực", icon: MapPinned },
 		],
 	},
 	{
 		label: "Hệ thống",
 		items: [
 			{ id: "users", label: "Người dùng", icon: Users },
-			{ id: "audit", label: "Nhật ký hoạt động", icon: History },
+			{ id: "audit", label: "Nhật ký sử dụng", icon: History },
 			{ id: "settings", label: "Cài đặt", icon: Settings },
 		],
 	},
 ];
+
+export const navItems = navGroups.flatMap(({ items }) => items);

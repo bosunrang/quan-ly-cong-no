@@ -1,6 +1,6 @@
-# Quản lý Chiết khấu MKT
+# Quản lý công nợ phải thu
 
-Bộ khung giao diện desktop quản lý chi phí chiết khấu theo đơn hàng, khách hàng, khu vực, nhân viên kinh doanh và kỳ quý/năm.
+Ứng dụng tra cứu sổ chi tiết bán hàng xuất từ MISA.
 
 ## Công nghệ
 
@@ -17,7 +17,83 @@ pnpm install
 pnpm dev
 ```
 
-Mở `http://localhost:5173` trên máy đang chạy app. Để một thiết bị khác cùng mạng Wi-Fi/LAN kiểm thử, mở địa chỉ `http://<IPv4-của-máy-chạy-app>:5173`. Máy chủ phải tiếp tục chạy và Windows Firewall cần cho phép Node.js trên mạng Private.
+Mở `http://127.0.0.1:5176` trên máy đang chạy app. Dùng lại đúng địa chỉ đã mở khi nhập dữ liệu vì bản phát triển lưu dữ liệu theo địa chỉ trình duyệt.
+
+## Chạy qua mạng nội bộ trên ba máy chủ
+
+| Công ty | Cổng | Địa chỉ từ máy khác trong LAN | Tệp SQLite |
+| --- | ---: | --- | --- |
+| Nam Hưng Việt | 3300 | `http://<IP-máy-chung>:3300/` | `cong-no-nam-hung-viet.sqlite` |
+| Naviva Group | 3301 | `http://<IP-máy-chung>:3301/` | `cong-no-naviva-group.sqlite` |
+| Tường Khuê | 3300 | `http://<IP-máy-Tường-Khuê>:3300/` | `cong-no-tuong-khue.sqlite` |
+| Winbio | 3300 | `http://<IP-máy-Winbio>:3300/` | `cong-no-winbio.sqlite` |
+
+### Vận hành bằng bản cài Windows
+
+Tạo bộ cài bằng `pnpm dist` trên máy build. Tệp `Quan-Ly-Cong-No-Setup-<phiên-bản>.exe` được tạo trong `release`. Cài trên các máy chủ cần chạy app.
+
+- **Máy chung**. Mở **Quản lý công nợ**, chọn **Nam Hưng Việt**. Mở lại ứng dụng và chọn **Naviva Group**. Windows hiển thị hai biểu tượng dưới khay; rê chuột lên mỗi biểu tượng để xem tên công ty và cổng.
+- **Máy Tường Khuê**. Mở ứng dụng và chọn **Tường Khuê**.
+- **Máy Winbio**. Mở ứng dụng và chọn **Winbio**.
+
+Khi mở công ty lần đầu, tạo tài khoản quản trị nếu được hỏi. Ghi lại mật khẩu tạm thời hiển thị và đổi mật khẩu ở lần đăng nhập đầu. Có thể tạo sau bằng mục **Tạo tài khoản quản trị…** dưới khay.
+
+Bấm **X** để ẩn cửa sổ xuống khay và giữ máy chủ chạy. Bấm đúp biểu tượng để mở cửa sổ. Trong menu chuột phải, chọn **Địa chỉ cho máy nhân viên…** để xem địa chỉ kết nối. Chọn **Thoát và dừng máy chủ** để kết thúc máy chủ của công ty đó.
+
+Trên bản đã cài, tick **Khởi động cùng Windows** ở biểu tượng của từng công ty cần chạy. Máy chung cần tick cả hai biểu tượng. Sau khi đăng nhập vào tài khoản Windows đã bật tùy chọn, mỗi công ty lên thẳng dưới khay. Mở thủ công qua shortcut vẫn cho chọn công ty. Chọn **Bản cục bộ** nếu dùng dữ liệu Electron cục bộ.
+
+Bản cài lưu dữ liệu LAN tại `%APPDATA%\QuanLyCongNo\lan`. Nếu máy đã có dữ liệu LAN ở thư mục khác, đặt biến môi trường người dùng `CONG_NO_LAN_DATA_DIR` thành đường dẫn tuyệt đối của thư mục đó trước khi mở bản cài. Mục khởi động Windows ghi nhớ thư mục đang dùng khi bật tùy chọn.
+
+### Chạy bằng lệnh hoặc thử từ mã nguồn
+
+Trên máy chủ Windows dùng Node.js 22.13 trở lên và pnpm. Build lại sau khi cập nhật mã nguồn.
+
+```powershell
+pnpm install
+pnpm build
+```
+
+Trên mỗi máy, chạy lệnh `lan:init-admin` một lần cho từng công ty do máy đó phục vụ. Lệnh in tên đăng nhập `admin` và một mật khẩu tạm thời. Người dùng đổi mật khẩu khi đăng nhập lần đầu. Chạy lệnh `lan` mỗi khi cần khởi động máy chủ.
+
+**Máy chung của Nam Hưng Việt và Naviva Group**
+
+```powershell
+pnpm lan:init-admin --company=nam-hung-viet
+pnpm lan:init-admin --company=naviva-group
+pnpm lan
+```
+
+**Máy riêng của Tường Khuê**
+
+```powershell
+pnpm lan:init-admin --company=tuong-khue
+pnpm lan --company=tuong-khue
+```
+
+**Máy riêng của Winbio**
+
+```powershell
+pnpm lan:init-admin --company=winbio
+pnpm lan --company=winbio
+```
+
+Mỗi địa chỉ mở thẳng công ty tương ứng. Thêm `--loopback` sau lệnh `pnpm lan` để chỉ mở trên máy chủ khi kiểm tra.
+
+Để chạy thử giao diện máy chủ dưới khay từ mã nguồn, dùng `pnpm desktop:lan --company=nam-hung-viet --loopback` sau khi build. Thoát máy chủ đang dùng cùng cổng trước khi đổi cách chạy.
+
+Giữ tiến trình máy chủ chạy trong thời gian sử dụng. Các máy trạm dùng cùng IP của máy chủ qua LAN. Nếu Windows Firewall chặn kết nối, cho phép cổng TCP cần dùng trên mạng **Private**, giới hạn trong mạng nội bộ. Nếu dùng HTTPS, đặt `CONG_NO_LAN_TLS_KEY` và `CONG_NO_LAN_TLS_CERT` thành đường dẫn tệp PEM của khóa và chứng chỉ được máy trạm tin cậy, rồi dùng `https://` với cùng cổng và đường dẫn.
+
+Mỗi kho chứa riêng sổ MISA, công nợ, khoản thu, phân bổ, khách hàng, phân công, cài đặt, tài khoản và nhật ký. Kho LAN bắt đầu trống. Dữ liệu đã nhập ở cổng `5176` hoặc trong bản desktop vẫn nằm tại kho cũ. Nhập sổ MISA đúng công ty sau khi đăng nhập vào kho tương ứng.
+
+Lệnh chạy từ mã nguồn lưu các tệp trong `data/lan` mặc định. Có thể đặt biến `CONG_NO_LAN_DATA_DIR` thành một thư mục cố định trên máy chủ trước khi khởi tạo quản trị và chạy app.
+
+### Sao lưu và khôi phục theo công ty
+
+Trong **Cài đặt → Quản trị dữ liệu**, dùng **Xuất sao lưu** và **Nhập sao lưu** để lưu hoặc khôi phục dữ liệu nghiệp vụ bằng tệp JSON. Bản sao LAN chỉ nhập được vào đúng công ty. Tệp chứa sổ MISA, khoản thu, phân bổ, khách hàng, nhân viên và cài đặt doanh nghiệp. Tài khoản và nhật ký nằm ngoài dữ liệu nhập. Dùng **Xóa dữ liệu** để chọn từng nhóm. Với sổ MISA đã có phân bổ hoặc khách hàng đã có khoản thu, chọn cả nhóm **Khoản thu và phân bổ** khi xóa dữ liệu liên quan.
+
+Máy chủ LAN tạo một bản SQLite mỗi ngày khi đang chạy và giữ 14 bản gần nhất trong `backups/<mã-công-ty>` thuộc thư mục dữ liệu LAN. Quản trị viên có thể dùng **Bản sao lưu tự động → Chọn bản sao lưu** để khôi phục ngay trong app. Trước khi khôi phục hoặc xóa theo nhóm, máy chủ lưu thêm một tệp JSON trong cùng thư mục và giữ 5 bản gần nhất. Trên bản Windows, dùng **Mở thư mục sao lưu…** dưới khay hệ thống để lấy các tệp này.
+
+Bản desktop chạy cục bộ cũng giữ 14 bản SQLite theo ngày tại thư mục `backups/local` trong thư mục dữ liệu của ứng dụng (`%APPDATA%`). Trước khi xóa hoặc khôi phục dữ liệu, app lưu thêm một tệp JSON đầy đủ ở cùng thư mục. Khi nâng cấp cấu trúc SQLite, app tạo bản sao `*.truoc-nang-cap-v<phiên-bản>-<thời-điểm>.sqlite` cạnh tệp dữ liệu.
 
 ## Chạy bản desktop
 
@@ -47,15 +123,38 @@ pnpm build
 
 Các quy tắc trên cùng cấu hình sandbox, CSP và giới hạn điều hướng Electron được bảo vệ bằng test trong `tests/architecture.test.ts`.
 
-## Phạm vi bộ khung hiện tại
+## Nhập dữ liệu MISA
 
-- Dashboard tổng quan.
-- Đối soát doanh số, tiền thu và chiết khấu.
-- Danh sách đơn hàng nhập từ MISA.
-- Danh mục sản phẩm tách riêng với chính sách chiết khấu theo từng đơn vị; hỗ trợ thiết lập hàng loạt, phiên bản theo thời gian và lịch sử tạm dừng/bật lại.
-- Đơn hàng đối chiếu chính sách theo đúng sản phẩm, đơn vị, ngày hiệu lực và giữ bản chụp chính sách cho dữ liệu đã chốt.
-- Quản lý khách hàng, người nhận chiết khấu, nhân viên và lịch sử phân công.
-- Nhập danh mục khách hàng từ Excel, lưu dữ liệu cục bộ có version và cảnh báo lỗi lưu trữ.
-- Điều hướng và trang khung cho kỳ chiết khấu, báo cáo, người dùng và nhật ký.
+Trong **Dữ liệu MISA**, chọn file Excel **Sổ chi tiết bán hàng**, kiểm tra các dòng xem trước rồi xác nhận nhập. App hiển thị 10 cột từ file và cho phép tìm theo chứng từ, hóa đơn, tên khách hàng hoặc tên hàng. Có thể nhập từng kỳ vì app bổ sung dữ liệu vào sổ hiện có, bỏ qua dòng trùng và đánh dấu các dòng xung đột với bản đã lưu.
 
-Chưa có cơ sở dữ liệu máy chủ hoặc đăng nhập thực. Dữ liệu MISA được nhập từ báo cáo chi tiết công nợ phải thu, lưu đầy đủ từng dòng và truy vấn theo đơn vị; phần báo cáo tổng hợp sẽ tiếp tục hoàn thiện theo nghiệp vụ.
+## Người dùng và nhật ký sử dụng
+
+Với kho cục bộ, mở **Người dùng** để tạo tài khoản quản trị đầu tiên và bật đăng nhập. Với kho LAN, cấp quản trị đầu tiên bằng lệnh trên máy chủ. **Quản trị** có quyền truy cập toàn bộ thẻ. Khi tạo hoặc sửa tài khoản **Nhập liệu** hay **Chỉ xem**, chọn từng thẻ trong giới hạn của vai trò. Tài khoản cũ chưa có danh sách thẻ riêng dùng quyền mặc định của vai trò. Khóa tài khoản, đổi quyền truy cập hoặc đổi mật khẩu sẽ vô hiệu hóa phiên cũ của tài khoản đó.
+
+Mật khẩu quản trị cấp khi tạo hoặc đặt lại cho người khác là mật khẩu tạm thời. Người dùng đăng nhập bằng mật khẩu đó, đặt mật khẩu riêng rồi mới vào các thẻ được cấp. Nhật ký ghi việc đổi mật khẩu mà không lưu nội dung mật khẩu.
+
+**Nhật ký sử dụng** ghi người thực hiện, thời điểm và chi tiết các thao tác kể từ khi tính năng được triển khai. Quản trị có thể lọc theo người, nhóm thao tác và khoảng ngày, rồi xuất kết quả CSV. Xóa dữ liệu nghiệp vụ giữ lại tài khoản và nhật ký.
+
+Máy chủ LAN xác thực tài khoản và lưu nhật ký tập trung trong kho của công ty đang mở.
+
+## Quy tắc giao diện
+
+Kích thước và màu trạng thái nằm trong `src/styles/foundation/tokens.css`, theo ba nhóm của QC Lab gồm thang nền tảng, vai trò giao diện và thành phần. CSS trang lấy màu, khoảng cách, kích thước cố định, bo góc và viền qua `var(--…)`. Các trang dùng quy tắc trong `src/styles/shared/controls.css` và các thành phần ở `src/shared/ui`.
+
+Giữ điều kiện đổi bố cục trong `@media` vì truy vấn kích thước CSS không đọc biến tùy chỉnh. Vị trí popup và độ dài thanh tiến độ được tính từ kích thước thực tế hoặc dữ liệu đang hiển thị.
+
+| Thành phần | Quy tắc |
+| --- | --- |
+| Chữ | Chú thích 11–12 px, nội dung bảng 13 px, ô nhập và nút 14 px, tiêu đề khối 16 px, tiêu đề trang 24 px. Token dùng `rem` để tôn trọng cỡ chữ trình duyệt. |
+| Ô nhập và ngày | Cao 36 px. Dùng 32 px cho điều khiển phân trang và nút trong hàng, 28 px cho nút đóng thông báo. Nhãn cách ô 6 px, các trường cách nhau 16 px. |
+| Dropdown | Dùng `select` gốc cho danh sách bộ lọc. Trình duyệt hỗ trợ `base-select` dùng bảng chọn có cùng viền, bo góc, giới hạn chiều cao và trạng thái chọn với bộ gợi ý tìm kiếm. Dùng `SearchableInput` cho danh sách cần tìm theo chữ, như tỉnh/thành. |
+| Focus | Bấm ô nhập hoặc nút hành động bằng chuột làm đổi màu viền. Khi dùng bàn phím, điều khiển có vòng focus 2 px. Vòng nằm trong viền ô nhập và bao quanh cả khung của ô có biểu tượng. Dùng vòng sáng trên nền tối và màu lỗi cho trường `aria-invalid`. |
+| Nút chính và nút phụ | Dùng `button primary` cho hành động chính như Lưu, Xác nhận và Nhập MISA. Khi rê chuột, nút chuyển xanh đậm, đổ bóng và nhấc 1 px. Dùng `button secondary` cho Hủy, Quay lại và hành động phụ. Nút phụ đổi nền, viền, chữ và bóng nhẹ. Cả hai dùng chung một quy tắc ở trang, hộp thoại và ngăn chi tiết. |
+| Di chuột và nhấn | Nút Xóa dùng bóng đỏ. Nút cảnh báo nhấn viền vàng. Nút biểu tượng, phân trang, dropdown, lịch và hàng bảng phản hồi bằng màu. Thẻ chọn dùng viền và bóng nhẹ. Khi nhấn, nút có hiệu ứng nhấc trở về vị trí ban đầu và bóng tắt. Chuyển tiếp dùng token 150 ms và tôn trọng thiết lập giảm chuyển động. |
+| Vô hiệu hóa | Dùng thuộc tính `disabled` gốc. Nút dùng độ mờ 45% và con trỏ không cho phép thao tác. Ô nhập và dropdown bị khóa dùng nền nhạt, viền và chữ mờ. |
+| Thanh cuộn | Cuộn dọc và ngang dùng cùng token màu. Trên Chromium, cả hai trục dùng 10 px. Các bảng tự cuộn, giữ chỗ cho thanh cuộn dọc và giữ tiêu đề khi cần. |
+| Bảng | Header và hàng thường tối thiểu 40 và 44 px. Bảng xem trước dùng 30 và 36 px. Hàng có ô nhập dùng tối thiểu 52 px. Nội dung nhiều dòng được xuống dòng. Các cột tiền trong bảng công nợ và đối soát căn giữa, các cột tiền trong sổ MISA căn phải. |
+| Xóa | Dùng `RowActionButton` trong danh sách hoặc nút viền đỏ khi có nhãn. Mở `Dialog` với `tone="danger"`, nêu tên đối tượng và ảnh hưởng. Đặt **Hủy** trước nút đỏ xác nhận, với tiêu điểm ban đầu ở **Hủy**. Dùng màu cảnh báo cho ngừng hoạt động và bỏ phân công. |
+| Hộp thoại và ngăn chi tiết | Dùng `Dialog` hoặc `Drawer`. `Tab` đi trong khung đang mở. Khi mở lịch, focus chuyển vào lịch. `Esc` đóng lịch hay bộ chọn trước và trả focus về điều khiển tương ứng. Lần `Esc` tiếp theo mới đóng hộp thoại. |
+| Thông báo | Dùng `Notice` với mức thành công, thông tin, cảnh báo hoặc lỗi. Hiển thị lỗi và cảnh báo tại phần nội dung liên quan. Dùng thông báo nổi cho phản hồi sau thao tác và luôn có nút đóng. |
+| Kiểu mới | Ưu tiên token và thành phần sẵn có. Chỉ bổ sung kiểu riêng tại trang khi cần bố trí đặc thù như bảng MISA 10 cột. |

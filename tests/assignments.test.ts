@@ -47,7 +47,6 @@ function customer(): Customer {
 				effectiveTo: null,
 			},
 		],
-		recipients: [],
 		createdAt: "2025-01-01T00:00:00.000Z",
 		updatedAt: "2026-01-01T00:00:00.000Z",
 	};
@@ -91,6 +90,26 @@ describe("assignment service", () => {
 
 		expect(result).toBe(current);
 		expect(result.assignments).toHaveLength(2);
+	});
+
+	it("giữ lịch sử và từ chối ngày trùng một lượt đã kết thúc", () => {
+		const current = customer();
+		current.assignments[1].effectiveTo = "2026-04-30";
+		const [unchanged] = assignCustomers(
+			[current],
+			[current.id],
+			employee,
+			"2026-04-30",
+		);
+		const [assigned] = assignCustomers(
+			[current],
+			[current.id],
+			employee,
+			"2026-05-01",
+		);
+		expect(unchanged).toBe(current);
+		expect(assigned.assignments.slice(0, 2)).toEqual(current.assignments);
+		expect(assigned.assignments[2].effectiveFrom).toBe("2026-05-01");
 	});
 
 	it("ngừng nhân viên bằng cách đóng lượt hoạt động, không xóa lịch sử", () => {

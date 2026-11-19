@@ -1,4 +1,5 @@
-import { readSheet, type Row, type SheetData } from "read-excel-file/browser";
+import type { Row, SheetData } from "read-excel-file/browser";
+import { readExcelSheet } from "../../shared/lib/excelSheet";
 import type {
 	Customer,
 	CustomerGroup,
@@ -28,10 +29,12 @@ export interface CustomerImportPreview {
 	invalidCount: number;
 }
 
+type ExistingCustomerForImport = Pick<Customer, "misaCode">;
+
 const headerAliases = {
 	misaCode: ["ma khach hang", "ma kh", "ma misa"],
 	name: ["ten khach hang", "ten don vi", "khach hang"],
-	group: ["nha nuoc tu nhan", "nhom khach hang", "loai khach hang"],
+	group: ["nha nuoc tu nhan", "nhom", "nhom khach hang", "loai khach hang"],
 	address: ["dia chi"],
 	province: ["tinh thanh pho", "tinh thanh", "tinh", "thanh pho"],
 };
@@ -52,20 +55,60 @@ function parseGroup(value: string): CustomerGroup | undefined {
 	const normalized = normalizeVietnamese(value);
 	if (normalized.includes("nha nuoc")) return "state";
 	if (normalized.includes("tu nhan")) return "private";
+	if (normalized === "chua phan loai") return "unknown";
 	return undefined;
+}
+
+function parseCsv(source: string): SheetData {
+	const rows: string[][] = [];
+	let row: string[] = [];
+	let value = "";
+	let quoted = false;
+	const text = source.replace(/^\uFEFF/, "");
+
+	for (let index = 0; index < text.length; index += 1) {
+		const character = text[index];
+		if (character === '"') {
+			if (quoted && text[index + 1] === '"') {
+				value += '"';
+				index += 1;
+			} else {
+				quoted = !quoted;
+			}
+		} else if (character === "," && !quoted) {
+			row.push(value);
+			value = "";
+		} else if ((character === "\n" || character === "\r") && !quoted) {
+			if (character === "\r" && text[index + 1] === "\n") index += 1;
+			row.push(value);
+			rows.push(row);
+			row = [];
+			value = "";
+		} else {
+			value += character;
+		}
+	}
+	if (value || row.length) {
+		row.push(value);
+		rows.push(row);
+	}
+	return rows;
 }
 
 export async function parseCustomerWorkbook(
 	file: File,
 	existingCustomers: Customer[],
 ): Promise<CustomerImportPreview> {
-	return parseCustomerRows(file.name, await readSheet(file), existingCustomers);
+	const sheet = file.name.toLocaleLowerCase("vi-VN").endsWith(".csv")
+		? parseCsv(await file.text())
+		: await readExcelSheet(file);
+	return parseCustomerRows(file.name, sheet, existingCustomers);
 }
 
 export function parseCustomerRows(
 	fileName: string,
 	sheet: SheetData,
-	existingCustomers: Customer[],
+	existingCustomers: ExistingCustomerForImport[],
 ): CustomerImportPreview {
 	const [headers = [], ...dataRows] = sheet;
 	const columns = {
@@ -75,12 +118,18 @@ export function parseCustomerRows(
 		address: findColumn(headers, headerAliases.address),
 		province: findColumn(headers, headerAliases.province),
 	};
-	const missingHeaders = Object.entries(columns)
+	const requiredColumns = {
+		misaCode: columns.misaCode,
+		name: columns.name,
+		address: columns.address,
+		province: columns.province,
+	};
+	const missingHeaders = Object.entries(requiredColumns)
 		.filter(([, index]) => index < 0)
 		.map(([key]) => key);
 	if (missingHeaders.length) {
 		throw new Error(
-			"File Excel cần đủ 5 cột: Mã khách hàng, Tên khách hàng, Nhà nước/Tư nhân, Địa chỉ và Tỉnh/Thành phố.",
+			"File Excel cần đủ 4 cột: Mã khách hàng, Tên khách hàng, Địa chỉ và Tỉnh/Thành phố.",
 		);
 	}
 
@@ -107,28 +156,35 @@ export function parseCustomerRows(
 
 		if (!misaCode) issues.push("Thiếu mã khách hàng");
 		if (!name) issues.push("Thiếu tên khách hàng");
-		if (!group) issues.push("Nhóm phải là Nhà nước hoặc Tư nhân");
 		if (!address) issues.push("Thiếu địa chỉ");
 		if (!province) issues.push("Thiếu tỉnh/thành phố");
 
 		let status: CustomerImportStatus = issues.length ? "invalid" : "ready";
 		let message = issues.join(" · ");
-		if (status === "ready" && existingCodes.has(normalizedCode)) {
-			status = "duplicate";
-			message = "Mã khách hàng đã có trong hệ thống";
-		} else if (status === "ready" && firstRowByCode.has(normalizedCode)) {
+		if (status === "ready" && firstRowByCode.has(normalizedCode)) {
 			status = "duplicate";
 			message = `Trùng mã với dòng ${firstRowByCode.get(normalizedCode)}`;
 		} else if (status === "ready") {
 			firstRowByCode.set(normalizedCode, rowNumber);
-			message = provinceInferred
-				? "Sẵn sàng · Tỉnh/thành được suy ra từ địa chỉ"
-				: "Sẵn sàng nhập";
+			if (existingCodes.has(normalizedCode)) {
+				status = "duplicate";
+				message = "Mã khách hàng đã có trong danh mục";
+			} else {
+				message = provinceInferred
+					? "Sẵn sàng · Tỉnh/thành được suy ra từ địa chỉ"
+					: "Sẵn sàng nhập";
+			}
 		}
 
 		rows.push({
 			rowNumber,
-			draft: { misaCode, name, group: group ?? "state", province, address },
+			draft: {
+				misaCode,
+				name,
+				group: group ?? "unknown",
+				province,
+				address,
+			},
 			status,
 			message,
 			provinceInferred,

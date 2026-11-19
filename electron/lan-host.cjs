@@ -1,0 +1,195 @@
+const { app, dialog, Menu, nativeImage, shell, Tray } = require('electron');
+const { randomBytes } = require('node:crypto');
+const { mkdirSync } = require('node:fs');
+const { networkInterfaces } = require('node:os');
+const { join } = require('node:path');
+const { companies, getCompany } = require('../server/companies.cjs');
+const { backupDirectory } = require('../server/automatic-backup.cjs');
+const { createLanServer, listenLanServer, stopLanServer } = require('../server/lan.cjs');
+const { lanOptions } = require('../server/lan-options.cjs');
+const { loginItem } = require('./lan-startup.cjs');
+
+async function chooseMode(argv) {
+  const option = argv.find((item) => item.startsWith('--company='));
+  if (option) return getCompany(option.slice('--company='.length));
+  const { response } = await dialog.showMessageBox({
+    type: 'question',
+    title: 'Mở Quản lý công nợ',
+    message: 'Chọn công ty trên máy chủ này',
+    detail: 'Trên máy chung, mở ứng dụng hai lần và chọn Nam Hưng Việt ở một lần, Naviva Group ở lần kia.',
+    buttons: [...companies.map((company) => company.name), 'Bản cục bộ', 'Thoát'],
+    cancelId: companies.length + 1,
+    noLink: true,
+  });
+  if (response === companies.length) return 'local';
+  return companies[response];
+}
+
+function showLanAddresses(company, settings) {
+  const protocol = settings.tls ? 'https' : 'http';
+  const ipv4 = settings.loopback ? [] : Object.values(networkInterfaces())
+    .flat().filter((entry) => entry?.family === 'IPv4' && !entry.internal)
+    .map((entry) => `${protocol}://${entry.address}:${company.port}/`);
+  void dialog.showMessageBox({
+    type: 'info',
+    title: company.name,
+    message: 'Địa chỉ cho máy nhân viên',
+    detail: [...new Set(ipv4)].join('\n') || 'Máy chủ hiện chỉ truy cập được trên máy này.',
+    buttons: ['Đóng'],
+  });
+}
+
+async function startLanHost(company, { createWindow, configureSession }) {
+  const defaultDirectory = app.isPackaged
+    ? join(app.getPath('appData'), 'QuanLyCongNo', 'lan')
+    : join(app.getAppPath(), 'data', 'lan');
+  const settings = lanOptions(process.argv, defaultDirectory);
+  const browserProfile = join(app.getPath('userData'), 'lan-profiles', company.id);
+  mkdirSync(browserProfile, { recursive: true });
+  app.setPath('userData', browserProfile);
+  const hidden = process.argv.includes('--hidden');
+  if (!app.requestSingleInstanceLock({ hidden })) return app.quit();
+  configureSession();
+  Menu.setApplicationMenu(null);
+  const server = createLanServer({ ...settings, company });
+  try {
+    await listenLanServer(server, company.port, settings.host);
+  } catch (error) {
+    if (error.code === 'EADDRINUSE') {
+      throw new Error(`Cổng ${company.port} đang được sử dụng. Tắt máy chủ công nợ đang dùng cổng này rồi thử lại.`);
+    }
+    throw error;
+  }
+
+  let quitting = false;
+  let stopping = false;
+  let window;
+  let tray;
+  let creatingAdministrator = false;
+  const protocol = settings.tls ? 'https' : 'http';
+  const url = `${protocol}://127.0.0.1:${company.port}/`;
+  const startup = loginItem(company, settings, process.execPath);
+  const canAutoStart = app.isPackaged && process.platform === 'win32';
+  const backups = backupDirectory(settings.directory, company);
+
+  app.on('before-quit', () => { quitting = true; });
+  app.on('will-quit', (event) => {
+    event.preventDefault();
+    if (stopping) return;
+    stopping = true;
+    tray?.destroy();
+    void stopLanServer(server)
+      .then(() => app.exit(0))
+      .catch((error) => {
+        console.error(error);
+        app.exit(1);
+      });
+  });
+
+  function showWindow() {
+    if (quitting) return;
+    if (window && !window.isDestroyed()) {
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+      return;
+    }
+    window = createWindow({ url });
+    window.on('close', (event) => {
+      if (quitting) return;
+      event.preventDefault();
+      window.hide();
+    });
+    window.on('closed', () => { window = undefined; });
+  }
+
+  async function setupAdministrator() {
+    if (creatingAdministrator || server.hasAdministrator()) return;
+    creatingAdministrator = true;
+    try {
+      const { response } = await dialog.showMessageBox({
+        type: 'question',
+        title: company.name,
+        message: 'Tạo tài khoản quản trị đầu tiên?',
+        detail: 'App sẽ cấp một mật khẩu tạm thời để đổi ở lần đăng nhập đầu.',
+        buttons: ['Tạo tài khoản', 'Để sau'],
+        cancelId: 1,
+        noLink: true,
+      });
+      if (response !== 0 || quitting) return;
+      const password = randomBytes(12).toString('base64url');
+      await server.initializeAdministrator(password);
+      updateMenu();
+      await dialog.showMessageBox({
+        type: 'info',
+        title: company.name,
+        message: 'Tài khoản quản trị đã được tạo',
+        detail: `Tên đăng nhập: admin\nMật khẩu tạm thời: ${password}\nGhi lại mật khẩu trước khi đóng hộp thoại này.`,
+        buttons: ['Đóng'],
+      });
+    } catch (error) {
+      dialog.showErrorBox('Không thể tạo tài khoản', error.message);
+    } finally {
+      creatingAdministrator = false;
+    }
+  }
+
+  const icon = nativeImage.createFromPath(join(__dirname, 'lan-icon.png'));
+  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  tray.setToolTip(`${company.name} · Công nợ · Cổng ${company.port}${settings.tls ? '' : ' · HTTP chưa mã hóa'}`);
+  function updateMenu() {
+    const items = [
+      { label: 'Mở ứng dụng', click: showWindow },
+      { label: 'Địa chỉ cho máy nhân viên…', click: () => showLanAddresses(company, settings) },
+      {
+        label: 'Mở thư mục sao lưu…',
+        click: async () => {
+          try {
+            mkdirSync(backups, { recursive: true });
+            const error = await shell.openPath(backups);
+            if (error) throw new Error(error);
+          } catch (error) {
+            dialog.showErrorBox('Không mở được thư mục sao lưu', error.message);
+          }
+        },
+      },
+    ];
+    if (!server.hasAdministrator()) {
+      items.push({ label: 'Tạo tài khoản quản trị…', click: () => void setupAdministrator() });
+    }
+    if (canAutoStart) {
+      const status = app.getLoginItemSettings({ path: startup.path, args: startup.args });
+      items.push({
+        label: 'Khởi động cùng Windows',
+        type: 'checkbox',
+        checked: status.launchItems?.some((item) => item.name === startup.name && item.enabled) ??
+          status.openAtLogin,
+        click: (item) => {
+          try {
+            app.setLoginItemSettings({ ...startup, openAtLogin: item.checked });
+          } catch (error) {
+            dialog.showErrorBox('Không đổi được thiết lập khởi động', error.message);
+          }
+          updateMenu();
+        },
+      });
+    }
+    tray.setContextMenu(Menu.buildFromTemplate([
+      ...items,
+      { type: 'separator' },
+      { label: 'Thoát và dừng máy chủ', click: () => app.quit() },
+    ]));
+  }
+  updateMenu();
+  tray.on('double-click', showWindow);
+  app.on('second-instance', (_event, _argv, _cwd, data) => {
+    if (!data?.hidden) showWindow();
+  });
+  app.on('activate', showWindow);
+  if (!hidden) {
+    showWindow();
+    if (!server.hasAdministrator()) void setupAdministrator();
+  }
+}
+
+module.exports = { chooseMode, startLanHost };

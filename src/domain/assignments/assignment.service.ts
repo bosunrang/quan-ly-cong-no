@@ -1,7 +1,7 @@
 import type { Customer, SalesAssignment } from "../customers/customer.model";
 import { currentAssignment } from "../customers/customer.selectors";
 import type { SalesEmployee } from "../employees/employee.model";
-import { previousDay } from "../../shared/lib/date";
+import { isIsoDate, previousDay } from "../../shared/lib/date";
 import { createId } from "../../shared/lib/identity";
 
 export function activeSalesAssignment(
@@ -10,18 +10,38 @@ export function activeSalesAssignment(
 	return currentAssignment(customer);
 }
 
+export function canAssignCustomer(
+	customer: Customer,
+	employee?: SalesEmployee,
+): boolean {
+	return (
+		employee?.status === "active" &&
+		customer.status === "active" &&
+		currentAssignment(customer)?.employeeId !== employee.id
+	);
+}
+
+export function latestAssignmentBoundary(customer: Customer): string {
+	return customer.assignments.reduce((latest, assignment) => {
+		const boundary = assignment.effectiveTo ?? assignment.effectiveFrom;
+		return boundary > latest ? boundary : latest;
+	}, "");
+}
+
 export function assignCustomers(
 	customers: Customer[],
 	customerIds: string[],
 	employee: SalesEmployee,
 	effectiveFrom: string,
 ): Customer[] {
+	if (!isIsoDate(effectiveFrom) || employee.status !== "active")
+		return customers;
 	const selectedIds = new Set(customerIds);
 	return customers.map((customer) => {
-		if (!selectedIds.has(customer.id)) return customer;
+		if (!selectedIds.has(customer.id) || !canAssignCustomer(customer, employee))
+			return customer;
+		if (effectiveFrom <= latestAssignmentBoundary(customer)) return customer;
 		const active = currentAssignment(customer);
-		if (active?.employeeId === employee.id) return customer;
-		if (active && effectiveFrom <= active.effectiveFrom) return customer;
 
 		const assignments = customer.assignments.map((assignment) =>
 			assignment.id === active?.id

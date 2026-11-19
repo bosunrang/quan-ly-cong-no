@@ -1,5 +1,5 @@
 :root{
-  font-family:Manrope,"Segoe UI",sans-serif;
+  font-family:var(--sans);
   color:var(--ink);
   background:var(--bg);
   font-synthesis:none;
@@ -7,11 +7,29 @@
 }
 
 *{box-sizing:border-box}
-.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-html,body,#root{margin:0;min-width:320px;min-height:100%;height:100%}
+.visually-hidden{position:absolute!important;width:var(--space-1)!important;height:var(--space-1)!important;padding:0!important;margin:calc(-1 * var(--space-1))!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+html,body,#root{margin:0;min-width:var(--layout-320);min-height:100%;height:100%}
 body{min-height:100vh;background:var(--bg);overflow:hidden}
 button,input,select,textarea{font:inherit}
-input,select,textarea{font-weight:400!important}
-input:focus,input:focus-visible,select:focus,select:focus-visible,textarea:focus,textarea:focus-visible{box-shadow:none!important;outline:none!important}
+input,select,textarea{font-weight:400}
 button{border:0}
-button:focus-visible{outline:3px solid var(--focus-ring);outline-offset:1px}
+
+/* Chromium sử dụng cùng bề dày cho cả hai trục. Firefox dùng thanh cuộn mảnh của hệ thống. */
+@supports selector(::-webkit-scrollbar){
+  ::-webkit-scrollbar{width:var(--scrollbar-size);height:var(--scrollbar-size)}
+  ::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:var(--local-scrollbar-track,var(--scrollbar-track))}
+  ::-webkit-scrollbar-thumb{background:var(--local-scrollbar-thumb,var(--scrollbar-thumb));border:var(--border-emphasis-width) solid var(--local-scrollbar-track,var(--scrollbar-track));border-radius:var(--radius-full)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--local-scrollbar-hover,var(--scrollbar-thumb-hover))}
+}
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:var(--local-scrollbar-thumb,var(--scrollbar-thumb)) var(--local-scrollbar-track,var(--scrollbar-track))}
+}
+.sidebar{--local-scrollbar-track:var(--sidebar);--local-scrollbar-thumb:var(--sidebar-scroll);--local-scrollbar-hover:var(--sidebar-icon)}
+:where(.page-content,.nav-groups,.table-scroll,.customer-drawer,.import-preview-table-wrap,.misa-import-preview-table-wrap){scrollbar-gutter:stable}
+.table-scroll-auto-gutter{scrollbar-gutter:auto}
+:where(.table-scroll,.import-preview-table-wrap,.misa-import-preview-table-wrap){overscroll-behavior:contain}
+
+@media (forced-colors: active){
+  ::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:Canvas}
+  ::-webkit-scrollbar-thumb{background:ButtonText;border-color:Canvas}
+}

@@ -1,0 +1,263 @@
+.access-login {
+	display: grid;
+	place-items: center;
+	height: 100%;
+	padding: var(--space-24);
+	overflow: auto;
+	background: linear-gradient(var(--login-overlay), var(--login-overlay)),
+		var(--login-canvas) url("../../assets/naviva-login-background.png") center / cover no-repeat fixed;
+}
+
+.access-login-panel {
+	display: grid;
+	gap: var(--space-13);
+	width: min(100%, var(--login-card-width));
+	padding: var(--space-26);
+	border-color: var(--login-card-border);
+	border-radius: var(--radius-10);
+	box-shadow: var(--login-card-shadow);
+}
+
+.access-brand {
+	display: flex;
+	align-items: center;
+	gap: var(--space-11);
+	margin-block-end: var(--space-9);
+}
+
+.access-brand .brand-mark {
+	width: var(--layout-42);
+	height: var(--layout-42);
+	flex-basis: var(--layout-42);
+	color: var(--on-accent);
+}
+
+.access-brand .brand-copy {
+	overflow-wrap: anywhere;
+}
+
+.access-brand .brand-copy strong {
+	color: var(--ink);
+}
+
+.access-brand .brand-copy span {
+	color: var(--muted);
+}
+
+.access-login-panel p {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--type-body-sm);
+	line-height: var(--line-body);
+}
+
+.access-login-panel .ui-field {
+	gap: var(--space-5);
+}
+
+.access-login-panel label,
+.activity-date label {
+	font-size: var(--type-body-sm);
+	font-weight: 650;
+	color: var(--muted);
+}
+
+.access-login-panel input {
+	width: 100%;
+	height: var(--layout-40);
+	padding-inline: var(--space-11);
+	border: var(--border-width) solid var(--line-strong);
+	border-radius: var(--surface-radius);
+	background: var(--panel);
+	color: var(--ink);
+	font-size: var(--control-font-size);
+}
+
+.access-login-panel .button {
+	width: 100%;
+	height: var(--layout-40);
+	margin-block-start: var(--space-6);
+}
+
+.access-password-actions {
+	display: grid;
+	justify-items: center;
+	gap: var(--space-8);
+}
+
+.account-status-list {
+	display: inline-flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: var(--space-5);
+}
+
+.account-password-hint {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.access-table {
+	max-height: 64vh;
+}
+
+.access-table table {
+	min-width: var(--layout-760);
+}
+
+.access-table th {
+	position: sticky;
+	top: 0;
+	z-index: var(--z-sticky);
+}
+
+.access-table tbody td {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.access-table:not(.activity-table) :is(th, td):not(:first-child) {
+	text-align: center;
+}
+
+.access-row-actions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-8);
+}
+
+.access-table-footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: var(--space-12);
+	min-height: var(--layout-52);
+	padding: var(--space-8) var(--space-13);
+	background: var(--table-footer-bg);
+	border-top: var(--border-width) solid var(--line);
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.dialog-shell.account-access-dialog {
+	width: min(100%, var(--layout-760));
+}
+
+.account-fields {
+	margin-top: 0;
+}
+
+.account-page-list {
+	width: 34%;
+}
+
+.account-page-picker {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.account-page-picker legend {
+	padding: 0;
+	color: var(--ink);
+	font-size: var(--type-body-sm);
+	font-weight: 750;
+}
+
+.account-page-picker p {
+	margin: var(--space-3) 0 var(--space-8);
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.account-page-options {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--space-10);
+}
+
+.account-page-option {
+	position: relative;
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-9);
+	min-height: var(--layout-92);
+	padding: var(--space-10);
+	border: var(--border-width) solid var(--line);
+	border-radius: var(--radius-9);
+	background: var(--panel);
+	cursor: pointer;
+}
+
+.account-page-option.is-selected {
+	border-color: var(--selection-border);
+	border-inline-start: var(--selection-indicator-width) solid var(--selection-indicator);
+	padding-inline-start: calc(var(--space-10) + var(--border-width) - var(--selection-indicator-width));
+	background: var(--surface-accent-faint);
+}
+
+.account-page-option input {
+	position: absolute;
+	inset: var(--space-10) var(--space-10) auto auto;
+	width: var(--space-16);
+	height: var(--space-16);
+	margin: 0;
+	cursor: inherit;
+}
+
+.account-page-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: var(--space-34);
+	height: var(--space-34);
+	border-radius: var(--radius);
+	background: var(--teal-soft);
+	color: var(--teal);
+}
+
+.account-page-copy {
+	display: grid;
+	gap: var(--space-4);
+	min-width: 0;
+	line-height: var(--line-compact);
+}
+
+.account-page-copy strong {
+	padding-inline-end: var(--space-20);
+	color: var(--ink);
+	font-size: var(--type-body-sm);
+}
+
+.account-page-copy small {
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.activity-filters {
+	flex-wrap: wrap;
+	align-items: flex-end;
+}
+
+.activity-filters > select {
+	max-width: var(--layout-190);
+}
+
+.activity-date {
+	width: var(--layout-150);
+}
+
+.activity-message {
+	display: grid;
+	gap: var(--space-10);
+	justify-items: start;
+	padding: var(--space-16);
+}
+
+.activity-table th:nth-child(1) { width: 17%; }
+.activity-table th:nth-child(2) { width: 15%; }
+.activity-table th:nth-child(3) { width: 14%; }
+.activity-table th:nth-child(4) { width: 20%; }

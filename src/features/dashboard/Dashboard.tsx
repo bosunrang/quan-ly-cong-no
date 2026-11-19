@@ -1,325 +1,441 @@
 import {
 	ArrowRight,
-	BanknoteArrowDown,
-	ChartNoAxesCombined,
-	CheckCircle2,
 	CircleDollarSign,
-	Download,
-	FileSpreadsheet,
-	PackageCheck,
+	Database,
 	ReceiptText,
-	RefreshCcw,
-	TrendingUp,
+	Search,
+	Wallet,
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { readDashboardData } from "../../domain/dashboard/dashboard.service";
-import type { PageId } from "../../types";
-import { StatusBadge } from "../../shared/ui/StatusBadge";
-import { formatDateOnly } from "../../shared/lib/date";
+import {
+	type ComponentType,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import { normalizeVietnamese } from "../../domain/customers/customer.province";
+import { readCustomers } from "../../domain/customers/customer.repository";
+import { readSalesEmployees } from "../../domain/employees/employee.repository";
+import { readMisaSalesBook } from "../../domain/misa/misa.sales-book.repository";
+import {
+	readReceiptLedger,
+	subscribeReceiptLedger,
+} from "../../domain/payments/receipt-ledger.repository";
+import { usePagination } from "../../shared/hooks/usePagination";
+import { formatDateOnly, todayLocal } from "../../shared/lib/date";
+import { sameJson } from "../../shared/lib/sameJson";
+import { DateInput } from "../../shared/ui/DateInput/DateInput";
+import { Notice } from "../../shared/ui/Notice";
+import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
+import { buildDashboardSummary } from "./dashboard.summary";
 
-const money = new Intl.NumberFormat("vi-VN", {
-	style: "currency",
-	currency: "VND",
-	maximumFractionDigits: 0,
-});
+const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 
-interface DashboardProps {
-	onNavigate: (page: PageId) => void;
-}
+const views = [
+	{ id: "receivables", title: "Còn phải thu", icon: Wallet },
+	{ id: "period", title: "Tiền thu trong kỳ", icon: ReceiptText },
+	{ id: "unallocated", title: "Thu chưa phân bổ", icon: CircleDollarSign },
+] as const;
 
-export function Dashboard({ onNavigate }: DashboardProps) {
-	const [
-		{
-			activityItems,
-			monthlySeries,
-			reconcileRows,
-			periodLabel,
-			updatedThrough,
-		},
-	] = useState(readDashboardData);
-	const { revenue, collected, expected, eligible, collectedRate } = useMemo(() => {
-		const revenue = reconcileRows.reduce((sum, row) => sum + row.revenue, 0);
-		const collected = reconcileRows.reduce(
-			(sum, row) => sum + row.collected,
-			0,
+type View = (typeof views)[number]["id"];
+type Summary = ReturnType<typeof buildDashboardSummary>;
+type CustomerRow = Summary["receivables"][number];
+type Row = CustomerRow | Summary["periodReceipts"][number];
+type DashboardData = {
+	book: Awaited<ReturnType<typeof readMisaSalesBook>>;
+	ledger: Awaited<ReturnType<typeof readReceiptLedger>>;
+	customers: ReturnType<typeof readCustomers>;
+	employees: ReturnType<typeof readSalesEmployees>;
+};
+
+const emptyRows: Row[] = [];
+
+export function Dashboard({
+	onOpenMisa,
+	onOpenPayments,
+	InvoiceDrawer,
+}: {
+	onOpenMisa?: () => void;
+	onOpenPayments?: () => void;
+	InvoiceDrawer: ComponentType<{
+		customer: CustomerRow;
+		asOfDate: string;
+		onClose: () => void;
+	}>;
+}) {
+	const [data, setData] = useState<DashboardData>();
+	const [error, setError] = useState("");
+	const request = useRef(0);
+	const [through, setThrough] = useState(todayLocal);
+	const [periodStart, setPeriodStart] = useState<string>();
+	const from = periodStart ?? (through ? `${through.slice(0, 7)}-01` : "");
+	const [view, setView] = useState<View>("receivables");
+	const [customerQuery, setCustomerQuery] = useState("");
+	const [openedCustomerId, setOpenedCustomerId] = useState<string>();
+
+	const refresh = useCallback(() => {
+		const current = ++request.current;
+		void Promise.all([readMisaSalesBook(), readReceiptLedger()])
+			.then(([book, ledger]) => {
+				if (current !== request.current) return;
+				const customers = readCustomers();
+				const employees = readSalesEmployees();
+				// Sổ chưa đổi thì giữ nguyên dữ liệu cũ để không tính lại khi chọn lại cửa sổ.
+				setData((previous) =>
+					previous?.book === book &&
+					previous.ledger === ledger &&
+					sameJson(previous.customers, customers) &&
+					sameJson(previous.employees, employees)
+						? previous
+						: { book, ledger, customers, employees },
+				);
+				setError("");
+			})
+			.catch((reason: unknown) => {
+				if (current !== request.current) return;
+				setError(
+					reason instanceof Error
+						? reason.message
+						: "Không thể đọc dữ liệu Dashboard.",
+				);
+			});
+	}, []);
+
+	useEffect(() => {
+		const unsubscribe = subscribeReceiptLedger(refresh);
+		window.addEventListener("focus", refresh);
+		refresh();
+		return () => {
+			request.current += 1;
+			unsubscribe();
+			window.removeEventListener("focus", refresh);
+		};
+	}, [refresh]);
+
+	const invalidDates = !from || !through || from > through;
+	const summary = useMemo(
+		() =>
+			data && !invalidDates
+				? buildDashboardSummary(
+						data.book,
+						data.ledger,
+						data.customers,
+						data.employees,
+						from,
+						through,
+					)
+				: undefined,
+		[data, from, through, invalidDates],
+	);
+	const isReceivables = view === "receivables";
+	const customerSearch = normalizeVietnamese(customerQuery);
+	const receivableRows = useMemo(() => {
+		const customers = summary?.receivables;
+		if (!customerSearch) return customers;
+		return customers?.filter(({ name, customerCode }) =>
+			normalizeVietnamese(`${name} ${customerCode}`).includes(customerSearch),
 		);
-		const expected = reconcileRows.reduce(
-			(sum, row) => sum + row.expectedDiscount,
-			0,
+	}, [summary?.receivables, customerSearch]);
+	const rows =
+		(isReceivables
+			? receivableRows
+			: view === "period"
+				? summary?.periodReceipts
+				: summary?.unallocatedReceipts) ?? emptyRows;
+	const pagination = usePagination<Row>(rows, 10);
+	const openedCustomer = openedCustomerId
+		? summary?.receivables.find(({ id }) => id === openedCustomerId)
+		: undefined;
+
+	useEffect(() => {
+		if (openedCustomerId && !openedCustomer) setOpenedCustomerId(undefined);
+	}, [openedCustomerId, openedCustomer]);
+
+	if (error) {
+		return (
+			<div className="page-stack">
+				<Notice tone="danger" title="Không thể tải Dashboard" announce>
+					{error}
+				</Notice>
+				<div>
+					<button className="button secondary" type="button" onClick={refresh}>
+						Thử lại
+					</button>
+				</div>
+			</div>
 		);
-		const eligible = reconcileRows
-			.filter((row) => row.status === "eligible")
-			.reduce((sum, row) => sum + row.expectedDiscount, 0);
-		const collectedRate =
-			revenue > 0 ? Math.round((collected / revenue) * 100) : 0;
-		return { revenue, collected, expected, eligible, collectedRate };
-	}, [reconcileRows]);
+	}
+
+	if (!data)
+		return (
+			<p className="panel empty-state" role="status">
+				Đang tổng hợp công nợ…
+			</p>
+		);
+
+	const amounts = {
+		receivables: summary?.hasVerifiedDocuments ? summary.remaining : null,
+		period: summary?.periodReceived,
+		unallocated: summary?.unallocated,
+	};
+	const counts = {
+		receivables: summary?.hasVerifiedDocuments
+			? `${number.format(summary.receivables.length)} khách hàng còn nợ`
+			: summary?.salesRowCount
+				? "Chưa có chứng từ đủ điều kiện"
+				: "Chưa có dữ liệu MISA tại ngày chốt",
+		period: `${number.format(summary?.periodReceipts.length ?? 0)} khoản thu trong kỳ`,
+		unallocated: `${number.format(summary?.unallocatedReceipts.length ?? 0)} khoản thu còn tiền chờ phân bổ`,
+	};
+	const headings = isReceivables
+		? [
+				"Khách hàng",
+				"Nhân viên phụ trách",
+				"Khu vực",
+				"Chứng từ còn nợ",
+				"Còn phải thu",
+			]
+		: ["Chứng từ thu", "Ngày thu", "Khách hàng", "Số tiền thu", "Chưa phân bổ"];
 
 	return (
-		<div className="dashboard-page page-stack">
-			<section className="welcome-strip">
-				<div>
-					<span className="welcome-kicker">
-						<CheckCircle2 size={15} /> Dữ liệu cập nhật đến{" "}
-						{formatDateOnly(updatedThrough)}
-					</span>
-					<h2>Tình hình chiết khấu {periodLabel}</h2>
-					<p>
-						Có{" "}
-						<strong>
-							{reconcileRows.filter((row) => row.status === "eligible").length}{" "}
-							khách hàng
-						</strong>{" "}
-						đã thu đủ và đang chờ duyệt chiết khấu.
-					</p>
+		<div className="page-stack dashboard-page">
+			<section
+				className="panel dashboard-toolbar"
+				aria-label="Kỳ theo dõi Dashboard"
+			>
+				<div className="dashboard-dates">
+					<div className="ui-field">
+						<label htmlFor="dashboard-through">Ngày chốt</label>
+						<DateInput
+							id="dashboard-through"
+							ariaLabel="Ngày chốt"
+							value={through}
+							onChange={(date) => {
+								setThrough(date);
+								pagination.resetPage();
+							}}
+						/>
+					</div>
+					<div className="ui-field">
+						<label htmlFor="dashboard-from">Thu trong kỳ từ ngày</label>
+						<DateInput
+							id="dashboard-from"
+							ariaLabel="Thu trong kỳ từ ngày"
+							value={from}
+							onChange={(date) => {
+								setPeriodStart(date);
+								pagination.resetPage();
+							}}
+						/>
+					</div>
 				</div>
-				<div className="welcome-actions">
-					<button className="button secondary" type="button">
-						<Download size={16} /> Xuất báo cáo
-					</button>
+				{onOpenMisa && (
 					<button
-						className="button primary"
+						className="button secondary"
 						type="button"
-						onClick={() => onNavigate("reconcile")}
+						onClick={onOpenMisa}
 					>
-						<RefreshCcw size={16} /> Đối soát ngay
+						<Database className="icon-size-16" aria-hidden="true" /> Dữ liệu
+						MISA
 					</button>
-				</div>
+				)}
 			</section>
 
-			<section className="kpi-grid" aria-label="Chỉ số tổng quan">
-				<article className="kpi-card">
-					<div className="kpi-icon tone-blue">
-						<ChartNoAxesCombined size={21} />
-					</div>
-					<div className="kpi-label">Doanh số bán ra</div>
-					<strong className="kpi-value">{money.format(revenue)}</strong>
-					<div className="kpi-meta positive">
-						<TrendingUp size={14} /> +12,6% so với quý trước
-					</div>
-				</article>
-				<article className="kpi-card">
-					<div className="kpi-icon tone-teal">
-						<BanknoteArrowDown size={21} />
-					</div>
-					<div className="kpi-label">Đã thu từ khách hàng</div>
-					<strong className="kpi-value">{money.format(collected)}</strong>
-					<div className="kpi-meta">
-						<span className="mini-progress">
-							<i style={{ width: `${collectedRate}%` }} />
-						</span>
-						{collectedRate}% doanh số
-					</div>
-				</article>
-				<article className="kpi-card">
-					<div className="kpi-icon tone-amber">
-						<CircleDollarSign size={21} />
-					</div>
-					<div className="kpi-label">Chiết khấu dự kiến</div>
-					<strong className="kpi-value">{money.format(expected)}</strong>
-					<div className="kpi-meta">Theo chính sách đang hiệu lực</div>
-				</article>
-				<article className="kpi-card kpi-emphasis">
-					<div className="kpi-icon tone-success">
-						<PackageCheck size={21} />
-					</div>
-					<div className="kpi-label">Đủ điều kiện chi</div>
-					<strong className="kpi-value">{money.format(eligible)}</strong>
-					<button
-						className="kpi-link"
-						type="button"
-						onClick={() => onNavigate("reconcile")}
-					>
-						Xem danh sách <ArrowRight size={14} />
-					</button>
-				</article>
-			</section>
-
-			<section className="dashboard-main-grid">
-				<article className="panel chart-panel">
-					<div className="panel-header">
-						<div>
-							<h3>Doanh số và tiền thu</h3>
-							<p>Đơn vị: triệu đồng</p>
-						</div>
-						<div className="chart-legend">
-							<span>
-								<i className="legend-dot revenue-dot" /> Doanh số
-							</span>
-							<span>
-								<i className="legend-dot collected-dot" /> Đã thu
-							</span>
-						</div>
-					</div>
-					<div
-						className="bar-chart"
-						role="img"
-						aria-label="Biểu đồ doanh số và tiền thu sáu tháng đầu năm"
-					>
-						<div className="chart-y-labels">
-							<span>12</span>
-							<span>8</span>
-							<span>4</span>
-							<span>0</span>
-						</div>
-						<div className="chart-bars">
-							{monthlySeries.map((item) => (
-								<div className="bar-group" key={item.label}>
-									<div className="bar-pair">
-										<i
-											className="bar revenue-bar"
-											style={{ height: `${(item.revenue / 12) * 100}%` }}
-											title={`${item.revenue} triệu`}
-										/>
-										<i
-											className="bar collected-bar"
-											style={{ height: `${(item.collected / 12) * 100}%` }}
-											title={`${item.collected} triệu`}
-										/>
-									</div>
-									<span>{item.label}</span>
-								</div>
-							))}
-						</div>
-					</div>
-				</article>
-
-				<article className="panel status-panel">
-					<div className="panel-header">
-						<div>
-							<h3>Trạng thái đối soát</h3>
-							<p>{reconcileRows.length} khách hàng trong kỳ</p>
-						</div>
-					</div>
-					<div className="donut-wrap">
-						<div className="donut-chart">
-							<div>
-								<strong>{reconcileRows.length}</strong>
-								<span>khách hàng</span>
-							</div>
-						</div>
-						<div className="donut-legend">
-							<div>
-								<span>
-									<i className="donut-key key-eligible" /> Đủ điều kiện
+			{summary ? (
+				<>
+					<section className="dashboard-metrics" aria-label="Chỉ tiêu công nợ">
+						{views.map(({ id, title, icon: Icon }) => (
+							<button
+								className={`panel choice-card dashboard-metric${view === id ? " is-selected" : ""}`}
+								type="button"
+								key={id}
+								aria-pressed={view === id}
+								aria-controls="dashboard-details"
+								onClick={() => {
+									setView(id);
+									pagination.resetPage();
+								}}
+							>
+								<span className="dashboard-metric-icon">
+									<Icon className="icon-size-22" aria-hidden="true" />
 								</span>
-								<strong>
-									{
-										reconcileRows.filter((row) => row.status === "eligible")
-											.length
-									}
-								</strong>
-							</div>
-							<div>
-								<span>
-									<i className="donut-key key-pending" /> Chưa thu đủ
+								<span className="dashboard-metric-copy">
+									<span>{title}</span>
+									<strong>
+										{amounts[id] == null ? "—" : number.format(amounts[id])}
+									</strong>
+									<small>{counts[id]}</small>
 								</span>
-								<strong>
-									{
-										reconcileRows.filter((row) => row.status === "pending")
-											.length
-									}
-								</strong>
-							</div>
-							<div>
-								<span>
-									<i className="donut-key key-paid" /> Đã chi
-								</span>
-								<strong>
-									{reconcileRows.filter((row) => row.status === "paid").length}
-								</strong>
-							</div>
-						</div>
-					</div>
-					<button
-						className="panel-action"
-						type="button"
-						onClick={() => onNavigate("reconcile")}
-					>
-						Mở màn hình đối soát <ArrowRight size={15} />
-					</button>
-				</article>
-			</section>
-
-			<section className="dashboard-bottom-grid">
-				<article className="panel reconcile-preview">
-					<div className="panel-header">
-						<div>
-							<h3>Cần xử lý trong kỳ</h3>
-							<p>Ưu tiên các khách hàng đã thu đủ</p>
-						</div>
-						<button
-							className="text-button"
-							type="button"
-							onClick={() => onNavigate("reconcile")}
-						>
-							Xem tất cả <ArrowRight size={14} />
-						</button>
-					</div>
-					<div className="table-scroll">
-						<table>
-							<thead>
-								<tr>
-									<th>Khách hàng</th>
-									<th>Doanh số</th>
-									<th>Đã thu</th>
-									<th>Chiết khấu</th>
-									<th>Trạng thái</th>
-								</tr>
-							</thead>
-							<tbody>
-								{reconcileRows.slice(0, 3).map((row) => (
-									<tr key={row.id}>
-										<td>
-											<strong>{row.customer}</strong>
-											<span className="cell-meta">
-												{row.customerCode} · {row.region}
-											</span>
-										</td>
-										<td className="numeric">{money.format(row.revenue)}</td>
-										<td className="numeric">{money.format(row.collected)}</td>
-										<td className="numeric strong-number">
-											{money.format(row.expectedDiscount)}
-										</td>
-										<td>
-											<StatusBadge status={row.status} />
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				</article>
-
-				<article className="panel activity-panel">
-					<div className="panel-header">
-						<div>
-							<h3>Hoạt động gần đây</h3>
-							<p>Nhật ký cập nhật dữ liệu</p>
-						</div>
-					</div>
-					<div className="activity-list">
-						{activityItems.map((item) => (
-							<div className="activity-item" key={item.title}>
-								<span className={`activity-icon tone-${item.tone}`}>
-									{item.tone === "warning" ? (
-										<ReceiptText size={16} />
-									) : item.tone === "neutral" ? (
-										<FileSpreadsheet size={16} />
-									) : (
-										<CheckCircle2 size={16} />
-									)}
-								</span>
-								<div>
-									<strong>{item.title}</strong>
-									<span>{item.detail}</span>
-									<small>{item.time}</small>
-								</div>
-							</div>
+							</button>
 						))}
-					</div>
-				</article>
-			</section>
+					</section>
+
+					<Notice tone="info">
+						Chưa có dữ liệu hạn thanh toán và số dư đầu kỳ. Chỉ tiêu đến hạn và
+						quá hạn chưa thể tính.
+						{summary.unverifiedCount > 0 &&
+							` Có ${number.format(summary.unverifiedCount)} chứng từ chưa đủ điều kiện tính số còn phải thu.`}
+						{summary.unmatchedCount > 0 &&
+							` Có ${number.format(summary.unmatchedCount)} chứng từ có phân bổ chưa khớp sổ MISA.`}
+					</Notice>
+
+					<section
+						className="panel data-panel"
+						id="dashboard-details"
+						aria-labelledby="dashboard-detail-title"
+					>
+						<div className="panel-header">
+							<div>
+								<h3 id="dashboard-detail-title">
+									{isReceivables
+										? "Công nợ theo khách hàng"
+										: view === "period"
+											? "Khoản thu trong kỳ"
+											: "Khoản thu còn tiền chờ phân bổ"}
+								</h3>
+								<p>
+									{view === "period"
+										? `${formatDateOnly(from)} – ${formatDateOnly(through)}`
+										: `Tại ngày ${formatDateOnly(through)}`}{" "}
+									· VND
+								</p>
+							</div>
+							{isReceivables ? (
+								<label className="table-search dashboard-customer-search">
+									<Search className="icon-size-16" aria-hidden="true" />
+									<input
+										type="search"
+										aria-label="Tìm khách hàng hoặc mã MISA"
+										placeholder="Tìm khách hàng hoặc mã MISA"
+										value={customerQuery}
+										onChange={(event) => {
+											setCustomerQuery(event.target.value);
+											pagination.resetPage();
+										}}
+									/>
+								</label>
+							) : (
+								onOpenPayments && (
+									<button
+										className="button secondary"
+										type="button"
+										onClick={onOpenPayments}
+									>
+										Mở Đối soát khoản thu{" "}
+										<ArrowRight className="icon-size-16" aria-hidden="true" />
+									</button>
+								)
+							)}
+						</div>
+						{rows.length > 0 ? (
+							<>
+								<div className="table-scroll table-scroll-auto-gutter dashboard-table">
+									<table aria-labelledby="dashboard-detail-title">
+										<thead>
+											<tr>
+												{headings.map((heading) => (
+													<th key={heading} scope="col">
+														{heading}
+													</th>
+												))}
+											</tr>
+										</thead>
+										<tbody>
+											{pagination.pageItems.map((row) =>
+												"remaining" in row ? (
+													<tr key={row.id}>
+														<td>
+															<button
+																className="text-button dashboard-customer-link table-customer-name"
+																type="button"
+																aria-haspopup="dialog"
+																onClick={() => setOpenedCustomerId(row.id)}
+															>
+																{row.name}
+															</button>
+															{row.customerCode && (
+																<small className="cell-meta">
+																	{row.customerCode}
+																</small>
+															)}
+														</td>
+														<td>{row.employeeName || "—"}</td>
+														<td>{row.province || "—"}</td>
+														<td>{number.format(row.documents.length)}</td>
+														<td className="strong-number">
+															{number.format(row.remaining)}
+														</td>
+													</tr>
+												) : (
+													<tr key={row.id}>
+														<td>
+															<strong>{row.number}</strong>
+														</td>
+														<td>{formatDateOnly(row.date)}</td>
+														<td>
+															<strong>{row.customerName}</strong>
+															{row.customerCode && (
+																<small className="cell-meta">
+																	{row.customerCode}
+																</small>
+															)}
+														</td>
+														<td>{number.format(row.amount)}</td>
+														<td className="strong-number">
+															{number.format(row.unallocated)}
+														</td>
+													</tr>
+												),
+											)}
+										</tbody>
+									</table>
+								</div>
+								<div className="dashboard-table-footer">
+									<span>
+										{number.format(pagination.firstVisible)}–
+										{number.format(pagination.lastVisible)} /{" "}
+										{number.format(rows.length)}{" "}
+										{isReceivables ? "khách hàng" : "khoản thu"}
+									</span>
+									<PaginationControls
+										currentPage={pagination.currentPage}
+										pageCount={pagination.pageCount}
+										onPageChange={pagination.setCurrentPage}
+										previousLabel="Trang Dashboard trước"
+										nextLabel="Trang Dashboard sau"
+									/>
+								</div>
+							</>
+						) : (
+							<div className="empty-state">
+								{isReceivables
+									? customerSearch && summary.receivables.length > 0
+										? "Không tìm thấy khách hàng phù hợp."
+										: summary.salesRowCount
+											? "Chưa có khách hàng còn phải thu theo dữ liệu đủ điều kiện."
+											: "Chưa có dòng bán hàng MISA tại ngày chốt."
+									: view === "period"
+										? "Chưa có khoản thu trong kỳ đã chọn."
+										: "Chưa có khoản thu chờ phân bổ tại ngày chốt."}
+							</div>
+						)}
+					</section>
+				</>
+			) : (
+				<Notice tone="warning" announce>
+					Chọn ngày chốt và ngày bắt đầu kỳ thu hợp lệ. Ngày bắt đầu phải bằng
+					hoặc trước ngày chốt.
+				</Notice>
+			)}
+			{openedCustomer && (
+				<InvoiceDrawer
+					key={openedCustomer.id}
+					customer={openedCustomer}
+					asOfDate={through}
+					onClose={() => setOpenedCustomerId(undefined)}
+				/>
+			)}
 		</div>
 	);
 }

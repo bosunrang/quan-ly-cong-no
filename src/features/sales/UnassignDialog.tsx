@@ -1,3 +1,4 @@
+import { Notice } from "../../shared/ui/Notice";
 import { Building2, CalendarX2, UserMinus } from "lucide-react";
 import { useState } from "react";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
@@ -32,7 +33,7 @@ export function UnassignDialog({
 			ariaLabelledBy="unassign-dialog-title"
 			eyebrow="KẾT THÚC PHỤ TRÁCH"
 			title="Bỏ phân công đơn vị"
-			icon={<UserMinus size={19} />}
+			icon={<UserMinus className="icon-size-19" />}
 			tone="warning"
 			className="unassign-dialog"
 			onClose={onClose}
@@ -42,12 +43,12 @@ export function UnassignDialog({
 						Hủy
 					</button>
 					<button
-						className="button danger"
+						className="button warning"
 						type="button"
 						disabled={invalidDate}
 						onClick={() => onConfirm(effectiveTo)}
 					>
-						<CalendarX2 size={16} /> Kết thúc phụ trách
+						<CalendarX2 className="icon-size-16" /> Kết thúc phụ trách
 					</button>
 				</>
 			}
@@ -63,10 +64,10 @@ export function UnassignDialog({
 							<small>Nhân viên đang phụ trách</small>
 						</span>
 					</div>
-					<UserMinus size={20} />
+					<UserMinus className="icon-size-20" />
 					<div>
 						<span className="unassigned-state-icon">
-							<Building2 size={17} />
+							<Building2 className="icon-size-17" />
 						</span>
 						<span>
 							<strong>Chưa phân công</strong>
@@ -75,7 +76,7 @@ export function UnassignDialog({
 					</div>
 				</div>
 				<div className="unassign-customer">
-					<Building2 size={18} />
+					<Building2 className="icon-size-18" />
 					<div>
 						<strong>{customer.name}</strong>
 						<span>
@@ -92,15 +93,15 @@ export function UnassignDialog({
 						onChange={setEffectiveTo}
 					/>
 				</label>
-				<p className="dialog-note">
+				<Notice tone="info">
 					Khách hàng vẫn được giữ trong danh mục và sẽ trở về nhóm “Chưa phân
 					công”. Lịch sử của {employee.name} được lưu đến ngày kết thúc đã chọn.
-				</p>
+				</Notice>
 				{invalidDate && (
-					<p className="assignment-error">
+					<Notice tone="danger" announce>
 						Ngày kết thúc không được trước ngày bắt đầu phụ trách{" "}
 						{formatDateOnly(assignment.effectiveFrom)}.
-					</p>
+					</Notice>
 				)}
 			</div>
 		</Dialog>

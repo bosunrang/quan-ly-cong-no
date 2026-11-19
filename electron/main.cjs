@@ -1,17 +1,48 @@
-const { app, BrowserWindow, ipcMain, Menu, session } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, session } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { randomUUID } = require('node:crypto');
+const fs = require('node:fs');
 const { openDatabase } = require('./database.cjs');
+const { automaticBackups, backupDirectory } = require('../server/automatic-backup.cjs');
+const { chooseMode, startLanHost } = require('./lan-host.cjs');
 
 app.enableSandbox();
 let database;
+let localBackups;
+let lanHost = false;
+const localCompany = Object.freeze({ id: 'local', name: 'Bản cục bộ' });
+
+// Bản JSON đầy đủ trước thao tác xóa/khôi phục; đặt tên theo cùng quy ước với
+// saveBeforeChange để được dọn chung (giữ 5 bản gần nhất).
+function saveBeforeChangeSync() {
+  const directory = backupDirectory(app.getPath('userData'), localCompany);
+  fs.mkdirSync(directory, { recursive: true });
+  const name = `cong-no-${localCompany.id}-truoc-khi-thay-doi-${Date.now()}-${randomUUID()}.json`;
+  fs.writeFileSync(path.join(directory, name), JSON.stringify(database.exportBusinessBackup()), { flag: 'wx' });
+}
 
 function isDatasetKey(value) {
-  return typeof value === 'string' && /^mkt-cost\.[a-z0-9.-]+$/i.test(value) && value.length <= 120;
+  return typeof value === 'string' && /^cong-no\.[a-z0-9.-]+$/i.test(value) && value.length <= 120;
 }
 
 function configureDatabase() {
-  database = openDatabase(path.join(app.getPath('userData'), 'mkt-cost.sqlite'));
+  const databasePath = path.join(app.getPath('userData'), 'cong-no.sqlite');
+  database = openDatabase(databasePath);
+  // Bản desktop cũng giữ 14 bản SQLite theo ngày như máy chủ LAN.
+  localBackups = automaticBackups(databasePath, app.getPath('userData'), localCompany);
+  localBackups.start();
+  ipcMain.handle('database:export-business-backup', () => {
+    try { return { ok: true, value: database.exportBusinessBackup() }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  ipcMain.handle('database:change-business-data', (_event, change) => {
+    try {
+      saveBeforeChangeSync();
+      return { ok: true, value: database.changeBusinessData(change) };
+    }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
   ipcMain.on('database:read-dataset', (event, key) => {
     try {
       if (!isDatasetKey(key)) throw new Error('Khóa dữ liệu không hợp lệ.');
@@ -20,48 +51,93 @@ function configureDatabase() {
       event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể đọc SQLite.' };
     }
   });
+  // Sổ bán hàng và sổ đối soát có thể lớn: đọc/ghi bất đồng bộ để không khóa giao diện.
+  ipcMain.handle('database:read-dataset-async', (_event, key) => {
+    try {
+      if (!isDatasetKey(key)) throw new Error('Khóa dữ liệu không hợp lệ.');
+      return { ok: true, value: database.readDataset(key) ?? null };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Không thể đọc SQLite.' };
+    }
+  });
+  ipcMain.handle('database:dataset-stamp', (_event, key) => {
+    try {
+      if (!isDatasetKey(key)) throw new Error('Khóa dữ liệu không hợp lệ.');
+      return { ok: true, value: database.datasetStamp(key) };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Không thể đọc SQLite.' };
+    }
+  });
   ipcMain.on('database:write-dataset', (event, payload) => {
     try {
       if (!payload || !isDatasetKey(payload.key)) throw new Error('Khóa dữ liệu không hợp lệ.');
+      if (payload.key === 'cong-no.accounts.v1') throw new Error('Tài khoản cần được cập nhật qua luồng Người dùng.');
       event.returnValue = { ok: true, value: database.writeDataset(payload.key, payload.version, payload.data) };
     } catch (error) {
       event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể ghi SQLite.' };
     }
   });
-  ipcMain.on('database:query-products', (event, options) => {
+  ipcMain.handle('database:write-receipt-ledger', (_event, payload) => {
     try {
-      event.returnValue = { ok: true, value: database.queryProducts(options) };
+      if (typeof payload?.revision !== 'string' || typeof payload?.data?.revision !== 'string' ||
+          !Array.isArray(payload.data.receipts) || !Array.isArray(payload.data.allocations) ||
+          (payload.salesBookImportedAt !== undefined && typeof payload.salesBookImportedAt !== 'string')) {
+        throw new Error('Dữ liệu đối soát không hợp lệ.');
+      }
+      return { ok: true, value: database.writeReceiptLedger(payload.revision, payload.data, payload.salesBookImportedAt) };
     } catch (error) {
-      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể truy vấn danh sách sản phẩm.' };
+      return { ok: false, error: error instanceof Error ? error.message : 'Không thể lưu đối soát.' };
     }
   });
-  ipcMain.on('database:read-product-detail', (event, productId) => {
+  ipcMain.handle('database:write-misa-sales-book', (_event, payload) => {
     try {
-      event.returnValue = { ok: true, value: database.readProductDetail(productId) };
+      if (!payload || (payload.expectedImportedAt !== null && typeof payload.expectedImportedAt !== 'string') ||
+          typeof payload.data?.importedAt !== 'string' || typeof payload.data.fileName !== 'string' ||
+          !Array.isArray(payload.data.rows)) {
+        throw new Error('Dữ liệu sổ bán hàng không hợp lệ.');
+      }
+      return { ok: true, value: database.writeMisaSalesBook(payload.expectedImportedAt, payload.data) };
     } catch (error) {
-      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể đọc chi tiết sản phẩm.' };
+      return { ok: false, error: error instanceof Error ? error.message : 'Không thể lưu sổ bán hàng.' };
     }
   });
-  ipcMain.on('database:write-misa-details', (event, payload) => {
+  ipcMain.on('database:clear-all-data', (event, branding) => {
     try {
-      if (!payload || !Number.isInteger(payload.version)) throw new Error('Phiên bản dữ liệu MISA không hợp lệ.');
-      event.returnValue = { ok: true, value: database.writeMisaDetails(payload.version, payload.rows) };
+      if (!branding || typeof branding.displayName !== 'string' || typeof branding.tagline !== 'string' || (typeof branding.logoDataUrl !== 'string' && branding.logoDataUrl !== null)) {
+        throw new Error('Thông tin nhận diện không hợp lệ.');
+      }
+      saveBeforeChangeSync();
+      event.returnValue = { ok: true, value: database.clearAllData(branding) };
     } catch (error) {
-      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể ghi chi tiết MISA.' };
+      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể xóa dữ liệu SQLite.' };
     }
   });
-  ipcMain.on('database:query-misa-details', (event, options) => {
+  ipcMain.on('database:append-activity', (event, entry) => {
     try {
-      event.returnValue = { ok: true, value: database.queryMisaDetails(options) };
+      const fields = { id: 64, time: 32, actorId: 64, actorName: 140, category: 32, action: 140, detail: 500 };
+      if (!entry || Object.entries(fields).some(([key, limit]) => typeof entry[key] !== 'string' || entry[key].length > limit)) {
+        throw new Error('Bản ghi nhật ký không hợp lệ.');
+      }
+      const payload = Object.fromEntries(Object.keys(fields).map((key) => [key, entry[key]]));
+      event.returnValue = { ok: true, value: database.appendActivity(payload) };
     } catch (error) {
-      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể truy vấn chi tiết MISA.' };
+      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể ghi nhật ký.' };
     }
   });
-  ipcMain.on('database:query-misa-range', (event, options) => {
+  ipcMain.on('database:write-accounts', (event, payload) => {
     try {
-      event.returnValue = { ok: true, value: database.queryMisaRange(options) };
+      if (!Array.isArray(payload?.expected) || !Array.isArray(payload?.accounts))
+        throw new Error('Danh sách tài khoản không hợp lệ.');
+      event.returnValue = { ok: true, value: database.writeAccounts(payload.expected, payload.accounts) };
     } catch (error) {
-      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể truy vấn MISA theo khoảng ngày.' };
+      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể ghi tài khoản.' };
+    }
+  });
+  ipcMain.on('database:read-activities', (event) => {
+    try {
+      event.returnValue = { ok: true, value: database.readActivities() };
+    } catch (error) {
+      event.returnValue = { ok: false, error: error instanceof Error ? error.message : 'Không thể đọc nhật ký.' };
     }
   });
   ipcMain.on('database:status', (event) => {
@@ -78,9 +154,9 @@ function configureSession() {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
 }
 
-function createWindow() {
+function createWindow({ url } = {}) {
   const appEntry = path.join(__dirname, '..', 'dist', 'index.html');
-  const appEntryUrl = pathToFileURL(appEntry).toString();
+  const appEntryUrl = url ?? pathToFileURL(appEntry).toString();
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -90,7 +166,7 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      ...(url ? {} : { preload: path.join(__dirname, 'preload.cjs') }),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -109,11 +185,23 @@ function createWindow() {
     if (url !== appEntryUrl) event.preventDefault();
   });
 
-  window.loadFile(appEntry);
   window.once('ready-to-show', () => window.show());
+  const loaded = url ? window.loadURL(url) : window.loadFile(appEntry);
+  void loaded.catch((error) => {
+    if (error.code !== 'ERR_ABORTED') dialog.showErrorBox('Không mở được ứng dụng', error.message);
+  });
+  return window;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (process.argv.includes('--lan') || (app.isPackaged && !process.argv.includes('--local'))) {
+    const mode = await chooseMode(process.argv);
+    if (!mode) return app.quit();
+    if (mode !== 'local') {
+      lanHost = true;
+      return startLanHost(mode, { createWindow, configureSession });
+    }
+  }
   configureDatabase();
   configureSession();
   Menu.setApplicationMenu(null);
@@ -121,9 +209,14 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+}).catch((error) => {
+  dialog.showErrorBox('Không khởi động được Quản lý công nợ', error.message);
+  app.quit();
 });
 
 app.on('before-quit', () => {
+  void localBackups?.stop();
+  localBackups = undefined;
   database?.close();
   database = undefined;
 });
@@ -133,5 +226,5 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (!lanHost && process.platform !== 'darwin') app.quit();
 });

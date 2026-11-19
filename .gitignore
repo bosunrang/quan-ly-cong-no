@@ -2,6 +2,7 @@ node_modules/
 dist/
 release/
 coverage/
+/data/lan/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
