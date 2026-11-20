@@ -131,6 +131,12 @@ khoảng 1,8 KB và 10 khách hàng công nợ khoảng 3,4 KB.
 Ghi log ra tệp, tự cập nhật (`electron-updater`), máy desktop làm máy trạm của máy chủ khác, truy cập
 từ xa qua Cloudflare Tunnel, `ARCHITECTURE.md` với đầy đủ quy tắc như app cước phí.
 
+Đã triển khai máy trạm Electron, nhật ký vận hành theo ngày, kênh cập nhật cho bản Windows có ký và
+tên miền Tunnel cấu hình theo công ty. Xem hướng dẫn vận hành trong [README.md](../README.md) và quy
+tắc triển khai trong [ARCHITECTURE.md](../ARCHITECTURE.md). Kiểm thử cục bộ dùng máy chủ, cấu hình
+proxy và bộ cập nhật mô phỏng. Phát hành và truy cập từ xa cần nguồn cập nhật, chứng thư ký mã và
+tên miền Tunnel của đơn vị vận hành.
+
 ## Quyết định đã chốt (19/11/2026)
 
 | Câu hỏi | Quyết định |

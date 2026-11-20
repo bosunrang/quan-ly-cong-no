@@ -1,3 +1,4 @@
+const { parseTunnelOrigin } = require('./client-address.cjs');
 const { readFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { fileURLToPath } = require('node:url');
@@ -16,9 +17,11 @@ function lanOptions(argv, defaultDirectory) {
   }
   const tls = key ? { key: readFileSync(key), cert: readFileSync(cert) } : undefined;
   const loopback = argv.includes('--loopback');
+  const tunnel = argv.find((arg) => arg.startsWith('--tunnel-origin='));
   return {
     directory,
     tls,
+    tunnelOrigin: parseTunnelOrigin(tunnel?.slice('--tunnel-origin='.length)),
     loopback,
     host: loopback ? '127.0.0.1' : '0.0.0.0',
     staticRoot: join(__dirname, '..', 'dist'),

@@ -49,7 +49,7 @@ async function saveBusinessChange(tenant, req, change, detail = "") {
     audit(db, account, 'settings', change.type === 'restore' ? 'Khôi phục dữ liệu' : 'Xóa dữ liệu theo nhóm', detail));
 }
 
-function createApi(tenant, tls) {
+function createApi(tenant) {
   const { db, access, backups } = tenant;
   const router = createRouter();
   const auth = (operation, transform = (body) => body) =>
@@ -112,10 +112,10 @@ function createApi(tenant, tls) {
   }, pages(['settings']));
   router.get('/api/status', () => ({ backend: 'lan', schemaVersion: db.status().schemaVersion }), pages([]));
 
-  return async (req, res, pathname) => {
+  return async (req, res, pathname, origin) => {
     const query = new URLSearchParams(String(req.url).split("?").slice(1).join("?"));
     if (req.headers['x-cong-no-lan'] !== '1' ||
-        (req.headers.origin && req.headers.origin !== (tls ? 'https://' : 'http://') + req.headers.host))
+        (req.headers.origin && req.headers.origin !== origin))
       fail(403, 'Yêu cầu khác nguồn bị từ chối.');
     const route = router.match(req.method, pathname);
     if (!route) fail(404, 'Chức năng không tồn tại.');

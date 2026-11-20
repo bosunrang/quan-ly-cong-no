@@ -1,3 +1,5 @@
+const { fail } = require('./access-errors.cjs');
+const { requestPeer } = require('./client-address.cjs');
 const { pbkdf2, randomBytes, randomUUID, timingSafeEqual } = require('node:crypto');
 const { promisify } = require('node:util');
 
@@ -14,9 +16,6 @@ const pagesByRole = {
   viewer: ['dashboard', 'receivables', 'reports'],
 };
 
-function fail(status, message) {
-  throw Object.assign(new Error(message), { status });
-}
 
 function canOpen(account, page) {
   return account.role === 'admin' ||
@@ -94,7 +93,7 @@ async function initializeAdministrator(db, password, username = 'admin') {
   storeAccounts(db, [], [account]);
 }
 
-function createAccess(db, company, tls) {
+function createAccess(db, company, tls, tunnelOrigin) {
   const sessions = new Map();
   // Lần đăng nhập sai được đếm theo máy và theo tên đăng nhập. Đăng nhập đúng chỉ
   // xóa bộ đếm của chính tài khoản đó, nên không thể dùng tài khoản của mình để
@@ -135,8 +134,9 @@ function createAccess(db, company, tls) {
     return req.headers.cookie?.split(';').map((part) => part.trim())
       .find((part) => part.startsWith(`${cookie}=`))?.slice(cookie.length + 1);
   }
-  function setCookie(res, value, age) {
-    res.setHeader('Set-Cookie', `${cookie}=${value}; Path=/api/; HttpOnly; SameSite=Strict; Max-Age=${age}${tls ? '; Secure' : ''}`);
+  function setCookie(req, res, value, age) {
+    const { secure } = requestPeer(req, tls, tunnelOrigin);
+    res.setHeader('Set-Cookie', `${cookie}=${value}; Path=/api/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure ? '; Secure' : ''}`);
   }
   function createSession(req, res, account) {
     sessions.delete(token(req));
@@ -144,7 +144,7 @@ function createAccess(db, company, tls) {
       if (session.until <= Date.now()) sessions.delete(key);
     const secret = randomBytes(32).toString('base64url');
     sessions.set(secret, { id: account.id, version: account.sessionVersion, until: Date.now() + 12 * HOUR });
-    setCookie(res, secret, 12 * 3600);
+    setCookie(req, res, secret, 12 * 3600);
   }
   function actor(req, allowPending = false) {
     const key = token(req);
@@ -173,7 +173,7 @@ function createAccess(db, company, tls) {
       if (operation === 'login') {
         const now = Date.now();
         pruneFailures(now);
-        const address = req.socket.remoteAddress ?? '';
+        const { address } = requestPeer(req, tls, tunnelOrigin);
         const password = payload.password;
         const username = typeof payload.username === 'string' ? payload.username.trim().toLowerCase() : '';
         checkLoginAllowed(address, username, now);
@@ -198,7 +198,7 @@ function createAccess(db, company, tls) {
       if (operation === 'logout') {
         const account = actor(req, true);
         sessions.delete(token(req));
-        setCookie(res, '', 0);
+        setCookie(req, res, '', 0);
         audit(db, account, 'session', 'Đăng xuất');
         return true;
       }

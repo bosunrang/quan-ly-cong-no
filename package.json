@@ -15,7 +15,7 @@
     "check:electron": "node --check electron/main.cjs && node --check electron/lan-host.cjs && node --check electron/database.cjs && node --check server/development.cjs",
     "test": "pnpm build:domain && vitest run",
     "test:sqlite": "node --test tests/sqlite-database.test.cjs",
-    "test:lan": "pnpm build:domain && node --test tests/lan.test.cjs tests/lan-security.test.cjs",
+    "test:lan": "pnpm build:domain && node --test tests/lan.test.cjs tests/lan-security.test.cjs tests/operations.test.cjs",
     "test:watch": "pnpm build:domain && vitest",
     "test:coverage": "pnpm build:domain && vitest run --coverage",
     "check": "pnpm lint && pnpm typecheck && pnpm check:electron && pnpm test && pnpm test:sqlite && pnpm test:lan",
@@ -23,9 +23,9 @@
     "start": "pnpm build:domain && electron .",
     "desktop": "pnpm build && electron . --local",
     "desktop:lan": "pnpm build:domain && electron . --lan",
-    "dist": "pnpm build && electron-builder --win nsis",
+    "dist": "pnpm build && node electron/build-windows.mjs",
     "dev:init-admin": "pnpm build:domain && node server/init-dev-admin.cjs",
-    "test:desktop": "pnpm build:domain && node tests/electron-http-smoke.cjs",
+    "test:desktop": "pnpm build:domain && node tests/electron-http-smoke.cjs && node tests/electron-workstation-smoke.cjs",
     "build:domain": "node server/build-domain.mjs",
     "test:golden": "pnpm build:domain && vitest run tests/golden-numbers.test.ts",
     "test:performance": "pnpm build:domain && node tests/performance/accounting.benchmark.cjs"
@@ -68,6 +68,7 @@
     }
   },
   "dependencies": {
+    "electron-updater": "6.8.9",
     "exceljs": "^4.4.0",
     "lucide-react": "^1.33.0",
     "react": "^19.2.8",

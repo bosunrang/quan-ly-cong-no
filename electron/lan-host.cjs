@@ -7,6 +7,7 @@ const { companies, getCompany } = require('../server/companies.cjs');
 const { backupDirectory } = require('../server/automatic-backup.cjs');
 const { createLanServer, listenLanServer, stopLanServer } = require('../server/lan.cjs');
 const { lanOptions } = require('../server/lan-options.cjs');
+const { createFileLog } = require('../server/file-log.cjs');
 const { loginItem } = require('./lan-startup.cjs');
 
 async function chooseMode(argv) {
@@ -17,11 +18,12 @@ async function chooseMode(argv) {
     title: 'Mở Quản lý công nợ',
     message: 'Chọn công ty trên máy chủ này',
     detail: 'Trên máy chung, mở ứng dụng hai lần và chọn Nam Hưng Việt ở một lần, Naviva Group ở lần kia.',
-    buttons: [...companies.map((company) => company.name), 'Bản cục bộ', 'Thoát'],
-    cancelId: companies.length + 1,
+    buttons: [...companies.map((company) => company.name), 'Bản cục bộ', 'Máy trạm…', 'Thoát'],
+    cancelId: companies.length + 2,
     noLink: true,
   });
   if (response === companies.length) return 'local';
+  if (response === companies.length + 1) return 'client';
   return companies[response];
 }
 
@@ -34,12 +36,12 @@ function showLanAddresses(company, settings) {
     type: 'info',
     title: company.name,
     message: 'Địa chỉ cho máy nhân viên',
-    detail: [...new Set(ipv4)].join('\n') || 'Máy chủ hiện chỉ truy cập được trên máy này.',
+    detail: [...new Set([...ipv4, ...(settings.tunnelOrigin ? [settings.tunnelOrigin] : [])])].join('\n') || 'Máy chủ hiện chỉ truy cập được trên máy này.',
     buttons: ['Đóng'],
   });
 }
 
-async function startLanHost(company, { createWindow, configureSession }) {
+async function startLanHost(company, { createWindow, configureSession, createUpdater }) {
   const local = company === 'local';
   if (local) company = Object.freeze({ id: 'local', name: 'Bản cục bộ', port: 0 });
   const localDirectory = app.getPath('userData');
@@ -56,7 +58,8 @@ async function startLanHost(company, { createWindow, configureSession }) {
   if (!app.requestSingleInstanceLock({ hidden })) return app.quit();
   configureSession();
   Menu.setApplicationMenu(null);
-  const server = createLanServer({ ...settings, company });
+  const log = createFileLog(join(settings.directory, 'logs', company.id));
+  const server = createLanServer({ ...settings, company, log });
   try {
     await listenLanServer(server, company.port, settings.host);
   } catch (error) {
@@ -67,7 +70,9 @@ async function startLanHost(company, { createWindow, configureSession }) {
   }
 
   let quitting = false;
-  let stopping = false;
+  let stopping;
+  let stoppedForUpdate = false;
+  let exitRequested = false;
   let window;
   let tray;
   let creatingAdministrator = false;
@@ -78,13 +83,25 @@ async function startLanHost(company, { createWindow, configureSession }) {
   const canAutoStart = !local && app.isPackaged && process.platform === 'win32';
   const backups = backupDirectory(settings.directory, company);
 
+  function stop() {
+    if (!stopping) stopping = stopLanServer(server);
+    return stopping;
+  }
+  const updater = createUpdater({ log, onChanged: () => updateMenu(),
+    async prepareInstall() {
+      quitting = true;
+      await stop();
+      stoppedForUpdate = true;
+    },
+  });
   app.on('before-quit', () => { quitting = true; });
   app.on('will-quit', (event) => {
+    if (stoppedForUpdate) return;
     event.preventDefault();
-    if (stopping) return;
-    stopping = true;
+    if (exitRequested) return;
+    exitRequested = true;
     tray?.destroy();
-    void stopLanServer(server)
+    void stop()
       .then(() => app.exit(0))
       .catch((error) => {
         console.error(error);
@@ -152,6 +169,8 @@ async function startLanHost(company, { createWindow, configureSession }) {
   function updateMenu() {
     const items = [
       { label: 'Mở ứng dụng', click: showWindow },
+      { label: 'Mở thư mục nhật ký…', click: () => void shell.openPath(log.directory) },
+      ...(updater ? [updater.menuItem()] : []),
       // Bản cục bộ chỉ nghe trên 127.0.0.1 nên không có địa chỉ cho máy khác.
       ...(local ? [] : [{ label: 'Địa chỉ cho máy nhân viên…', click: () => showLanAddresses(company, settings) }]),
       {

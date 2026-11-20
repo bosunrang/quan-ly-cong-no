@@ -30,6 +30,7 @@ async function main() {
       await listenLanServer(server, port, settings.host);
       servers.push(server);
       console.log(`${profile.name} - ${settings.tls ? 'https' : 'http'}://127.0.0.1:${port}/`);
+      if (settings.tunnelOrigin) console.log('Cloudflare Tunnel: ' + settings.tunnelOrigin);
       if (!settings.tls && !settings.loopback)
         console.warn('  Cảnh báo: máy chủ đang dùng HTTP không mã hóa trên mạng LAN. Đặt CONG_NO_LAN_TLS_KEY và CONG_NO_LAN_TLS_CERT để bật HTTPS.');
     }

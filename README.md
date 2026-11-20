@@ -119,6 +119,48 @@ pnpm desktop
 
 Lệnh trên build giao diện rồi mở ứng dụng Electron.
 
+## Dùng Electron làm máy trạm
+
+Mở bản cài, chọn **Máy trạm…**, rồi nhập địa chỉ máy chủ do quản trị viên cung cấp
+(ví dụ `http://192.168.1.20:3300` trong LAN hoặc `https://congno.example.com` từ xa).
+Địa chỉ được lưu cho các lần mở tiếp theo. Trong cửa sổ, menu **Máy trạm** có mục đổi địa chỉ,
+kết nối lại và mở trong trình duyệt. Cửa sổ dùng giao diện, tài khoản và dữ liệu do máy chủ cung cấp.
+
+Có thể mở thẳng chế độ này với `--client` hoặc `--client --server-url=https://congno.example.com`
+sau tên tệp `.exe`. Từ mã nguồn, dùng `pnpm start --client`.
+
+## Truy cập từ xa qua Cloudflare Tunnel
+
+1. Trên máy chạy app, cấu hình một tiến trình cho đúng công ty và tên miền. Ví dụ `pnpm lan --company=nam-hung-viet --loopback --tunnel-origin=https://congno.example.com`.
+   Với bản cài Windows, dùng các đối số `--company=nam-hung-viet --loopback --tunnel-origin=https://congno.example.com` sau tên tệp `.exe`.
+   Nếu máy cũng phục vụ nhân viên trực tiếp trong LAN, bỏ `--loopback` và giới hạn cổng của app trong firewall.
+2. Chạy `cloudflared` trên cùng máy. Thêm hostname công khai `congno.example.com`, dịch vụ
+   `http://127.0.0.1:3300` (hoặc cổng của công ty) và đặt **HTTP Host Header** thành
+   `congno.example.com`. Ví dụ này dùng HTTP ở đoạn loopback. Nếu origin dùng HTTPS, dùng
+   URL `https://` và cấu hình để connector tin chứng thư của máy chủ. Dùng một hostname khác cho mỗi công ty.
+   [Thông số origin của Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/reference/origin-parameters/)
+3. Bật chuyển hướng HTTP sang HTTPS ở Cloudflare. Thiết lập Cloudflare Access cho nhân viên được phép truy cập
+   nếu cần lớp xác thực bên ngoài. Nếu Access chuyển qua tên miền của nhà cung cấp danh tính,
+   dùng trình duyệt để hoàn tất đăng nhập. Công nợ tiếp tục xác thực và kiểm tra quyền tại máy chủ.
+
+## Nhật ký và cập nhật Windows
+
+Mở **Mở thư mục nhật ký…** từ khay máy chủ hoặc menu **Máy trạm**. Máy chủ ghi trong
+`logs/<mã-công-ty>` dưới thư mục dữ liệu, bản cục bộ trong `logs/local`, máy trạm trong
+`workstation/logs` dưới thư mục dữ liệu người dùng. Lỗi khởi động desktop nằm trong `logs/desktop`.
+Các tệp theo ngày UTC, giữ 30 ngày, tối đa 5 MB mỗi ngày.
+
+`pnpm dist` tạo bộ cài Windows. Để bật kênh cập nhật, đặt `CONG_NO_UPDATE_URL` tới thư mục phát
+hành HTTPS và `CONG_NO_UPDATE_PUBLISHER` đúng tên nhà phát hành trong chứng thư ký mã Windows.
+Cấu hình chứng thư cho electron-builder trước khi chạy `pnpm dist`. Sau khi build có ký, tải bộ
+cài, tệp `.blockmap` và `latest.yml` lên nguồn cập nhật. Tải `latest.yml` lên sau các tệp
+bộ cài. Khi phát hành bản mới, tăng phiên bản trong `package.json` và duy trì danh tính nhà phát hành.
+[Hướng dẫn auto-update của electron-builder](https://www.electron.build/docs/features/auto-update/)
+
+Bản Windows có cấu hình nguồn cập nhật kiểm tra định kỳ và tải nền. Chọn **Cài bản cập nhật…** trên máy trạm
+hoặc trong menu khay. Trên máy chạy nhiều công ty, đóng các phiên công ty còn lại trước khi cài vì bộ cài
+dùng chung. App dừng máy chủ, chờ tác vụ sao lưu đang chạy kết thúc rồi khởi động trình cài.
+
 ## Kiểm tra chất lượng
 
 ```powershell

@@ -29,7 +29,7 @@ function copyDatabase(source, destination) {
   });
 }
 
-function automaticBackups(source, root, company, now = () => new Date()) {
+function automaticBackups(source, root, company, now = () => new Date(), log) {
   const directory = backupDirectory(root, company);
   const prefix = `cong-no-${company.id}-`;
   let active;
@@ -78,6 +78,7 @@ function automaticBackups(source, root, company, now = () => new Date()) {
         lastError = false;
       }).catch((error) => {
         lastError = true;
+        log?.write('WARN', 'backup.snapshot.failed', error.code);
         console.warn(`Sao lưu ${company.name}: ${error.message}`);
       }).finally(() => { active = undefined; });
     }

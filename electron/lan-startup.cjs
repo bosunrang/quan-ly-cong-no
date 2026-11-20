@@ -8,6 +8,7 @@ function loginItem(company, settings, executable) {
     `--data-dir-url=${pathToFileURL(settings.directory).href}`,
   ];
   if (settings.loopback) args.push('--loopback');
+  if (settings.tunnelOrigin) args.push('--tunnel-origin=' + settings.tunnelOrigin);
   if (settings.tls) args.push('--require-tls');
   return { name: `QuanLyCongNo-${company.id}`, path: executable, args };
 }

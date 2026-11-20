@@ -1,0 +1,9 @@
+body { font: 1rem system-ui, sans-serif; margin: 0; color-scheme: light dark; }
+main { margin: 1.5rem; }
+h1 { font-size: 1.25rem; margin: 0 0 1.25rem; }
+label { font-weight: 600; display: block; margin-bottom: .5rem; }
+input { width: 100%; box-sizing: border-box; padding: .65rem; font: inherit; }
+p { margin: .65rem 0; }
+#hint, #status { font-size: .9rem; }
+#status:empty { display: none; }
+button { font: inherit; padding: .55rem 1.1rem; margin-top: .7rem; }

@@ -2,8 +2,8 @@
 
 Ứng dụng quản lý công nợ phải thu của khách hàng từ Sổ chi tiết bán hàng MISA: nhập sổ bán hàng,
 ghi và phân bổ khoản thu, theo dõi công nợ, lập biên bản đối chiếu. React + TypeScript + Vite trong
-vỏ Electron, mọi giao diện đều gọi máy chủ HTTP; bản desktop tự chạy máy chủ loopback hoặc LAN. Mã tổ chức theo module nghiệp vụ; component
-giao diện không tự đọc/ghi dữ liệu.
+vỏ Electron. Giao diện gọi máy chủ HTTP cùng nguồn trong chế độ cục bộ, LAN hoặc máy trạm.
+Mã tổ chức theo module nghiệp vụ. Component nhận dữ liệu và hành động qua hook hoặc props.
 
 ## Cấu trúc chuẩn
 
@@ -41,27 +41,31 @@ src/
     foundation/        Font, token, reset/base và typography
     layout/            App shell và responsive toàn ứng dụng
     shared/            Style của component dùng chung
-electron/              Vỏ desktop, SQLite (database.cjs, books.cjs), máy chủ loopback/LAN
+electron/              Vỏ desktop, máy trạm, cập nhật Windows, mô-đun SQLite thuần Node
 server/                Máy chủ dùng chung, định tuyến (http.cjs), API (index.cjs), sao lưu và khởi chạy dev
-tests/                 Vitest cho src; node --test cho SQLite và máy chủ LAN
+tests/                 Vitest cho src, node --test cho SQLite và LAN, smoke test cho Electron
 ```
 
 ## Quy tắc bắt buộc
 
 1. Màu, cỡ chữ và kích thước shell lấy từ `styles/foundation/tokens.css`; không viết mã màu riêng trong component mới.
 2. Model, repository và quy tắc nghiệp vụ nằm trong `domain`; UI và state màn hình nằm trong `features`.
-3. UI chỉ nhận dữ liệu và callback qua props hoặc hook của feature; không gọi trực tiếp `localStorage`, SQLite hay API.
+3. Component nhận dữ liệu và callback qua props hoặc hook. Feature gọi repository trong `domain`.
+   Repository gọi HTTP qua `shared/api/client.ts`.
 4. Mọi phép tính tiền (công nợ, phân bổ, số dư đối chiếu) nằm trong `domain` và có kiểm thử; dashboard, báo cáo và màn hình thu tiền dùng chung, không tự tính lại.
 5. Dữ liệu MISA được đọc qua adapter kiểm tra tiêu đề và định dạng số trước khi vào model chuẩn; nhập lại theo từng chứng từ, người dùng xem trước rồi mới ghi.
 6. Chứng từ đã có khoản thu phân bổ không bị thay hay gỡ khi nhập lại sổ.
 7. Ghi sổ bán hàng và sổ khoản thu dùng kiểm tra phiên bản (`importedAt`, `revision`) để không ghi đè thay đổi của máy khác.
-8. Ẩn menu không phải là phân quyền: máy chủ kiểm tra thẻ truy cập và cấu trúc dữ liệu trước khi đọc/ghi.
+8. Máy chủ yêu cầu phiên hợp lệ theo mặc định. Mỗi route nghiệp vụ khai báo quyền và phạm vi dữ liệu.
+   Máy chủ kiểm tra quyền trước khi đọc nội dung gửi lên và áp dụng bộ lọc phạm vi ở máy chủ.
 9. CSS riêng của feature đặt cạnh feature đó; CSS nền chỉ import qua `styles/index.css`.
 10. Feature không import model, logic hoặc CSS của feature khác. Phần dùng chung chuyển vào `domain` hoặc `shared`.
 11. Page chỉ điều phối state và use case; khối giao diện có trách nhiệm riêng tách vào `components`.
 12. Khóa lưu trữ (`cong-no.*`) và migration thuộc repository/`electron/database.cjs`. Không đổi khóa khi refactor; nếu bắt buộc phải đổi thì làm bằng bước migration (như v12).
 13. Schema SQLite đổi bằng bước migration mới, chạy trong transaction; không sửa bước đã chạy. App tạo bản sao tệp trước mỗi lần nâng cấp.
-14. Trạng thái dạng nhãn dùng `shared/ui/StatusPill` với đúng năm ngữ nghĩa: `success`, `warning`, `info`, `neutral`, `danger`.
+14. Người thực hiện và công ty được lấy từ phiên và cấu hình máy chủ. Với thao tác nghiệp vụ thay đổi
+    nhiều dữ liệu, lưu thay đổi và nhật ký cùng một giao dịch SQLite.
+15. Trạng thái dạng nhãn dùng `shared/ui/StatusPill` với đúng năm ngữ nghĩa: `success`, `warning`, `info`, `neutral`, `danger`.
 
 ## Hướng phụ thuộc
 
@@ -73,9 +77,12 @@ app ──> features ──> domain
 domain  -X-> features
 feature -X-> feature khác
 shared  -X-> features/domain nghiệp vụ
+
+Electron ──> server ──> nghiệp vụ đã build và mô-đun SQLite thuần Node
 ```
 
-`domain` phải chạy được không cần React. `shared/ui` chỉ chứa giao diện tổng quát.
+`domain` phải chạy được không cần React. `shared/ui` chỉ chứa giao diện tổng quát. `server/start.cjs` chạy được bằng Node.js độc lập. Các mô-đun
+SQLite trong `electron/` giữ đường dẫn hiện tại và chỉ phụ thuộc Node.js.
 
 ## Luồng dữ liệu
 
@@ -92,7 +99,11 @@ Mọi chế độ đều đăng nhập bằng cookie HttpOnly và được máy 
 
 - **Desktop cục bộ:** tự mở máy chủ tại `127.0.0.1` với cổng tự chọn; mở trực tiếp
   `cong-no.sqlite` trong `userData` cũ. Không có preload hoặc IPC truy cập dữ liệu.
-- **Máy chủ LAN:** desktop và máy trạm cùng gọi HTTP; giữ nguyên công ty, cổng và tệp SQLite hiện có.
+- **Máy chủ LAN:** mỗi tiến trình desktop phục vụ một công ty và một cổng. Chế độ Node.js có thể phục vụ nhiều cổng.
+- **Máy trạm Electron:** tải giao diện và API từ cùng địa chỉ đã lưu trong `userData/workstation/server.json`.
+  Kho SQLite và các tác vụ sao lưu thuộc máy chủ từ xa. Trình duyệt có thể mở cùng địa chỉ.
+- **Cloudflare Tunnel:** mỗi máy chủ công ty nhận một tên miền HTTPS đã cấu hình. Connector chạy cùng máy
+  và chuyển tới cổng loopback của công ty.
 - **Phát triển:** `pnpm dev` tự mở máy chủ loopback, Vite chuyển tiếp `/api/` cùng nguồn.
   Dữ liệu phát triển ở `data/dev/cong-no.sqlite`; tạo admin bằng `pnpm dev:init-admin`.
   `pnpm preview` phục vụ bản build qua cùng máy chủ và cùng kho phát triển.
@@ -113,8 +124,8 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
 
 ## API và lưu danh mục
 
-Máy chủ định tuyến theo phương thức và đường dẫn. Chỉ đăng nhập và nhận diện đăng nhập được mở công khai
-qua danh sách cho phép. Mỗi route khai báo thẻ quyền và giới hạn dung lượng. Máy chủ kiểm quyền trước khi
+Máy chủ định tuyến theo phương thức và đường dẫn. `PUBLIC_ROUTES` gồm `POST /api/session` để đăng nhập
+và `GET /api/branding` để lấy thông tin hiển thị trên màn hình đăng nhập. Mỗi route khai báo thẻ quyền và giới hạn dung lượng. Máy chủ kiểm quyền trước khi
 đọc nội dung yêu cầu. Giao diện tải dữ liệu bất đồng bộ qua client dùng chung và dùng cookie HttpOnly.
 
 Khách hàng, nhân viên và phân công ghi theo bản ghi. Thao tác hàng loạt chỉ gửi các bản ghi được chọn
@@ -130,5 +141,48 @@ biên bản theo kỳ, danh sách khoản thu và ứng viên phân bổ. Các d
 hàng chỉ tải khi mở chứng từ. Các route báo cáo trả dữ liệu của một khách hàng theo kỳ được chọn.
 Định dạng tệp sao lưu JSON phiên bản 1 tiếp tục dùng cho xuất và khôi phục.
 
-`pnpm check` kiểm tra kiến trúc, nghiệp vụ, SQLite và LAN; `pnpm test:desktop` (sau `pnpm build`)
-chạy Electron với kho tạm để kiểm tra HTTP, dữ liệu SQLite cũ, đăng nhập, đổi mật khẩu và khôi phục cookie.
+## Phân quyền
+
+| Phạm vi | Cách kiểm tra |
+| --- | --- |
+| Công ty | Công ty gắn với máy chủ HTTP và kho SQLite của cổng đang mở. |
+| Phiên | `server/access.cjs` kiểm tra cookie, trạng thái tài khoản và phiên bản phiên. |
+| Thẻ | Vai trò và thẻ được cấp giới hạn route. Thẻ quản trị người dùng, cấu hình và nhật ký thuộc quản trị viên. |
+| Bản ghi | Máy chủ áp dụng điều kiện của từng nghiệp vụ, gồm ràng buộc chứng từ, phân bổ và phiên bản khi ghi. |
+
+## Thêm một màn hình mới
+
+1. Khai báo mã màn hình, quyền và mục điều hướng theo cấu trúc hiện tại trong `src/app` và
+   `server/access.cjs`. Thẻ được cấp phải nằm trong danh sách của vai trò.
+2. Khai báo route ở mô-đun máy chủ tương ứng. Đặt giới hạn dữ liệu đầu vào, quyền và quy tắc kiểm tra ở route.
+3. Dùng repository trong `src/domain/` gọi client HTTP. Đặt trang và các component trong `src/features/`.
+4. Khi phải thay đổi SQLite, thêm migration mới, thử với kho cũ và giữ định dạng xuất sao lưu tương thích.
+5. Kiểm thử route, quyền và nghiệp vụ. Chạy cả bộ số tiền chuẩn nếu thay đổi sổ, khoản thu, đối chiếu
+   hoặc cách tổng hợp số liệu.
+
+## An toàn và vận hành
+
+- Mật khẩu dùng PBKDF2 với salt riêng. Giới hạn đăng nhập theo địa chỉ và theo tài khoản.
+  Cookie phiên có `HttpOnly` và `SameSite=Strict`. Qua HTTPS hoặc Tunnel, cookie có thêm `Secure`.
+- Electron bật sandbox và context isolation, chặn quyền trình duyệt, popup và điều hướng sang nguồn khác.
+  Trang cấu hình máy trạm đóng gói cục bộ chỉ được đọc và lưu địa chỉ. Renderer nghiệp vụ tải từ HTTP không có preload.
+- Tên miền Tunnel phải khớp cài đặt của công ty. Máy chủ chỉ dùng `CF-Connecting-IP` cho yêu cầu từ
+  loopback có `Host` đã khai báo và `X-Forwarded-Proto: https`. Máy chạy connector là ranh giới tin cậy.
+  Cấu hình Cloudflare Access khi cần giới hạn danh tính bên ngoài. Giữ cổng HTTP gốc trong LAN hoặc trên loopback.
+- Nhật ký vận hành theo chế độ, ghi JSON Lines theo ngày UTC, giữ 30 ngày và tối đa 5 MB mỗi ngày.
+  Chỉ ghi thời điểm, mức độ, mã sự kiện và mã lỗi. Nhật ký thao tác nghiệp vụ vẫn ở SQLite.
+- Kênh cập nhật Windows dùng nguồn HTTPS và yêu cầu ký mã. Bản có kênh cập nhật kiểm tra định kỳ,
+  tải nền, xác minh nhà phát hành và đợi người dùng xác nhận cài. Đóng các phiên khác trước khi cài và
+  dừng máy chủ của phiên hiện tại trước khi chạy trình cài.
+
+## Giới hạn hiện tại
+
+- App nhận mẫu Sổ chi tiết bán hàng MISA có tiêu đề cột đã biết.
+- Máy trạm cần kết nối đến máy chủ để đọc và ghi. Với luồng xác thực Cloudflare Access chuyển sang
+  tên miền của nhà cung cấp danh tính, mở ứng dụng bằng trình duyệt từ menu Máy trạm.
+- HTTPS cho Tunnel do Cloudflare cung cấp. Tên miền, connector, chứng thư ký mã và kênh cập nhật
+  do đơn vị vận hành cấu hình trước khi sử dụng.
+
+`pnpm check` kiểm tra kiến trúc, nghiệp vụ, SQLite và LAN. `pnpm test:golden` đối chiếu số tiền qua API.
+Sau `pnpm build`, `pnpm test:desktop` mở Electron với kho tạm, kiểm tra luồng cục bộ trên SQLite cũ
+và kết nối máy trạm tới máy chủ qua HTTP.
