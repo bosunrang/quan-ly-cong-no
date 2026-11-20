@@ -1,9 +1,11 @@
 import { ChevronLeft, ShieldCheck } from "lucide-react";
+import { version as appVersion } from "../../../package.json";
 import {
 	canOpenPage,
 	type PageAccess,
 } from "../../domain/access/accounts.model";
 import type { AppSettings } from "../../domain/settings/settings.model";
+import { AppLogo } from "../../shared/ui/AppLogo";
 import type { PageId } from "../../types";
 import { navGroups } from "../navigation";
 
@@ -37,11 +39,7 @@ export function Sidebar({
 		>
 			<div className="brand">
 				<div className="brand-mark">
-					{settings.logoDataUrl ? (
-						<img src={settings.logoDataUrl} alt="Logo phần mềm" />
-					) : (
-						<span>CN</span>
-					)}
+					<AppLogo logoDataUrl={settings.logoDataUrl} alt="Logo phần mềm" />
 				</div>
 				{!collapsed && (
 					<div className="brand-copy">
@@ -96,7 +94,7 @@ export function Sidebar({
 				{!collapsed && (
 					<div>
 						<strong>Phiên bản nội bộ</strong>
-						<span>Khung giao diện v0.1</span>
+						<span>Khung giao diện V{appVersion}</span>
 					</div>
 				)}
 			</div>

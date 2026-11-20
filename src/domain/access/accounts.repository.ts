@@ -69,8 +69,28 @@ export async function signOutLan() {
 	updateLanAccounts([]);
 }
 
+async function openSession() {
+	try {
+		return await api<LanAccountSnapshot>("GET", "session");
+	} catch (error) {
+		if (
+			!import.meta.env.DEV ||
+			!isSessionExpired(error) ||
+			!document.querySelector(
+				'meta[name="cong-no-lan-api"][data-dev-login="true"]',
+			)
+		) throw error;
+		return api<LanAccountSnapshot>("POST", "dev-login");
+	}
+}
+
+let openingSession: Promise<LanAccountSnapshot> | undefined;
+
 export async function restoreLanSession() {
-	const result = await api<LanAccountSnapshot>("GET", "session");
+	openingSession ??= openSession().finally(() => {
+		openingSession = undefined;
+	});
+	const result = await openingSession;
 	setApiSession(result.profile.sessionVersion);
 	updateLanAccounts(result.accounts);
 	return accountSession(result.profile);

@@ -8,6 +8,7 @@ const { createFileLog } = require('../server/file-log.cjs');
 const { startLanHost } = require('./lan-host.cjs');
 const { chooseCompany, chooseRole } = require('./startup-choice.cjs');
 const { getCompany } = require('../server/companies.cjs');
+const appIcon = require('./app-icon.cjs');
 
 app.enableSandbox();
 
@@ -16,7 +17,7 @@ function configureSession() {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
 }
 
-function createWindow({ url, onLoadError, showMenu = false }) {
+function createWindow({ url, onLoadError }) {
   const allowed = new URL(url).origin;
   function guard(event, target) {
     try { if (new URL(target).origin === allowed) return; } catch {}
@@ -27,9 +28,10 @@ function createWindow({ url, onLoadError, showMenu = false }) {
     height: 900,
     minWidth: 1120,
     minHeight: 720,
+    icon: appIcon,
     backgroundColor: '#f2f5f7',
     show: false,
-    autoHideMenuBar: !showMenu,
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -75,22 +77,23 @@ app.whenReady().then(async () => {
       return controller;
     };
     const serverUrl = process.argv.find((arg) => arg.startsWith('--server-url='));
-    const workstation = (directory) => {
+    const workstation = (directory, company) => {
       const log = createFileLog(join(directory, 'logs'));
-      return startWorkstation({ directory, createWindow, configureSession, log, createUpdater,
+      return startWorkstation({ directory, company, createWindow, configureSession, log, createUpdater,
         initialOrigin: serverUrl ? workstationOrigin(serverUrl.slice('--server-url='.length)) : undefined });
     };
     // Cờ dòng lệnh cho quản trị và lập trình: --client/--server-url (máy trạm), --local (bản thử một máy).
     if (serverUrl || process.argv.includes('--client')) return workstation(join(root, 'workstation'));
     if (process.argv.includes('--local'))
-      return startLanHost('local', { createWindow, configureSession, createUpdater });
+      // `return await`: lỗi khởi động phải rơi vào catch bên dưới để báo cho người dùng.
+      return await startLanHost('local', { createWindow, configureSession, createUpdater });
     // Như app cước phí: chọn công ty, rồi vai trò của máy cho công ty đó (chỉ hỏi lần đầu).
     const option = process.argv.find((arg) => arg.startsWith('--company='));
     const company = option ? getCompany(option.slice('--company='.length)) : await chooseCompany(root);
     if (!company) return app.quit();
     const role = await chooseRole(root, company, { autoStart: Boolean(option) });
     if (!role) return app.quit();
-    if (role === 'client') return workstation(join(root, 'workstation', company.id));
+    if (role === 'client') return workstation(join(root, 'workstation', company.id), company);
     await startLanHost(company, { createWindow, configureSession, createUpdater });
   } catch (error) {
     startupLog.write('ERROR', 'desktop.start.failed', error.code);

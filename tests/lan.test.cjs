@@ -255,6 +255,17 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   }, actor);
   assert.equal(batch.status, 409);
   assert.ok(!(await call('GET', 'customers', undefined, actor)).value.some(({ misaCode }) => misaCode === 'BATCH'));
+  const firstTax = { ...customer, misaCode: 'TAX-1', name: 'Bệnh viện thử', taxCode: '0100123456-001' };
+  const secondTax = { ...firstTax, misaCode: 'TAX-2', name: 'BỆNH VIỆN THỬ' };
+  const taxBatch = await call('POST', 'customers/imports', { customers: [firstTax, secondTax] }, actor);
+  assert.equal(taxBatch.status, 200);
+  const storedTax = (await call('GET', 'customers', undefined, actor)).value.filter(({ misaCode }) => misaCode.startsWith('TAX-'));
+  assert.deepEqual(storedTax.map(({ misaCode, taxCode }) => [misaCode, taxCode]),
+    [['TAX-1', firstTax.taxCode], ['TAX-2', firstTax.taxCode]]);
+  assert.equal((await call('POST', 'customers', { ...firstTax, misaCode: 'TAX-3' }, actor)).status, 409);
+  assert.equal((await call('POST', 'customers/imports', {
+    customers: [{ ...firstTax, misaCode: 'TAX-3', name: 'Đơn vị khác' }],
+  }, actor)).status, 409);
   assert.equal((await call('POST', 'receipts', {
     id: 'req-deleted-customer', customerId: addedCustomer.id, customerCode: addedCustomer.misaCode,
     date: '2026-01-02', amount: 100, reference: '',

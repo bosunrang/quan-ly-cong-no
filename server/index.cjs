@@ -9,9 +9,15 @@ const PUBLIC_ROUTES = new Set(['POST /api/session', 'GET /api/branding']);
 const directoryReaders = ['dashboard', 'misa', 'payments', 'receivables', 'reports', 'customers', 'sales'];
 
 function createApi(tenant) {
-  const { db, access } = tenant;
+  const { db, access, devLoginKey } = tenant;
   const router = createRouter();
   require('./routes/auth.cjs').register(router, tenant);
+  if (devLoginKey) {
+    router.post('/api/dev-login', ({ req, res }) => {
+      if (req.headers['x-cong-no-dev-login'] !== devLoginKey) fail(403, 'Chỉ tự đăng nhập qua máy chủ Vite cục bộ.');
+      return access.devLogin(req, res);
+    }, { pages: [], maxBodyBytes: 0 });
+  }
   require('./routes/settings.cjs').register(router, tenant);
   require('./routes/customers.cjs').register(router, db, directoryReaders);
   require('./routes/employees.cjs').register(router, db, directoryReaders);
@@ -28,7 +34,8 @@ function createApi(tenant) {
     const route = router.match(req.method, pathname);
     if (!route) fail(404, 'Chức năng không tồn tại.');
     let account;
-    if (!PUBLIC_ROUTES.has(req.method + ' ' + pathname)) {
+    const devLogin = devLoginKey && req.method === 'POST' && pathname === '/api/dev-login';
+    if (!devLogin && !PUBLIC_ROUTES.has(req.method + ' ' + pathname)) {
       account = access.actor(req, route.options.allowPending);
       requirePage(account, route.options.pages);
     }

@@ -26,6 +26,10 @@ test('bộ cài chứa nghiệp vụ máy chủ và kênh cập nhật GitHub đ
     join('src', 'domain', 'access', 'permissions.mjs'),
     join('src', 'domain', 'settings', 'business-data.rules.mjs'),
   ]) assert.ok(asar.statFile(archive, file).size > 0, file);
+  const appIcon = asar.extractFile(archive, join('public', 'assets', 'app-icon.png'));
+  assert.ok(appIcon.length > 0);
+  assert.deepEqual(asar.extractFile(archive, join('dist', 'assets', 'app-icon.png')), appIcon);
+  assert.match(asar.extractFile(archive, join('dist', 'index.html')).toString(), /rel="icon"[^>]*app-icon\.png/);
   const feed = yaml.load(readFileSync(join(resources, 'app-update.yml'), 'utf8'));
   assert.equal(feed.provider, 'github');
   assert.equal(feed.owner, 'bosunrang');

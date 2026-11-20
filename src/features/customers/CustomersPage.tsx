@@ -8,7 +8,13 @@ import {
 	LoaderCircle,
 	UserPlus,
 } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useDeferredValue,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import type {
 	Customer,
 	CustomerDraft,
@@ -55,21 +61,31 @@ export function CustomersPage() {
 	const [importLoading, setImportLoading] = useState(false);
 	const { notice, showNotice, dismissNotice } = useTransientNotice(2600);
 
-	const filteredCustomers = useMemo(
+	const searchableCustomers = useMemo(
 		() =>
-			customers.filter((customer) => {
+			customers.map((customer) => {
 				const assignment = currentAssignment(customer);
-				const searchable =
-					`${customer.misaCode} ${customer.name} ${customer.taxCode} ${customer.province} ${assignment?.employeeName ?? ""}`.toLowerCase();
-				return (
-					searchable.includes(searchQuery.trim().toLowerCase()) &&
+				return {
+					customer,
+					employeeId: assignment?.employeeId,
+					searchText:
+						`${customer.misaCode} ${customer.name} ${customer.taxCode} ${customer.province} ${assignment?.employeeName ?? ""}`.toLowerCase(),
+				};
+			}),
+		[customers],
+	);
+	const filteredCustomers = useMemo(() => {
+		const needle = searchQuery.trim().toLowerCase();
+		return searchableCustomers
+			.filter(
+				({ customer, employeeId, searchText }) =>
+					searchText.includes(needle) &&
 					(status === "all" || customer.status === status) &&
 					(province === "all" || customer.province === province) &&
-					(employee === "all" || assignment?.employeeId === employee)
-				);
-			}),
-		[customers, employee, province, searchQuery, status],
-	);
+					(employee === "all" || employeeId === employee),
+			)
+			.map(({ customer }) => customer);
+	}, [searchableCustomers, employee, province, searchQuery, status]);
 	const detailCustomer = detailCustomerId
 		? customers.find((item) => item.id === detailCustomerId)
 		: undefined;
@@ -97,7 +113,7 @@ export function CustomersPage() {
 	} = usePagination(filteredCustomers);
 	const filterKey = `${employee}|${province}|${searchQuery}|${status}`;
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		void filterKey;
 		resetPage();
 	}, [filterKey, resetPage]);
@@ -257,6 +273,7 @@ export function CustomersPage() {
 					employee={employee}
 					status={status}
 					filtersActive={filtersActive}
+					filterKey={filterKey}
 					onQueryChange={setQuery}
 					onProvinceChange={setProvince}
 					onEmployeeChange={setEmployee}

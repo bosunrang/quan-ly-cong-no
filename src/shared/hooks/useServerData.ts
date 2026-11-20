@@ -61,6 +61,7 @@ export function useServerData<T>(resource?: string) {
 	return {
 		data: current?.data,
 		previous: resource ? result?.data : undefined,
+		previousResource: resource ? result?.resource : undefined,
 		loading: Boolean(resource && (!current || current.request !== request)),
 		error: current?.request === request ? current?.error : undefined,
 		refresh,

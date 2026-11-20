@@ -137,6 +137,7 @@ export function CustomerImportDialog({
 											{row.draft.misaCode || "Chưa có mã"} ·{" "}
 											{row.draft.address || "Chưa có địa chỉ"}
 										</span>
+										{row.draft.taxCode && <span>MST {row.draft.taxCode}</span>}
 									</td>
 									<td>{row.draft.province || "Chưa xác định"}</td>
 									<td>

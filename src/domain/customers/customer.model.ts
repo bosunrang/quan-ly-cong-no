@@ -41,6 +41,7 @@ export interface CustomerImportDraft {
 	misaCode: string;
 	name: string;
 	group: CustomerGroup;
+	taxCode?: string;
 	province: string;
 	address: string;
 }

@@ -111,8 +111,10 @@ Mọi chế độ đều đăng nhập bằng cookie HttpOnly và được máy 
 - **Cloudflare Tunnel:** mỗi máy chủ công ty nhận một tên miền HTTPS đã cấu hình. Connector chạy cùng máy
   và chuyển tới cổng loopback của công ty.
 - **Phát triển:** `pnpm dev` tự mở máy chủ loopback, Vite chuyển tiếp `/api/` cùng nguồn.
-  Dữ liệu phát triển ở `data/dev/cong-no.sqlite`; tạo admin bằng `pnpm dev:init-admin`.
-  `pnpm preview` phục vụ bản build qua cùng máy chủ và cùng kho phát triển.
+  Dữ liệu phát triển ở `data/dev/cong-no.sqlite`. Vite cục bộ ở cổng 5176 có thể cấp phiên quản trị
+  khi chưa có phiên. Vite chỉ gửi khóa nội bộ cho yêu cầu cùng nguồn từ loopback.
+  `CONG_NO_DEV_AUTO_LOGIN=0` tắt tự đăng nhập để thử luồng thủ công.
+  `pnpm preview` phục vụ bản build và dùng đăng nhập thủ công trên cùng kho phát triển.
 
 Không có chế độ lưu nghiệp vụ trên trình duyệt. Thiếu endpoint hoặc mất kết nối thì báo lỗi,
 không chuyển sang một bản dữ liệu khác. Bản sao lưu cục bộ tiếp tục dùng `companyId: null` để
@@ -137,6 +139,7 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
 Máy chủ định tuyến theo phương thức và đường dẫn. `PUBLIC_ROUTES` gồm `POST /api/session` để đăng nhập
 và `GET /api/branding` để lấy thông tin hiển thị trên màn hình đăng nhập. Mỗi route khai báo thẻ quyền và giới hạn dung lượng. Máy chủ kiểm quyền trước khi
 đọc nội dung yêu cầu. Giao diện tải dữ liệu bất đồng bộ qua client dùng chung và dùng cookie HttpOnly.
+Route `POST /api/dev-login` chỉ được đăng ký khi server nhận khóa nội bộ từ Vite lúc khởi động.
 
 Khách hàng, nhân viên và phân công ghi theo bản ghi. Thao tác hàng loạt chỉ gửi các bản ghi được chọn
 và được xử lý trong một giao dịch. Máy chủ kiểm tra xung đột trên từng hồ sơ liên quan.
@@ -175,6 +178,9 @@ hàng chỉ tải khi mở chứng từ. Các route báo cáo trả dữ liệu 
 
 - Mật khẩu dùng PBKDF2 với salt riêng. Giới hạn đăng nhập theo địa chỉ và theo tài khoản.
   Cookie phiên có `HttpOnly` và `SameSite=Strict`. Qua HTTPS hoặc Tunnel, cookie có thêm `Secure`.
+- Như app cước phí, máy chủ desktop tự tạo tài khoản `admin` / `admin` khi kho chưa có tài khoản. Tài khoản
+  bị buộc đặt mật khẩu đủ quy định trước khi gọi được route nghiệp vụ. Lệnh `lan:init-admin` vẫn cấp mật khẩu ngẫu nhiên.
+- Khi dừng máy chủ (thoát hoặc cài cập nhật), yêu cầu đang dở có 3 giây để hoàn tất rồi mọi kết nối bị ngắt.
 - Electron bật sandbox và context isolation, chặn quyền trình duyệt, popup và điều hướng sang nguồn khác.
   Trang cấu hình máy trạm đóng gói cục bộ chỉ được đọc và lưu địa chỉ. Renderer nghiệp vụ tải từ HTTP không có preload.
 - Tên miền Tunnel phải khớp cài đặt của công ty. Máy chủ chỉ dùng `CF-Connecting-IP` cho yêu cầu từ
@@ -194,7 +200,7 @@ hàng chỉ tải khi mở chứng từ. Các route báo cáo trả dữ liệu 
 
 - App nhận mẫu Sổ chi tiết bán hàng MISA có tiêu đề cột đã biết.
 - Máy trạm cần kết nối đến máy chủ để đọc và ghi. Với luồng xác thực Cloudflare Access chuyển sang
-  tên miền của nhà cung cấp danh tính, mở ứng dụng bằng trình duyệt từ menu Máy trạm.
+  tên miền của nhà cung cấp danh tính, mở ứng dụng bằng trình duyệt từ menu khay của máy trạm.
 - HTTPS cho Tunnel do Cloudflare cung cấp. Tên miền và connector do đơn vị vận hành cấu hình.
   Kênh cập nhật GitHub có sẵn; chứng thư ký mã Windows hoặc nguồn cập nhật riêng cần cấu hình bổ sung.
 

@@ -86,8 +86,14 @@ if (!process.versions.electron) {
           assert.ok(!existsSync(join(directory, 'cong-no.sqlite')));
           assert.ok(!readdirSync(profile, { recursive: true }).some((name) => name.endsWith('.sqlite')));
           assert.ok(existsSync(join(hostDirectory, 'cong-no-winbio.sqlite')));
+          // Như app cước phí: bấm X chỉ ẩn cửa sổ xuống khay, máy trạm vẫn chạy.
+          const window = BrowserWindow.fromWebContents(contents);
+          window.close();
+          await delay(200);
+          assert.equal(window.isDestroyed(), false);
+          assert.equal(window.isVisible(), false);
           await stopLanServer(server);
-          console.log(JSON.stringify({ desktop: 'workstation', setupForm: true, savedOrigin: true, remoteLogin: true, remoteCookie: true, bridge: false, localDatabase: false }));
+          console.log(JSON.stringify({ desktop: 'workstation', setupForm: true, savedOrigin: true, remoteLogin: true, remoteCookie: true, bridge: false, localDatabase: false, closeHidesToTray: true }));
           passed = true;
           app.quit();
         })().catch((error) => { console.error(error); app.exit(1); });

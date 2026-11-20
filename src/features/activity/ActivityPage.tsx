@@ -2,14 +2,13 @@ import { Download, History, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { normalizeVietnamese } from "../../domain/customers/customer.province";
 import { usePagination } from "../../shared/hooks/usePagination";
-import { formatTimestamp, localDateToIso } from "../../shared/lib/date";
+import { formatTimestamp } from "../../shared/lib/date";
 import {
 	activityCategories,
 	type ActivityEntry,
 	readActivities,
 	subscribeActivities,
 } from "../../shared/storage/activityLog";
-import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 
@@ -64,8 +63,6 @@ export function ActivityPage() {
 	const searchQuery = useDeferredValue(query);
 	const [actor, setActor] = useState("");
 	const [category, setCategory] = useState("");
-	const [from, setFrom] = useState("");
-	const [through, setThrough] = useState("");
 	const refresh = useRef<() => void>(() => undefined);
 
 	useEffect(() => {
@@ -100,22 +97,15 @@ export function ActivityPage() {
 	for (const row of entries ?? []) {
 		if (!actors.has(row.actorId)) actors.set(row.actorId, row.actorName);
 	}
-	const invalidDates = Boolean(from && through && through < from);
 	const needle = normalizeVietnamese(searchQuery);
-	const filtered = invalidDates
-		? []
-		: (entries ?? []).filter((row) => {
-				const date = localDateToIso(new Date(row.time));
-				return (
-					(!actor || row.actorId === actor) &&
-					(!category || row.category === category) &&
-					(!from || date >= from) &&
-					(!through || date <= through) &&
-					normalizeVietnamese(
-						`${row.actorName} ${row.action} ${row.detail}`,
-					).includes(needle)
-				);
-			});
+	const filtered = (entries ?? []).filter(
+		(row) =>
+			(!actor || row.actorId === actor) &&
+			(!category || row.category === category) &&
+			normalizeVietnamese(
+				`${row.actorName} ${row.action} ${row.detail}`,
+			).includes(needle),
+	);
 	const pagination = usePagination(filtered);
 
 	return (
@@ -186,30 +176,6 @@ export function ActivityPage() {
 							</option>
 						))}
 					</select>
-					<div className="ui-field activity-date">
-						<label htmlFor="activity-from">Từ ngày</label>
-						<DateInput
-							id="activity-from"
-							ariaLabel="Từ ngày"
-							value={from}
-							onChange={(date) => {
-								setFrom(date);
-								pagination.resetPage();
-							}}
-						/>
-					</div>
-					<div className="ui-field activity-date">
-						<label htmlFor="activity-through">Đến ngày</label>
-						<DateInput
-							id="activity-through"
-							ariaLabel="Đến ngày"
-							value={through}
-							onChange={(date) => {
-								setThrough(date);
-								pagination.resetPage();
-							}}
-						/>
-					</div>
 				</div>
 				{error ? (
 					<div className="activity-message">
@@ -223,12 +189,6 @@ export function ActivityPage() {
 						>
 							Thử lại
 						</button>
-					</div>
-				) : invalidDates ? (
-					<div className="activity-message">
-						<Notice tone="warning" announce>
-							Từ ngày phải bằng hoặc trước Đến ngày.
-						</Notice>
 					</div>
 				) : entries === undefined ? (
 					<p className="empty-state" role="status">

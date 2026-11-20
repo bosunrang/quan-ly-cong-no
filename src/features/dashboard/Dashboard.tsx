@@ -6,7 +6,7 @@ import {
 	Search,
 	Wallet,
 } from "lucide-react";
-import { type ComponentType, useDeferredValue, useState } from "react";
+import { type ComponentType, useEffect, useState } from "react";
 import type {
 	DashboardView,
 	InvoiceCustomer,
@@ -22,6 +22,7 @@ import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
+const searchDelay = 250;
 
 const views = [
 	{ id: "receivables", title: "Còn phải thu", icon: Wallet },
@@ -50,60 +51,59 @@ export function Dashboard({
 	const [view, setView] = useState<View>("receivables");
 	const [customerQuery, setCustomerQuery] = useState("");
 	const [openedCustomer, setOpenedCustomer] = useState<InvoiceCustomer>();
-	const [page, setPage] = useState(1);
+	const [{ q, page }, setFilters] = useState({ q: "", page: 1 });
 	const invalidDates =
 		!isIsoDate(from) || !isIsoDate(through) || from > through;
-	const customerSearch = useDeferredValue(customerQuery);
+	const isReceivables = view === "receivables";
+	const customerSearch = customerQuery.trim();
+	const searchPending = isReceivables && !invalidDates && customerSearch !== q;
+	const scope = { from, through, view };
 	const resource = invalidDates
 		? undefined
 		: resourceWithQuery("dashboard", {
-				from,
-				through,
-				view,
-				q: customerSearch,
+				...scope,
+				q: isReceivables ? q : undefined,
 				page,
 			});
 	const response = useServerData<DashboardView>(resource);
 	const { error, refresh } = response;
-	const summary = response.data;
-	const isReceivables = view === "receivables";
+	const sameScope = response.previousResource?.startsWith(
+		`${resourceWithQuery("dashboard", scope)}&`,
+	);
+	const summary = response.data ?? (sameScope ? response.previous : undefined);
+	const loading = searchPending || response.loading;
+	const total = summary?.rows.total ?? 0;
+	const currentPage = summary?.rows.page ?? page;
+	const pagination = pageControls(
+		currentPage,
+		summary?.rows.limit ?? 10,
+		total,
+	);
 	const rows = summary?.rows.items ?? [];
-	const pagination = {
-		...pageControls(summary?.rows.page ?? page, 10, summary?.rows.total ?? 0),
-		currentPage: summary?.rows.page ?? page,
-		setCurrentPage: setPage,
-		resetPage: () => setPage(1),
-		pageItems: rows,
-	};
+	const setPage = (page: number) =>
+		setFilters((current) => ({ ...current, page }));
 
-	if (error) {
-		return (
-			<div className="page-stack">
-				<Notice tone="danger" title="Không thể tải Dashboard" announce>
-					{error}
-				</Notice>
-				<div>
-					<button className="button secondary" type="button" onClick={refresh}>
-						Thử lại
-					</button>
-				</div>
-			</div>
-		);
-	}
+	useEffect(() => {
+		if (!searchPending) return;
+		const timer = window.setTimeout(() => {
+			setFilters({ q: customerSearch, page: 1 });
+		}, searchDelay);
+		return () => window.clearTimeout(timer);
+	}, [searchPending, customerSearch]);
 
 	const amounts = {
 		receivables: summary?.hasVerifiedDocuments ? summary.remaining : null,
 		period: summary?.periodReceived,
 		unallocated: summary?.unallocated,
 	};
-	const counts = {
-		receivables: summary?.hasVerifiedDocuments
+	const counts = summary && {
+		receivables: summary.hasVerifiedDocuments
 			? `${number.format(summary.receivablesCount)} khách hàng còn nợ`
-			: summary?.salesRowCount
+			: summary.salesRowCount
 				? "Chưa có chứng từ đủ điều kiện"
 				: "Chưa có dữ liệu MISA tại ngày chốt",
-		period: `${number.format(summary?.periodCount ?? 0)} khoản thu trong kỳ`,
-		unallocated: `${number.format(summary?.unallocatedCount ?? 0)} khoản thu còn tiền chờ phân bổ`,
+		period: `${number.format(summary.periodCount)} khoản thu trong kỳ`,
+		unallocated: `${number.format(summary.unallocatedCount)} khoản thu còn tiền chờ phân bổ`,
 	};
 	const headings = isReceivables
 		? [
@@ -130,7 +130,7 @@ export function Dashboard({
 							value={through}
 							onChange={(date) => {
 								setThrough(date);
-								pagination.resetPage();
+								setPage(1);
 							}}
 						/>
 					</div>
@@ -142,7 +142,7 @@ export function Dashboard({
 							value={from}
 							onChange={(date) => {
 								setPeriodStart(date);
-								pagination.resetPage();
+								setPage(1);
 							}}
 						/>
 					</div>
@@ -159,11 +159,7 @@ export function Dashboard({
 				)}
 			</section>
 
-			{response.loading ? (
-				<p className="panel empty-state" role="status">
-					Đang tổng hợp công nợ…
-				</p>
-			) : summary ? (
+			{!invalidDates ? (
 				<>
 					<section className="dashboard-metrics" aria-label="Chỉ tiêu công nợ">
 						{views.map(({ id, title, icon: Icon }) => (
@@ -175,7 +171,7 @@ export function Dashboard({
 								aria-controls="dashboard-details"
 								onClick={() => {
 									setView(id);
-									pagination.resetPage();
+									setPage(1);
 								}}
 							>
 								<span className="dashboard-metric-icon">
@@ -186,20 +182,22 @@ export function Dashboard({
 									<strong>
 										{amounts[id] == null ? "—" : number.format(amounts[id])}
 									</strong>
-									<small>{counts[id]}</small>
+									<small>{counts?.[id]}</small>
 								</span>
 							</button>
 						))}
 					</section>
 
-					<Notice tone="info">
-						Chưa có dữ liệu hạn thanh toán và số dư đầu kỳ. Chỉ tiêu đến hạn và
-						quá hạn chưa thể tính.
-						{summary.unverifiedCount > 0 &&
-							` Có ${number.format(summary.unverifiedCount)} chứng từ chưa đủ điều kiện tính số còn phải thu.`}
-						{summary.unmatchedCount > 0 &&
-							` Có ${number.format(summary.unmatchedCount)} chứng từ có phân bổ chưa khớp sổ MISA.`}
-					</Notice>
+					{summary && (
+						<Notice tone="info">
+							Chưa có dữ liệu hạn thanh toán và số dư đầu kỳ. Chỉ tiêu đến hạn
+							và quá hạn chưa thể tính.
+							{summary.unverifiedCount > 0 &&
+								` Có ${number.format(summary.unverifiedCount)} chứng từ chưa đủ điều kiện tính số còn phải thu.`}
+							{summary.unmatchedCount > 0 &&
+								` Có ${number.format(summary.unmatchedCount)} chứng từ có phân bổ chưa khớp sổ MISA.`}
+						</Notice>
+					)}
 
 					<section
 						className="panel data-panel"
@@ -230,10 +228,7 @@ export function Dashboard({
 										aria-label="Tìm khách hàng hoặc mã MISA"
 										placeholder="Tìm khách hàng hoặc mã MISA"
 										value={customerQuery}
-										onChange={(event) => {
-											setCustomerQuery(event.target.value);
-											pagination.resetPage();
-										}}
+										onChange={(event) => setCustomerQuery(event.target.value)}
 									/>
 								</label>
 							) : (
@@ -249,10 +244,26 @@ export function Dashboard({
 								)
 							)}
 						</div>
-						{rows.length > 0 ? (
+						{error && !searchPending ? (
+							<div className="dashboard-toolbar">
+								<Notice tone="danger" title="Không thể tải Dashboard" announce>
+									{error}
+								</Notice>
+								<button
+									className="button secondary"
+									type="button"
+									onClick={refresh}
+								>
+									Thử lại
+								</button>
+							</div>
+						) : rows.length > 0 ? (
 							<>
-								<div className="table-scroll table-scroll-auto-gutter dashboard-table">
-									<table aria-labelledby="dashboard-detail-title">
+								<div className="table-scroll dashboard-table">
+									<table
+										aria-labelledby="dashboard-detail-title"
+										aria-busy={loading}
+									>
 										<thead>
 											<tr>
 												{headings.map((heading) => (
@@ -263,7 +274,7 @@ export function Dashboard({
 											</tr>
 										</thead>
 										<tbody>
-											{pagination.pageItems.map((row) =>
+											{rows.map((row) =>
 												"remaining" in row ? (
 													<tr key={row.id}>
 														<td>
@@ -316,24 +327,29 @@ export function Dashboard({
 									<span>
 										{number.format(pagination.firstVisible)}–
 										{number.format(pagination.lastVisible)} /{" "}
-										{number.format(summary.rows.total)}{" "}
+										{number.format(total)}{" "}
 										{isReceivables ? "khách hàng" : "khoản thu"}
 									</span>
 									<PaginationControls
-										currentPage={pagination.currentPage}
+										currentPage={currentPage}
 										pageCount={pagination.pageCount}
-										onPageChange={pagination.setCurrentPage}
+										onPageChange={setPage}
 										previousLabel="Trang Dashboard trước"
 										nextLabel="Trang Dashboard sau"
+										disabled={loading}
 									/>
 								</div>
 							</>
+						) : loading ? (
+							<p className="empty-state" role="status">
+								Đang tổng hợp công nợ…
+							</p>
 						) : (
 							<div className="empty-state">
 								{isReceivables
-									? customerSearch && summary.receivablesCount > 0
+									? q && (summary?.receivablesCount ?? 0) > 0
 										? "Không tìm thấy khách hàng phù hợp."
-										: summary.salesRowCount
+										: summary?.salesRowCount
 											? "Chưa có khách hàng còn phải thu theo dữ liệu đủ điều kiện."
 											: "Chưa có dòng bán hàng MISA tại ngày chốt."
 									: view === "period"

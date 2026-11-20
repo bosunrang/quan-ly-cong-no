@@ -60,11 +60,12 @@ export function CustomerFormDrawer({
 			setError("Mã khách hàng MISA đã tồn tại trong danh mục.");
 			return;
 		}
+		const taxCode = draft.taxCode.trim();
 		const duplicateTaxCode =
-			draft.taxCode.trim() &&
+			taxCode &&
+			taxCode !== customer?.taxCode &&
 			customers.some(
-				(item) =>
-					item.id !== customer?.id && item.taxCode === draft.taxCode.trim(),
+				(item) => item.id !== customer?.id && item.taxCode === taxCode,
 			);
 		if (duplicateTaxCode) {
 			setError("Mã số thuế đã được sử dụng bởi một khách hàng khác.");

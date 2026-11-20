@@ -37,7 +37,7 @@ describe("customer import", () => {
 	});
 
 	it("bỏ qua cột người nhận chi phí của file cũ và bảo toàn quy tắc mã trùng", () => {
-		const existing = [{ misaCode: "KH-001" }];
+		const existing = [{ misaCode: "KH-001", name: "Đơn vị A", taxCode: "" }];
 		const sheet: SheetData = [
 			[...headers, "Người nhận chi phí"],
 			[
@@ -98,11 +98,12 @@ describe("customer import", () => {
 			address: "Số 1, Hà Nội",
 			province: "Hà Nội",
 			group: "unknown",
+			taxCode: "0101",
 		});
 	});
 
 	it("phát hiện mã đã tồn tại trong danh mục", () => {
-		const existing = [{ misaCode: "KH-001" }];
+		const existing = [{ misaCode: "KH-001", name: "Đơn vị A", taxCode: "" }];
 		const sheet: SheetData = [
 			headers,
 			["kh-001", "Đơn vị A", "Nhà nước", "Hà Nội", "Hà Nội"],
@@ -112,6 +113,27 @@ describe("customer import", () => {
 
 		expect(preview.rows[0].status).toBe("duplicate");
 		expect(preview.rows[0].message).toContain("đã có trong danh mục");
+	});
+
+	it("giữ số 0 đầu, chấp nhận cùng đơn vị và báo trùng mã số thuế khác tên", () => {
+		const sheet: SheetData = [
+			[...headers, "MST"],
+			["KH-001", "Bệnh viện A", "", "Hà Nội", "Hà Nội", " 0100123456-001 "],
+			["KH-002", "BỆNH VIỆN A", "", "Hà Nội", "Hà Nội", "0100123456-001"],
+			["KH-003", "Bệnh viện B", "", "Hà Nội", "Hà Nội", "0100123456-001"],
+			["KH-004", "Bệnh viện C", "", "Hà Nội", "Hà Nội", "0100999999"],
+		];
+		const preview = parseCustomerRows("customers.xlsx", sheet, [
+			{ misaCode: "KH-OLD", name: "Đơn vị D", taxCode: "0100999999" },
+		]);
+		expect(preview.rows.map(({ status }) => status)).toEqual([
+			"ready",
+			"ready",
+			"invalid",
+			"invalid",
+		]);
+		expect(preview.rows[0].draft.taxCode).toBe("0100123456-001");
+		expect(preview.rows[3].message).toContain("Mã số thuế");
 	});
 
 	it("từ chối file thiếu cột bắt buộc", () => {

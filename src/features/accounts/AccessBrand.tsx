@@ -1,3 +1,5 @@
+import { AppLogo } from "../../shared/ui/AppLogo";
+
 export function AccessBrand({
 	title,
 	subtitle,
@@ -10,7 +12,7 @@ export function AccessBrand({
 	return (
 		<div className="access-brand">
 			<div className="brand-mark" aria-hidden="true">
-				{logoDataUrl ? <img src={logoDataUrl} alt="" /> : <span>CN</span>}
+				<AppLogo logoDataUrl={logoDataUrl} />
 			</div>
 			<div className="brand-copy">
 				<strong>{title}</strong>

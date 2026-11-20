@@ -5,6 +5,7 @@ import {
 	MAX_BANK_ACCOUNTS,
 } from "../../domain/settings/settings.model";
 import { useTransientNotice } from "../../shared/hooks/useTransientNotice";
+import { AppLogo } from "../../shared/ui/AppLogo";
 import { Notice } from "../../shared/ui/Notice";
 import { SettingsDataPanel } from "./SettingsDataPanel";
 interface SettingsPageProps {
@@ -75,7 +76,7 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 						<h2>Thông tin doanh nghiệp</h2>
 					</div>
 					<div className="settings-form-body">
-						<label>
+						<label className="settings-form-wide">
 							Tên doanh nghiệp
 							<input
 								placeholder="Nhập tên doanh nghiệp"
@@ -83,7 +84,7 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 								onChange={(event) => setCompanyName(event.target.value)}
 							/>
 						</label>
-						<label>
+						<label className="settings-form-wide">
 							Địa chỉ
 							<input
 								placeholder="Nhập địa chỉ doanh nghiệp"
@@ -133,6 +134,8 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 								onChange={(event) => setSignatoryTitle(event.target.value)}
 							/>
 						</label>
+					</div>
+					<div className="settings-form-actions">
 						<button className="button primary" type="submit" disabled={saving}>
 							<Save className="icon-size-16" /> Lưu thông tin
 						</button>
@@ -180,42 +183,13 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 									onChange={(event) => setTagline(event.target.value)}
 								/>
 							</label>
-							<div className="settings-brand-actions">
-								<button
-									className="button primary"
-									type="submit"
-									disabled={saving}
-								>
-									<Save className="icon-size-16" /> Lưu logo
-								</button>
-								<button
-									className="button secondary"
-									type="button"
-									onClick={() => {
-										setLogoDataUrl(null);
-										setFileName("Chưa chọn tệp");
-										if (fileInput.current) fileInput.current.value = "";
-										showNotice(
-											"Đã bỏ ảnh logo. Bấm Lưu logo để xác nhận.",
-											undefined,
-											"info",
-										);
-									}}
-								>
-									Bỏ ảnh logo
-								</button>
-							</div>
 						</div>
 
 						<div className="settings-logo-tools">
 							<span className="settings-field-label">Logo hiện tại</span>
 							<div className="settings-logo-preview">
 								<div className="settings-logo-mark">
-									{logoDataUrl ? (
-										<img src={logoDataUrl} alt="Logo đang chọn" />
-									) : (
-										"CN"
-									)}
+									<AppLogo logoDataUrl={logoDataUrl} alt="Logo đang hiển thị" />
 								</div>
 								<div>
 									<strong>{displayName || "Tên phần mềm"}</strong>
@@ -265,6 +239,27 @@ export function SettingsPage({ settings, onSave }: SettingsPageProps) {
 								cùng dữ liệu phần mềm.
 							</p>
 						</div>
+					</div>
+					<div className="settings-form-actions">
+						<button className="button primary" type="submit" disabled={saving}>
+							<Save className="icon-size-16" /> Lưu logo
+						</button>
+						<button
+							className="button secondary"
+							type="button"
+							onClick={() => {
+								setLogoDataUrl(null);
+								setFileName("Chưa chọn tệp");
+								if (fileInput.current) fileInput.current.value = "";
+								showNotice(
+									"Đã bỏ ảnh logo. Bấm Lưu logo để xác nhận.",
+									undefined,
+									"info",
+								);
+							}}
+						>
+							Bỏ ảnh logo
+						</button>
 					</div>
 				</form>
 			</section>

@@ -8,9 +8,9 @@ function developmentOptions(directory = process.env.CONG_NO_DEV_DATA_DIR || join
     staticRoot: join(__dirname, '..'), loopback: true, host: '127.0.0.1' };
 }
 
-async function startDevelopmentServer(directory, staticRoot) {
+async function startDevelopmentServer(directory, staticRoot, { devLoginKey } = {}) {
   const options = developmentOptions(directory);
-  const server = createLanServer({ ...options, ...(staticRoot ? { staticRoot } : {}) });
+  const server = createLanServer({ ...options, ...(staticRoot ? { staticRoot } : {}), devLoginKey });
   await listenLanServer(server, 0, '127.0.0.1');
   return { server, target: `http://127.0.0.1:${server.address().port}`, stop: () => stopLanServer(server) };
 }

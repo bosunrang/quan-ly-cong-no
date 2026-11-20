@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import type { MisaSalesLine } from "../../domain/misa/misa.sales-book";
 import { formatDateOnly } from "../../shared/lib/date";
 import { StatusPill } from "../../shared/ui/StatusPill";
@@ -15,13 +16,21 @@ const numericColumns = new Set<keyof MisaSalesLine>([
 export function MisaSalesTable({
 	rows,
 	issues,
+	viewportRef,
+	loading,
+	emptyMessage,
 }: {
 	rows: MisaSalesLine[];
 	issues?: ReadonlyMap<number, SalesImportIssue>;
+	viewportRef?: Ref<HTMLElement>;
+	loading?: boolean;
+	emptyMessage?: string;
 }) {
 	return (
 		<section
 			className="table-scroll misa-sales-table"
+			ref={viewportRef}
+			aria-busy={loading}
 			// biome-ignore lint/a11y/noNoninteractiveTabindex: This makes both axes of the table scrollable by keyboard.
 			tabIndex={0}
 			aria-label="Vùng cuộn sổ bán hàng"
@@ -78,6 +87,7 @@ export function MisaSalesTable({
 					})}
 				</tbody>
 			</table>
+			{emptyMessage && <div className="empty-state">{emptyMessage}</div>}
 		</section>
 	);
 }

@@ -1,5 +1,5 @@
 import { ArrowRight, Database, FilterX, Search } from "lucide-react";
-import { useDeferredValue, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
 	InvoiceCustomer,
 	ReceivablesView,
@@ -15,6 +15,8 @@ import { SalesInvoiceDrawer } from "./SalesInvoiceDrawer";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 const missing = "?";
+const searchDelay = 250;
+const initialFilters = { q: "", employee: "", province: "", page: 1 };
 
 export function SalesReceivablesPage({
 	onOpenMisa,
@@ -24,20 +26,32 @@ export function SalesReceivablesPage({
 	onOpenCustomers?: () => void;
 }) {
 	const [query, setQuery] = useState("");
-	const searchQuery = useDeferredValue(query);
-	const [employee, setEmployee] = useState("");
-	const [province, setProvince] = useState("");
+	const [filters, setFilters] = useState(initialFilters);
 	const [opened, setOpened] = useState<InvoiceCustomer>();
-	const [page, setPage] = useState(1);
-	const response = useServerData<ReceivablesView>(
-		resourceWithQuery("receivables", {
-			q: searchQuery,
-			employee,
-			province,
-			page,
-		}),
-	);
+	const tableViewport = useRef<HTMLElement>(null);
+	const shownResource = useRef<string | undefined>(undefined);
+	const searchQuery = query.trim();
+	const queryPending = searchQuery !== filters.q;
+	const resource = resourceWithQuery("receivables", filters);
+	const response = useServerData<ReceivablesView>(resource);
+	const { data: currentData } = response;
 	const data = response.data ?? response.previous;
+	const loading = queryPending || response.loading;
+
+	useEffect(() => {
+		if (!queryPending) return;
+		const timer = window.setTimeout(() => {
+			setFilters((current) => ({ ...current, q: searchQuery, page: 1 }));
+		}, searchDelay);
+		return () => window.clearTimeout(timer);
+	}, [queryPending, searchQuery]);
+
+	useLayoutEffect(() => {
+		if (!currentData || shownResource.current === resource) return;
+		shownResource.current = resource;
+		if (tableViewport.current) tableViewport.current.scrollTop = 0;
+	}, [currentData, resource]);
+
 	if (response.error)
 		return (
 			<Notice tone="danger" title="Không thể đọc công nợ" announce>
@@ -51,14 +65,9 @@ export function SalesReceivablesPage({
 			</p>
 		);
 	const { filterOptions, unmatchedAllocationCount, missingTotalCount } = data;
-	const total = response.data?.rows.total ?? 0;
-	const pagination = {
-		...pageControls(response.data?.rows.page ?? page, data.rows.limit, total),
-		currentPage: response.data?.rows.page ?? page,
-		setCurrentPage: setPage,
-		resetPage: () => setPage(1),
-		pageItems: response.data?.rows.items ?? [],
-	};
+	const { employee, province } = filters;
+	const { page, limit, total, items } = data.rows;
+	const pagination = pageControls(page, limit, total);
 
 	if (!data.hasBook) {
 		return (
@@ -74,8 +83,7 @@ export function SalesReceivablesPage({
 	}
 
 	return (
-		<div className="page-stack" aria-busy={response.loading}>
-			{response.loading && <p role="status">Đang tải kết quả…</p>}
+		<div className="page-stack">
 			{unmatchedAllocationCount > 0 && (
 				<Notice tone="warning">
 					{number.format(unmatchedAllocationCount)} chứng từ có phân bổ đang
@@ -96,12 +104,6 @@ export function SalesReceivablesPage({
 							Mở danh mục khách hàng
 						</button>
 					)}
-				</Notice>
-			)}
-			{missingTotalCount > 0 && (
-				<Notice tone="warning">
-					{number.format(missingTotalCount)} dòng thiếu Tổng thanh toán. Giá trị
-					trong bảng chỉ cộng các dòng có số tiền.
 				</Notice>
 			)}
 			<section
@@ -133,10 +135,7 @@ export function SalesReceivablesPage({
 								aria-label="Tìm khách hàng hoặc mã MISA"
 								value={query}
 								placeholder="Tìm khách hàng hoặc mã MISA"
-								onChange={(event) => {
-									setQuery(event.target.value);
-									pagination.resetPage();
-								}}
+								onChange={(event) => setQuery(event.target.value)}
 							/>
 						</span>
 					</label>
@@ -145,10 +144,14 @@ export function SalesReceivablesPage({
 						<select
 							aria-label="Lọc theo nhân viên phụ trách"
 							value={employee}
-							onChange={(event) => {
-								setEmployee(event.target.value);
-								pagination.resetPage();
-							}}
+							onChange={(event) =>
+								setFilters({
+									...filters,
+									q: searchQuery,
+									employee: event.target.value,
+									page: 1,
+								})
+							}
 						>
 							<option value="">Tất cả nhân viên</option>
 							{filterOptions.employees.map(([id, name]) => (
@@ -164,10 +167,14 @@ export function SalesReceivablesPage({
 						<select
 							aria-label="Lọc theo khu vực"
 							value={province}
-							onChange={(event) => {
-								setProvince(event.target.value);
-								pagination.resetPage();
-							}}
+							onChange={(event) =>
+								setFilters({
+									...filters,
+									q: searchQuery,
+									province: event.target.value,
+									page: 1,
+								})
+							}
 						>
 							<option value="">Tất cả khu vực</option>
 							{filterOptions.provinces.map((name) => (
@@ -178,25 +185,24 @@ export function SalesReceivablesPage({
 							<option value={missing}>Chưa có khu vực</option>
 						</select>
 					</label>
-					{(query || employee || province) && (
-						<button
-							className="row-action"
-							type="button"
-							aria-label="Xóa bộ lọc"
-							title="Xóa bộ lọc"
-							onClick={() => {
-								setQuery("");
-								setEmployee("");
-								setProvince("");
-								pagination.resetPage();
-							}}
-						>
-							<FilterX className="icon-size-16" />
-						</button>
-					)}
+					<button
+						className="row-action"
+						type="button"
+						aria-label="Xóa bộ lọc"
+						title="Xóa bộ lọc"
+						disabled={!query && !employee && !province}
+						onClick={() => {
+							setQuery("");
+							setFilters(initialFilters);
+						}}
+					>
+						<FilterX className="icon-size-16" />
+					</button>
 				</div>
 				<section
 					className="table-scroll receivable-table"
+					ref={tableViewport}
+					aria-busy={loading}
 					aria-label="Vùng cuộn bảng khách hàng"
 					// biome-ignore lint/a11y/noNoninteractiveTabindex: Support scrolling the table by keyboard.
 					tabIndex={0}
@@ -220,7 +226,7 @@ export function SalesReceivablesPage({
 							</tr>
 						</thead>
 						<tbody>
-							{pagination.pageItems.map((group) => (
+							{items.map((group) => (
 								<tr key={group.id}>
 									<td>
 										<button
@@ -281,25 +287,34 @@ export function SalesReceivablesPage({
 							))}
 						</tbody>
 					</table>
-					{!total && (
+					{!loading && !total && (
 						<p className="empty-state">Không tìm thấy khách hàng phù hợp.</p>
 					)}
 				</section>
 				<footer className="receivable-footer">
-					<span>
-						{number.format(pagination.firstVisible)}–
-						{number.format(pagination.lastVisible)} / {number.format(total)}{" "}
-						khách hàng
+					<span role="status">
+						{loading
+							? "Đang tải kết quả…"
+							: `${number.format(pagination.firstVisible)}–${number.format(pagination.lastVisible)} / ${number.format(total)} khách hàng`}
 					</span>
 					<PaginationControls
-						currentPage={pagination.currentPage}
+						currentPage={page}
 						pageCount={pagination.pageCount}
-						onPageChange={pagination.setCurrentPage}
+						disabled={loading}
+						onPageChange={(nextPage) =>
+							setFilters({ ...filters, page: nextPage })
+						}
 						previousLabel="Trang khách hàng trước"
 						nextLabel="Trang khách hàng sau"
 					/>
 				</footer>
 			</section>
+			{missingTotalCount > 0 && (
+				<Notice tone="warning">
+					{number.format(missingTotalCount)} dòng thiếu Tổng thanh toán. Giá trị
+					trong bảng chỉ cộng các dòng có số tiền.
+				</Notice>
+			)}
 			{opened && (
 				<SalesInvoiceDrawer
 					key={opened.id}

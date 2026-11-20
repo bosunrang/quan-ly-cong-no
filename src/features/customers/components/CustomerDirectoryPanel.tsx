@@ -1,5 +1,5 @@
 import { FilterX, Search, SlidersHorizontal } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import {
 	customerStatusLabels,
 	type Customer,
@@ -26,6 +26,7 @@ interface CustomerDirectoryPanelProps {
 	employee: string;
 	status: StatusFilter;
 	filtersActive: boolean;
+	filterKey: string;
 	onQueryChange: (value: string) => void;
 	onProvinceChange: (value: string) => void;
 	onEmployeeChange: (value: string) => void;
@@ -51,6 +52,7 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 		employee,
 		status,
 		filtersActive,
+		filterKey,
 		onQueryChange,
 		onProvinceChange,
 		onEmployeeChange,
@@ -65,11 +67,12 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 		filteredCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
 	const lastVisible = Math.min(currentPage * pageSize, filteredCount);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		void currentPage;
 		void pageSize;
+		void filterKey;
 		tableRef.current?.scrollTo({ top: 0 });
-	}, [currentPage, pageSize]);
+	}, [currentPage, pageSize, filterKey]);
 
 	return (
 		<section className="panel data-panel customer-data-panel">
@@ -116,16 +119,16 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 					<option value="active">Đang hoạt động</option>
 					<option value="paused">Tạm ngưng</option>
 				</select>
-				{filtersActive && (
-					<button
-						className="row-action reset-filter"
-						type="button"
-						onClick={onReset}
-						title="Xóa bộ lọc"
-					>
-						<FilterX className="icon-size-16" />
-					</button>
-				)}
+				<button
+					className="row-action reset-filter"
+					type="button"
+					onClick={onReset}
+					aria-label="Xóa bộ lọc"
+					title="Xóa bộ lọc"
+					disabled={!filtersActive}
+				>
+					<FilterX className="icon-size-16" />
+				</button>
 			</div>
 			<div ref={tableRef} className="table-scroll large-table customer-table">
 				<table>

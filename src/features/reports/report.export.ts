@@ -6,6 +6,7 @@ import {
 	statementConfirmation,
 	statementBalanceInWords,
 	statementCoverage,
+	statementIssueDate,
 	type statementSeller,
 	statementSignatures,
 	statementTitle,
@@ -136,9 +137,10 @@ export async function makeStatementWorkbook(
 	if (seller.contact) mergeText(seller.contact);
 	mergeText(statementConfirmation);
 	sheet.addRow([]);
-	mergeText(`Ngày lập biên bản ${formatDateOnly(issuedOn)}`).alignment = {
-		horizontal: "right",
-	};
+	const dateRow = sheet.addRow([null, null, null, statementIssueDate(issuedOn)]);
+	sheet.mergeCells(dateRow.number, 4, dateRow.number, 5);
+	dateRow.getCell(4).alignment = { horizontal: "center", vertical: "middle" };
+	dateRow.getCell(4).font = { name: "Arial", italic: true };
 	const signatures = sheet.addRow([
 		statementSignatures[0],
 		null,

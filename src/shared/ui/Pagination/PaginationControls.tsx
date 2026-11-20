@@ -7,6 +7,7 @@ interface PaginationControlsProps {
 	previousLabel: string;
 	nextLabel: string;
 	showPageWord?: boolean;
+	disabled?: boolean;
 }
 
 export function PaginationControls({
@@ -16,6 +17,7 @@ export function PaginationControls({
 	previousLabel,
 	nextLabel,
 	showPageWord = false,
+	disabled = false,
 }: PaginationControlsProps) {
 	return (
 		<div className="pagination-controls">
@@ -23,7 +25,7 @@ export function PaginationControls({
 				className="row-action"
 				type="button"
 				onClick={() => onPageChange(currentPage - 1)}
-				disabled={currentPage <= 1}
+				disabled={disabled || currentPage <= 1}
 				aria-label={previousLabel}
 			>
 				<ChevronLeft className="icon-size-16" />
@@ -36,7 +38,7 @@ export function PaginationControls({
 				className="row-action"
 				type="button"
 				onClick={() => onPageChange(currentPage + 1)}
-				disabled={currentPage >= pageCount}
+				disabled={disabled || currentPage >= pageCount}
 				aria-label={nextLabel}
 			>
 				<ChevronRight className="icon-size-16" />

@@ -41,7 +41,7 @@ export function createCustomerFromImport(draft: CustomerImportDraft): Customer {
 		misaCode: draft.misaCode.trim(),
 		name: draft.name.trim(),
 		group: draft.group,
-		taxCode: "",
+		taxCode: draft.taxCode?.trim() ?? "",
 		province: draft.province.trim(),
 		address: draft.address.trim(),
 		status: "active",
@@ -72,5 +72,5 @@ export function updateCustomerFromDraft(
 export function customerImportFields(
 	draft: CustomerImportDraft,
 ): CustomerDraft {
-	return { ...draft, taxCode: "", status: "active" };
+	return { ...draft, taxCode: draft.taxCode?.trim() ?? "", status: "active" };
 }

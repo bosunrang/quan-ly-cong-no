@@ -7,4 +7,5 @@ export * from "../src/domain/payments/receipt-ledger";
 export * from "../src/domain/payments/receipt-receivables";
 export * from "../src/domain/payments/receipt-matches";
 export { normalizeVietnamese } from "../src/domain/customers/customer.province";
+export { customerTaxCodes } from "../src/domain/customers/customer.tax-code";
 export { isIsoDate, todayLocal } from "../src/shared/lib/date";

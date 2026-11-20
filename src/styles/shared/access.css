@@ -55,8 +55,7 @@
 	gap: var(--space-5);
 }
 
-.access-login-panel label,
-.activity-date label {
+.access-login-panel label {
 	font-size: var(--type-body-sm);
 	font-weight: 650;
 	color: var(--muted);
@@ -246,10 +245,6 @@
 	max-width: var(--layout-190);
 }
 
-.activity-date {
-	width: var(--layout-150);
-}
-
 .activity-message {
 	display: grid;
 	gap: var(--space-10);
@@ -261,3 +256,7 @@
 .activity-table th:nth-child(2) { width: 15%; }
 .activity-table th:nth-child(3) { width: 14%; }
 .activity-table th:nth-child(4) { width: 20%; }
+
+.activity-table :is(th, td):nth-child(n + 2):nth-child(-n + 4) {
+	text-align: center;
+}

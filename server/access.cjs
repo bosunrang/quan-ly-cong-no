@@ -61,6 +61,10 @@ function validatePassword(password) {
 
 async function makeProof(password) {
   validatePassword(password);
+  return hashProof(password);
+}
+
+async function hashProof(password) {
   const salt = randomBytes(16);
   const hash = await derive(password, salt, 600_000, 32, 'sha256');
   return { salt: salt.toString('hex'), hash: hash.toString('hex') };
@@ -89,6 +93,45 @@ async function initializeAdministrator(db, password, username = 'admin') {
     active: true, mustChangePassword: true };
   if (accountsOf(db).length) fail(409, 'Công ty này đã có tài khoản quản trị.');
   storeAccounts(db, [], [account]);
+}
+
+// Tài khoản quản trị đầu tiên của bản desktop dùng mật khẩu mặc định dễ nhớ (như app cước phí).
+// Mật khẩu này ngắn hơn quy định nên chỉ được tạo ở đây; tài khoản bị buộc đặt mật khẩu mới
+// (đủ quy định) trước khi xem hay sửa được dữ liệu.
+const DEFAULT_ADMINISTRATOR = Object.freeze({ username: 'admin', password: 'admin' });
+
+async function initializeDefaultAdministrator(db) {
+  const { username, password } = DEFAULT_ADMINISTRATOR;
+  const fields = accountFields({ name: 'Quản trị viên', username, role: 'admin' });
+  const proof = await hashProof(password);
+  const account = { ...fields, proof, id: randomUUID(), sessionVersion: randomUUID(),
+    active: true, mustChangePassword: true };
+  if (accountsOf(db).length) fail(409, 'Công ty này đã có tài khoản quản trị.');
+  storeAccounts(db, [], [account]);
+  return DEFAULT_ADMINISTRATOR;
+}
+
+function usableAdministrator(accounts) {
+  return accounts.find((account) => account.role === 'admin' && account.active && !account.mustChangePassword);
+}
+
+async function developmentAdministrator(db) {
+  const existing = usableAdministrator(accountsOf(db));
+  if (existing) return existing;
+
+  // Tạo tài khoản dev riêng nếu kho chưa có quản trị viên dùng được.
+  const proof = await makeProof(randomBytes(32).toString('base64url'));
+  const accounts = accountsOf(db);
+  const prepared = usableAdministrator(accounts);
+  if (prepared) return prepared;
+
+  let username = 'dev-admin';
+  for (let suffix = 2; accounts.some((account) => account.username === username); suffix++)
+    username = `dev-admin-${suffix}`;
+  const account = { id: randomUUID(), username, name: 'Quản trị phát triển', role: 'admin', proof,
+    active: true, mustChangePassword: false, sessionVersion: randomUUID() };
+  storeAccounts(db, accounts, [...accounts, account]);
+  return account;
 }
 
 // Phiên lưu trong bảng sessions của từng công ty, chỉ giữ bản băm của token trong cookie:
@@ -169,6 +212,12 @@ function createAccess(db, company, tls, tunnelOrigin) {
   }
   return {
     actor,
+    async devLogin(req, res) {
+      const account = await developmentAdministrator(db);
+      createSession(req, res, account);
+      audit(db, account, 'session', 'Đăng nhập tự động trên máy phát triển');
+      return profilesFor(db, account);
+    },
     async handle(operation, payload, req, res) {
       if (operation === 'login') {
         const now = Date.now();
@@ -259,4 +308,4 @@ function createAccess(db, company, tls, tunnelOrigin) {
   };
 }
 
-module.exports = { createAccess, initializeAdministrator, canOpen, requirePage, audit, activityEntry, fail };
+module.exports = { createAccess, initializeAdministrator, initializeDefaultAdministrator, canOpen, requirePage, audit, activityEntry, fail };

@@ -140,22 +140,18 @@
 
 .report-signatures {
 	margin-block-start: var(--space-20);
-}
-
-.report-signatures > p {
-	text-align: right;
-	font-style: italic;
-}
-
-.report-signature-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: var(--space-24);
-	margin-block-start: var(--space-8);
+	gap: var(--space-8) var(--space-24);
 	text-align: center;
 }
 
-.report-signature-grid > div {
+.report-issue-date {
+	grid-column: 2;
+	font-style: italic;
+}
+
+.report-signatures > div {
 	min-height: var(--layout-104);
 }
 

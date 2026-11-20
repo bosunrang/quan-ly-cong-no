@@ -156,6 +156,16 @@ describe("Biên bản đối chiếu công nợ", () => {
 			(row) => row.getCell(1).value === "Số dư cuối kỳ",
 		);
 		expect(closing?.getCell(3).value).toBe(1750);
+		const issueDate = rows.find(
+			(row) => row.getCell(4).value === "Ngày 08 tháng 06 năm 2024",
+		);
+		if (!issueDate) throw new Error("Thiếu dòng ngày phía bên bán.");
+		const sellerSignature = sheet.getRow(issueDate.number + 1);
+		expect(sellerSignature.getCell(4).value).toBe("ĐẠI DIỆN BÊN BÁN");
+		for (const row of [issueDate, sellerSignature]) {
+			expect(row.getCell(5).master.address).toBe(`D${row.number}`);
+			expect(row.getCell(4).alignment.horizontal).toBe("center");
+		}
 		expect(sheet.pageSetup.orientation).toBe("portrait");
 	});
 

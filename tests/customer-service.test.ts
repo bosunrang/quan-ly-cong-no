@@ -7,6 +7,7 @@ import { isCustomer } from "../src/domain/customers/customer.model";
 import {
 	createCustomerFromDraft,
 	createCustomerFromImport,
+	customerImportFields,
 	customerToDraft,
 	updateCustomerFromDraft,
 } from "../src/domain/customers/customer.service";
@@ -85,18 +86,27 @@ describe("customer service", () => {
 			misaCode: " KH-002 ",
 			name: " Đơn vị B ",
 			group: "private",
+			taxCode: " 0100123456-001 ",
 			province: " Hà Nội ",
 			address: " Số 2 ",
 		});
 		expect(imported).toMatchObject({
 			misaCode: "KH-002",
 			name: "Đơn vị B",
+			taxCode: "0100123456-001",
 			province: "Hà Nội",
 			address: "Số 2",
 			status: "active",
 			assignments: [],
 		});
 		expect(isCustomer(imported)).toBe(true);
+		expect(
+			customerImportFields({ ...baseDraft, taxCode: " 0100123456-001 " })
+				.taxCode,
+		).toBe("0100123456-001");
+		expect(
+			customerImportFields({ ...baseDraft, taxCode: undefined }).taxCode,
+		).toBe("");
 	});
 
 	it("cập nhật hồ sơ nhưng giữ nguyên phân công", () => {

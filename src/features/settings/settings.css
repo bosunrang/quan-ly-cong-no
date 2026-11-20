@@ -1,17 +1,19 @@
 /* Màn hình Cài đặt — cấu trúc tham chiếu từ ứng dụng Quản lý cước gửi hàng. */
 .settings-page{position:relative;width:100%;max-width:none;margin:0}
-.settings-profile-grid{display:grid;grid-template-columns:minmax(var(--layout-320),.8fr) minmax(0,1.2fr);gap:var(--space-16);align-items:stretch}
+.settings-profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-16);align-items:stretch}
 .settings-form-card{display:flex;flex-direction:column;overflow:hidden}
 .settings-form-head,.settings-data-head{min-height:var(--layout-49);padding:var(--space-14) var(--space-16);background:var(--surface-section);border-bottom:var(--border-width) solid var(--line);display:flex;align-items:center;gap:var(--space-8)}
 .settings-form-head h2,.settings-data-head h2{margin:0;font-size:var(--type-heading-sm);font-weight:700;line-height:var(--line-heading)}
 .settings-data-head svg{color:var(--teal)}
 .settings-database-status{margin-left:auto}.settings-database-status i{width:var(--space-7);height:var(--space-7);border-radius:50%;background:currentColor}
-.settings-form-body{display:grid;gap:var(--space-12);padding:var(--space-16)}
+.settings-form-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-12);padding:var(--space-16)}
+.settings-form-wide{grid-column:1 / -1}
+.settings-form-body > label,.settings-brand-body > div{min-width:0}
 .settings-form-body label,.settings-brand-fields label{display:grid;gap:var(--space-6);margin:0;color:var(--muted);font-size:var(--type-body-sm);font-weight:600;line-height:var(--line-compact)}
 .settings-form-body input,.settings-brand-fields input{box-sizing:border-box;width:100%;height:var(--control-height);padding:0 var(--control-padding);border:var(--border-width) solid var(--line-strong);border-radius:var(--surface-radius);background:var(--panel);color:var(--ink);font-family:inherit;font-size:var(--type-body);font-weight:400;}
-.settings-form-body .button{justify-self:start;margin-top:var(--space-2)}
-.settings-brand-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--space-16);align-items:start;padding:var(--space-16)}
-.settings-brand-fields{display:grid;gap:var(--space-10)}.settings-brand-actions{display:flex;align-items:center;gap:var(--space-8);margin-top:var(--space-2);flex-wrap:wrap}
+.settings-form-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-8);margin-top:auto;padding:0 var(--space-16) var(--space-16)}
+.settings-brand-body{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-16);align-items:start;padding:var(--space-16)}
+.settings-brand-fields{display:grid;gap:var(--space-10)}
 .settings-logo-tools{display:grid;gap:var(--space-7)}.settings-field-label{color:var(--muted);font-size:var(--type-body-sm);font-weight:600;line-height:var(--line-compact)}
 .settings-logo-preview{display:flex;align-items:center;gap:var(--space-11);min-height:var(--layout-66);padding:var(--space-9);border:var(--border-width) solid var(--line);border-radius:var(--radius);background:var(--surface-control)}
 .settings-logo-mark{width:var(--layout-46);height:var(--layout-46);flex:none;border-radius:var(--radius);background:var(--gradient-brand);color:var(--on-accent);display:grid;place-items:center;font-size:var(--type-body);font-weight:800}
@@ -24,9 +26,9 @@
 .settings-data-card p{margin:var(--space-10) 0 0;color:var(--muted);font-size:var(--type-body-sm);line-height:var(--line-body)}
 .settings-data-card .button{width:100%;margin-top:auto;min-height:var(--control-height)}.settings-data-danger{border-color:var(--danger-border-soft)}
 
-@media(max-width:1150px){.settings-profile-grid{grid-template-columns:1fr}.settings-brand-body{grid-template-columns:1fr 1fr}}
+@media(max-width:1150px){.settings-profile-grid{grid-template-columns:minmax(0,1fr)}.settings-brand-body{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:900px){.settings-data-grid{grid-template-columns:1fr}.settings-data-card{min-height:0}.settings-data-card .button{margin-top:var(--space-24)}}
-@media(max-width:720px){.settings-brand-body{grid-template-columns:1fr}}
+@media(max-width:720px){.settings-brand-body,.settings-form-body{grid-template-columns:minmax(0,1fr)}}
 .settings-operation-body{display:grid;gap:var(--space-12);overflow-wrap:anywhere}
 .settings-operation-body p{margin:0;color:var(--muted);font-size:var(--type-body-sm)}
 .settings-options{display:grid;gap:var(--space-8)}

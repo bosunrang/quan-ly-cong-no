@@ -1,14 +1,18 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } = require('electron');
 const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { readWorkstation, saveWorkstation } = require('./workstation-config.cjs');
+const appIcon = require('./app-icon.cjs');
 
-function startWorkstation({ directory, createWindow, configureSession, initialOrigin, log, createUpdater }) {
+// Máy trạm chạy như app cước phí: có biểu tượng dưới khay, bấm X chỉ ẩn cửa sổ,
+// đổi máy chủ và thoát từ menu khay.
+function startWorkstation({ directory, company, createWindow, configureSession, initialOrigin, log, createUpdater }) {
   mkdirSync(directory, { recursive: true });
   app.setPath('userData', directory);
   if (!app.requestSingleInstanceLock({ workstation: true })) return app.quit();
   configureSession();
+  Menu.setApplicationMenu(null);
   let origin;
   try { origin = initialOrigin ? saveWorkstation(directory, initialOrigin) : readWorkstation(directory); }
   catch (error) {
@@ -17,8 +21,10 @@ function startWorkstation({ directory, createWindow, configureSession, initialOr
   }
   let window;
   let setup;
+  let tray;
   let quitting = false;
   let replacing = false;
+  const name = company?.name ?? 'Quản lý công nợ';
   const form = join(__dirname, 'workstation.html');
   const formUrl = pathToFileURL(form).href;
   const updater = createUpdater({
@@ -32,13 +38,13 @@ function startWorkstation({ directory, createWindow, configureSession, initialOr
     const failedWindow = window;
     void dialog.showMessageBox(failedWindow, {
       type: 'warning', title: 'Không kết nối được máy chủ',
-      message: 'Kiểm tra địa chỉ máy chủ và kết nối mạng.',
-      buttons: ['Kết nối lại', 'Đổi địa chỉ', 'Đóng'], defaultId: 0, cancelId: 2, noLink: true,
+      message: `Không mở được ${origin}.`,
+      detail: 'Kiểm tra máy chủ đang bật và cùng mạng nội bộ.',
+      buttons: ['Kết nối lại', 'Đổi máy chủ', 'Đóng'], defaultId: 0, cancelId: 2, noLink: true,
     }).then(({ response }) => {
       if (window !== failedWindow || quitting) return;
       if (response === 0) connect();
       if (response === 1) showSetup();
-      if (response === 2) app.quit();
     }).catch(() => {});
   }
 
@@ -48,26 +54,39 @@ function startWorkstation({ directory, createWindow, configureSession, initialOr
     try {
       const previous = window;
       const next = createWindow({
-        url: origin + '/', showMenu: true,
+        url: origin + '/',
         onLoadError(error) { if (window === next) connectionFailed(error); },
       });
       window = next;
-      next.on('closed', () => {
-        if (window === next) window = undefined;
-        if (!replacing && !setup && !quitting) app.quit();
+      next.on('close', (event) => {
+        if (quitting) return;
+        event.preventDefault();
+        next.hide();
       });
+      next.on('closed', () => { if (window === next) window = undefined; });
       previous?.destroy();
       setup?.close();
       updateMenu();
     } finally { replacing = false; }
   }
 
+  function showWindow() {
+    if (quitting) return;
+    if (setup && !setup.isDestroyed()) return setup.focus();
+    if (!window || window.isDestroyed()) return origin ? connect() : showSetup();
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  }
+
   function showSetup() {
     if (quitting) return;
     if (setup && !setup.isDestroyed()) return setup.focus();
+    // Cửa sổ chính có thể đang ẩn dưới khay: chỉ gắn hộp thiết lập vào nó khi đang hiện.
+    const parent = window?.isVisible() ? window : undefined;
     setup = new BrowserWindow({
-      width: 490, height: 330, resizable: false, show: false, parent: window,
-      modal: Boolean(window), autoHideMenuBar: true,
+      width: 490, height: 330, resizable: false, show: false, parent,
+      modal: Boolean(parent), autoHideMenuBar: true, icon: appIcon,
       webPreferences: { preload: join(__dirname, 'workstation-preload.cjs'), sandbox: true,
         contextIsolation: true, nodeIntegration: false, devTools: false, webviewTag: false },
     });
@@ -77,7 +96,8 @@ function startWorkstation({ directory, createWindow, configureSession, initialOr
     setup.webContents.on('will-redirect', (event) => event.preventDefault());
     setup.on('closed', () => {
       setup = undefined;
-      if (!window && !replacing && !quitting) app.quit();
+      // Chưa từng có địa chỉ máy chủ thì không còn gì để mở: thoát như app cước phí.
+      if (!origin && !replacing && !quitting) app.quit();
     });
     setup.once('ready-to-show', () => setup?.show());
     void setup.loadFile(form).catch((error) => {
@@ -105,22 +125,28 @@ function startWorkstation({ directory, createWindow, configureSession, initialOr
   });
 
   function updateMenu() {
-    Menu.setApplicationMenu(Menu.buildFromTemplate([{
-      label: 'Máy trạm',
-      submenu: [
-        { label: 'Đổi địa chỉ máy chủ…', click: showSetup },
-        { label: 'Kết nối lại', enabled: Boolean(origin), click: connect },
-        { label: 'Mở bằng trình duyệt', enabled: Boolean(origin), click: () => origin && void shell.openExternal(origin) },
-        { label: 'Mở thư mục nhật ký…', click: () => void shell.openPath(log.directory) },
-        ...(updater ? [updater.menuItem()] : []),
-        { type: 'separator' },
-        { label: 'Thoát', role: 'quit' },
-      ],
-    }]));
+    if (!tray || tray.isDestroyed()) return;
+    tray.setToolTip(`${name} — ${origin ? 'máy trạm đang kết nối' : 'máy trạm chưa có máy chủ'}`);
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Mở ứng dụng', click: showWindow },
+      ...(origin ? [{ label: `Máy chủ: ${origin}`, enabled: false }] : []),
+      { label: 'Đổi máy chủ…', click: showSetup },
+      { label: 'Kết nối lại', enabled: Boolean(origin), click: connect },
+      { label: 'Mở bằng trình duyệt', enabled: Boolean(origin), click: () => origin && void shell.openExternal(origin) },
+      { label: 'Mở thư mục nhật ký…', click: () => void shell.openPath(log.directory) },
+      ...(updater ? [updater.menuItem()] : []),
+      { type: 'separator' },
+      { label: 'Thoát', click: () => app.quit() },
+    ]));
   }
 
+  tray = new Tray(nativeImage.createFromPath(appIcon).resize({ width: 16, height: 16 }));
+  tray.on('double-click', showWindow);
+  updateMenu();
   app.on('before-quit', () => { quitting = true; });
-  app.on('second-instance', () => { if (setup) setup.focus(); else window?.focus(); });
+  app.on('will-quit', () => { tray?.destroy(); });
+  app.on('second-instance', showWindow);
+  app.on('activate', showWindow);
   log.write('INFO', 'workstation.started');
   if (origin) connect();
   else showSetup();

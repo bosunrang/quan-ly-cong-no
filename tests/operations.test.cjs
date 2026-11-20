@@ -15,6 +15,7 @@ const { readWorkstation, saveWorkstation, workstationOrigin } = require('../elec
 const { parseTunnelOrigin, requestPeer } = require('../server/client-address.cjs');
 const { createFileLog } = require('../server/file-log.cjs');
 const { createLanServer, listenLanServer, stopLanServer } = require('../server/lan.cjs');
+const { startDevelopmentServer } = require('../server/development.cjs');
 
 function workspace(t) {
   const directory = mkdtempSync(join(tmpdir(), 'cong-no-operations-'));
@@ -36,6 +37,35 @@ function http(port, headers, { method = 'GET', url = '/', body } = {}) {
     req.end(body && JSON.stringify(body));
   });
 }
+
+test('tự đăng nhập dev cần khóa nội bộ, cấp phiên quản trị và giữ tài khoản đang chờ đổi mật khẩu', async (t) => {
+  const directory = workspace(t);
+  const request = { method: 'POST', url: '/api/dev-login' };
+  const key = { 'X-Cong-No-Dev-Login': 'test-key' };
+  const normal = await startDevelopmentServer(directory);
+  try {
+    await normal.server.initializeAdministrator('pending-dev-password');
+    assert.equal((await http(normal.server.address().port, key, request)).status, 404);
+  } finally { await normal.stop(); }
+
+  const dev = await startDevelopmentServer(directory, undefined, { devLoginKey: key['X-Cong-No-Dev-Login'] });
+  try {
+    const { port } = dev.server.address();
+    assert.equal((await http(port, {}, request)).status, 403);
+    assert.equal((await http(port, { ...key, Origin: 'https://other.example.test' }, request)).status, 403);
+    const login = await http(port, key, request);
+    assert.equal(login.status, 200);
+    const [cookie] = login.headers['set-cookie'];
+    assert.match(cookie, /; HttpOnly/);
+    const dashboard = { url: '/api/dashboard?from=2026-01-01&through=2026-01-31' };
+    assert.equal((await http(port, { Cookie: cookie.split(';')[0] }, dashboard)).status, 200);
+
+    const manual = await http(port, {}, { method: 'POST', url: '/api/session',
+      body: { username: 'admin', password: 'pending-dev-password' } });
+    assert.equal(manual.status, 200);
+    assert.equal((await http(port, { Cookie: manual.headers['set-cookie'][0].split(';')[0] }, dashboard)).status, 403);
+  } finally { await dev.stop(); }
+});
 
 test('Tunnel secures public sessions and preserves ordinary LAN sessions', async (t) => {
   const directory = workspace(t);

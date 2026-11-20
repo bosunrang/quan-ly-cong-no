@@ -5,6 +5,7 @@ import {
 	statementColumns,
 	statementConfirmation,
 	statementCoverage,
+	statementIssueDate,
 	type statementSeller,
 	statementSignatures,
 	statementTitle,
@@ -145,21 +146,19 @@ export function StatementDocument({
 				<p>{statementConfirmation}</p>
 			</div>
 			<footer className="report-signatures">
-				<p>Ngày lập biên bản {formatDateOnly(issuedOn)}</p>
-				<div className="report-signature-grid">
-					<div>
-						<strong>{statementSignatures[0]}</strong>
-						<p>Ký, ghi rõ họ tên và đóng dấu</p>
-					</div>
-					<div>
-						<strong>{statementSignatures[1]}</strong>
-						<p>{seller.signatoryTitle || "Ký, ghi rõ họ tên và đóng dấu"}</p>
-						{seller.signatory && (
-							<strong className="report-signatory-name">
-								{seller.signatory}
-							</strong>
-						)}
-					</div>
+				<p className="report-issue-date">{statementIssueDate(issuedOn)}</p>
+				<div>
+					<strong>{statementSignatures[0]}</strong>
+					<p>Ký, ghi rõ họ tên và đóng dấu</p>
+				</div>
+				<div>
+					<strong>{statementSignatures[1]}</strong>
+					<p>{seller.signatoryTitle || "Ký, ghi rõ họ tên và đóng dấu"}</p>
+					{seller.signatory && (
+						<strong className="report-signatory-name">
+							{seller.signatory}
+						</strong>
+					)}
 				</div>
 			</footer>
 		</article>

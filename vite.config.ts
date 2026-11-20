@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+const devAutoLogin = process.env.CONG_NO_DEV_AUTO_LOGIN !== "0";
 
 export default defineConfig({
 	plugins: [
@@ -49,15 +51,31 @@ export default defineConfig({
 						if (domainSource.test(file)) rebuild();
 					});
 				const { startDevelopmentServer } = require("./server/development.cjs");
-				const backend = await startDevelopmentServer();
+				const devLoginKey = devAutoLogin ? randomUUID() : undefined;
+				const backend = await startDevelopmentServer(undefined, undefined, {
+					devLoginKey,
+				});
 				vite.config.server.proxy = {
 					"/api/": {
 						target: backend.target,
 						changeOrigin: true,
 						configure(proxy) {
 							proxy.on("proxyReq", (outgoing, incoming) => {
+								outgoing.removeHeader("x-cong-no-dev-login");
+								const host = incoming.headers.host;
+								const origin = incoming.headers.origin;
 								if (
-									incoming.headers.origin === `http://${incoming.headers.host}`
+									devLoginKey &&
+									incoming.method === "POST" &&
+									incoming.url === "/api/dev-login" &&
+									incoming.socket.remoteAddress === "127.0.0.1" &&
+									(host === "127.0.0.1:5176" || host === "localhost:5176") &&
+									origin === `http://${host}`
+								) {
+									outgoing.setHeader("x-cong-no-dev-login", devLoginKey);
+								}
+								if (
+									origin === `http://${host}`
 								)
 									outgoing.setHeader("origin", backend.target);
 							});
@@ -73,7 +91,11 @@ export default defineConfig({
 				handler: () => [
 					{
 						tag: "meta",
-						attrs: { name: "cong-no-lan-api", content: "/api/" },
+						attrs: {
+							name: "cong-no-lan-api",
+							content: "/api/",
+							...(devAutoLogin ? { "data-dev-login": "true" } : {}),
+						},
 						injectTo: "head",
 					},
 				],

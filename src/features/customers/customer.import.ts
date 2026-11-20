@@ -9,6 +9,7 @@ import {
 	inferProvince,
 	normalizeVietnamese,
 } from "../../domain/customers/customer.province";
+import { customerTaxCodes } from "../../domain/customers/customer.tax-code";
 import { localDateToIso } from "../../shared/lib/date";
 
 export type CustomerImportStatus = "ready" | "duplicate" | "invalid";
@@ -29,12 +30,16 @@ export interface CustomerImportPreview {
 	invalidCount: number;
 }
 
-type ExistingCustomerForImport = Pick<Customer, "misaCode">;
+type ExistingCustomerForImport = Pick<
+	Customer,
+	"misaCode" | "name" | "taxCode"
+>;
 
 const headerAliases = {
 	misaCode: ["ma khach hang", "ma kh", "ma misa"],
 	name: ["ten khach hang", "ten don vi", "khach hang"],
 	group: ["nha nuoc tu nhan", "nhom", "nhom khach hang", "loai khach hang"],
+	taxCode: ["ma so thue", "ma thue", "mst"],
 	address: ["dia chi"],
 	province: ["tinh thanh pho", "tinh thanh", "tinh", "thanh pho"],
 };
@@ -115,6 +120,7 @@ export function parseCustomerRows(
 		misaCode: findColumn(headers, headerAliases.misaCode),
 		name: findColumn(headers, headerAliases.name),
 		group: findColumn(headers, headerAliases.group),
+		taxCode: findColumn(headers, headerAliases.taxCode),
 		address: findColumn(headers, headerAliases.address),
 		province: findColumn(headers, headerAliases.province),
 	};
@@ -139,6 +145,7 @@ export function parseCustomerRows(
 		),
 	);
 	const firstRowByCode = new Map<string, number>();
+	const taxCodes = customerTaxCodes(existingCustomers);
 	const rows: CustomerImportPreviewRow[] = [];
 
 	dataRows.forEach((row, index) => {
@@ -147,6 +154,7 @@ export function parseCustomerRows(
 		const misaCode = cellText(row[columns.misaCode]);
 		const name = cellText(row[columns.name]);
 		const group = parseGroup(cellText(row[columns.group]));
+		const taxCode = cellText(row[columns.taxCode]);
 		const address = cellText(row[columns.address]);
 		const provinceFromCell = cellText(row[columns.province]);
 		const province = provinceFromCell || inferProvince(address);
@@ -164,16 +172,22 @@ export function parseCustomerRows(
 		if (status === "ready" && firstRowByCode.has(normalizedCode)) {
 			status = "duplicate";
 			message = `Trùng mã với dòng ${firstRowByCode.get(normalizedCode)}`;
+		} else if (status === "ready" && existingCodes.has(normalizedCode)) {
+			firstRowByCode.set(normalizedCode, rowNumber);
+			status = "duplicate";
+			message = "Mã khách hàng đã có trong danh mục";
+		} else if (
+			status === "ready" &&
+			taxCodes.conflicts({ taxCode, name }, true)
+		) {
+			status = "invalid";
+			message = "Mã số thuế đã dùng cho một tên khách hàng khác";
 		} else if (status === "ready") {
 			firstRowByCode.set(normalizedCode, rowNumber);
-			if (existingCodes.has(normalizedCode)) {
-				status = "duplicate";
-				message = "Mã khách hàng đã có trong danh mục";
-			} else {
-				message = provinceInferred
-					? "Sẵn sàng · Tỉnh/thành được suy ra từ địa chỉ"
-					: "Sẵn sàng nhập";
-			}
+			taxCodes.add({ taxCode, name });
+			message = provinceInferred
+				? "Sẵn sàng · Tỉnh/thành được suy ra từ địa chỉ"
+				: "Sẵn sàng nhập";
 		}
 
 		rows.push({
@@ -182,6 +196,7 @@ export function parseCustomerRows(
 				misaCode,
 				name,
 				group: group ?? "unknown",
+				taxCode,
 				province,
 				address,
 			},

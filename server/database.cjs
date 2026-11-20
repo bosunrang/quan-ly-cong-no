@@ -480,7 +480,7 @@ function directoryTransaction(database, work, transaction = true) {
       writeVersion(database, DATASET_KEYS.customers, 2);
     },
     customerCodes() {
-      return database.prepare('SELECT id, misa_code, tax_code FROM customers').all();
+      return database.prepare('SELECT id, misa_code, tax_code, name FROM customers').all();
     },
     employeeCodes() {
       return database.prepare('SELECT id, code FROM sales_employees').all();

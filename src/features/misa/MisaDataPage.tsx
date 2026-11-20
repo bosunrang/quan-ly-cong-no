@@ -1,6 +1,12 @@
 import { Notice } from "../../shared/ui/Notice";
 import { Database, Search, Upload, Users } from "lucide-react";
-import { type ChangeEvent, useDeferredValue, useRef, useState } from "react";
+import {
+	type ChangeEvent,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import {
 	confirmSalesImport,
 	type ImportChoices,
@@ -29,6 +35,8 @@ import {
 } from "./misa.sales-import";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 12 });
+const initialSearch = { q: "", page: 1 };
+const searchDelay = 250;
 export function MisaDataPage() {
 	const input = useRef<HTMLInputElement>(null);
 	const supplementInput = useRef<HTMLInputElement>(null);
@@ -43,25 +51,42 @@ export function MisaDataPage() {
 		plan: SalesSupplementReview;
 	}>();
 	const [query, setQuery] = useState("");
-	const [page, setPage] = useState(1);
-	const search = useDeferredValue(query);
-	const response = useServerData<SalesPage>(
-		resourceWithQuery("sales-book", { q: search, page }),
-	);
-	const data = response.data ?? response.previous;
+	const [search, setSearch] = useState(initialSearch);
+	const searchQuery = query.trim();
+	const queryPending = searchQuery !== search.q;
+	const resource = resourceWithQuery("sales-book", search);
+	const response = useServerData<SalesPage>(resource);
+	const currentData = response.data;
+	const data = currentData ?? response.previous;
 	const book = data?.book;
-	const total = response.data?.total ?? 0;
-	const busy = pending !== undefined;
-	const pagination = {
-		...pageControls(response.data?.page ?? page, 25, total),
-		currentPage: response.data?.page ?? page,
-		setCurrentPage: setPage,
-		resetPage: () => setPage(1),
-		pageItems: response.data?.rows ?? [],
+	const { page, limit, rows, total } = data ?? {
+		page: 1,
+		limit: 25,
+		rows: [],
+		total: 0,
 	};
+	const loading = queryPending || response.loading;
+	const busy = pending !== undefined;
+	const pagination = pageControls(page, limit, total);
+	const tableViewport = useRef<HTMLElement>(null);
+	const shownResource = useRef<string | undefined>(undefined);
 	const importPlan = review && { ...review, issues: new Map(review.issues) };
 	const message = (reason: unknown) =>
 		reason instanceof Error ? reason.message : "Không thể xử lý dữ liệu MISA.";
+
+	useEffect(() => {
+		if (!queryPending) return;
+		const timer = window.setTimeout(() => {
+			setSearch({ q: searchQuery, page: 1 });
+		}, searchDelay);
+		return () => window.clearTimeout(timer);
+	}, [queryPending, searchQuery]);
+
+	useLayoutEffect(() => {
+		if (!currentData || shownResource.current === resource) return;
+		shownResource.current = resource;
+		if (tableViewport.current) tableViewport.current.scrollTop = 0;
+	}, [currentData, resource]);
 
 	async function handleFile(
 		event: ChangeEvent<HTMLInputElement>,
@@ -150,7 +175,7 @@ export function MisaDataPage() {
 			setPreview(undefined);
 			setReview(undefined);
 			setQuery("");
-			setPage(1);
+			setSearch(initialSearch);
 			accountingChanged();
 		} catch (reason) {
 			setError(message(reason));
@@ -227,7 +252,7 @@ export function MisaDataPage() {
 					{error}
 				</Notice>
 			)}
-			{response.loading && (
+			{response.loading && !data && (
 				<p className="panel empty-state" role="status">
 					Đang tải sổ bán hàng…
 				</p>
@@ -248,28 +273,32 @@ export function MisaDataPage() {
 									type="search"
 									placeholder="Chứng từ, hóa đơn, khách hàng hoặc tên hàng"
 									value={query}
-									onChange={(event) => {
-										setQuery(event.target.value);
-										pagination.resetPage();
-									}}
+									onChange={(event) => setQuery(event.target.value)}
 								/>
 							</div>
 						</label>
 					</div>
-					<MisaSalesTable rows={pagination.pageItems} />
-					{!total && !response.loading && (
-						<div className="empty-state">Không tìm thấy dòng phù hợp.</div>
-					)}
+					<MisaSalesTable
+						rows={rows}
+						viewportRef={tableViewport}
+						loading={loading}
+						emptyMessage={
+							!loading && !total ? "Không tìm thấy dòng phù hợp." : undefined
+						}
+					/>
 					<footer className="misa-table-footer">
-						<span>
-							{number.format(pagination.firstVisible)}–
-							{number.format(pagination.lastVisible)} / {number.format(total)}{" "}
-							dòng
+						<span role="status">
+							{loading
+								? "Đang tải kết quả…"
+								: `${number.format(pagination.firstVisible)}–${number.format(pagination.lastVisible)} / ${number.format(total)} dòng`}
 						</span>
 						<PaginationControls
-							currentPage={pagination.currentPage}
+							currentPage={page}
 							pageCount={pagination.pageCount}
-							onPageChange={pagination.setCurrentPage}
+							disabled={loading}
+							onPageChange={(nextPage) =>
+								setSearch({ ...search, page: nextPage })
+							}
 							previousLabel="Trang trước"
 							nextLabel="Trang sau"
 						/>

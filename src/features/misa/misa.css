@@ -846,8 +846,16 @@
 .misa-sales-table th { white-space: nowrap; }
 .misa-sales-table td:nth-child(-n+3), .misa-sales-table td.numeric { white-space: nowrap; }
 .misa-sales-table td:nth-child(4), .misa-sales-table td:nth-child(5) { min-width: var(--layout-160); max-width: var(--layout-300); white-space: normal; }
-.misa-detail-panel .misa-sales-table { max-height: min(66vh, var(--misa-table-max-height)); }
+.misa-detail-panel .misa-sales-table { height: min(66vh, var(--misa-table-max-height)); }
+.misa-detail-panel .misa-sales-table table { table-layout: fixed; }
 .misa-detail-panel .misa-sales-table th { position: sticky; top: 0; z-index: var(--z-sticky); }
+.misa-detail-panel .misa-sales-table th { white-space: normal; }
+.misa-detail-panel .misa-sales-table th:nth-child(-n + 3) { width: 9%; }
+.misa-detail-panel .misa-sales-table th:is(:nth-child(4), :nth-child(5)) { width: 16%; }
+.misa-detail-panel .misa-sales-table th:nth-child(6) { width: 5%; }
+.misa-detail-panel .misa-sales-table th:nth-child(n + 7) { width: 9%; }
+.misa-detail-panel .misa-sales-table :is(th, td:not(.numeric)) { overflow-wrap: anywhere; }
+.misa-detail-panel .misa-sales-table td:nth-child(-n + 3) { white-space: normal; }
 .misa-sales-search { width: min(var(--layout-460), 100%); }
 
 .dialog-shell.misa-sales-preview-dialog {

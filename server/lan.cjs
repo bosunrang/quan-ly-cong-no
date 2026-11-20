@@ -3,7 +3,7 @@ const { createServer: httpsServer } = require('node:https');
 const { createReadStream, mkdirSync, readFileSync, statSync } = require('node:fs');
 const { extname, join, resolve, sep } = require('node:path');
 const { openDatabase } = require('./database.cjs');
-const { createAccess, fail, initializeAdministrator } = require('./access.cjs');
+const { createAccess, fail, initializeAdministrator, initializeDefaultAdministrator } = require('./access.cjs');
 const { automaticBackups } = require('./automatic-backup.cjs');
 const { createApi } = require('./index.cjs');
 const { sendError } = require('./http.cjs');
@@ -24,7 +24,7 @@ function openCompanyDatabase(directory, company) {
   return openDatabase(companyDatabasePath(directory, company));
 }
 
-function createLanServer({ company, directory, staticRoot, tls, tunnelOrigin, databasePath, log }) {
+function createLanServer({ company, directory, staticRoot, tls, tunnelOrigin, databasePath, log, devLoginKey }) {
   tunnelOrigin = parseTunnelOrigin(tunnelOrigin);
   const fileLog = log ?? createFileLog(join(directory, 'logs', company.id));
   const root = resolve(staticRoot);
@@ -40,7 +40,8 @@ function createLanServer({ company, directory, staticRoot, tls, tunnelOrigin, da
     throw error;
   }
   const backups = automaticBackups(source, directory, company, undefined, fileLog);
-  const api = createApi({ company, db, backups, access: createAccess(db, company, Boolean(tls), tunnelOrigin) });
+  const api = createApi({ company, db, backups, devLoginKey,
+    access: createAccess(db, company, Boolean(tls), tunnelOrigin) });
   const respond = async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -87,6 +88,7 @@ function createLanServer({ company, directory, staticRoot, tls, tunnelOrigin, da
   const server = tls ? httpsServer(tls, respond) : httpServer(respond);
   server.hasAdministrator = () => Boolean(db.readDataset('cong-no.accounts.v1')?.data?.length);
   server.initializeAdministrator = (password) => initializeAdministrator(db, password);
+  server.initializeDefaultAdministrator = () => initializeDefaultAdministrator(db);
   server.once('listening', () => {
     fileLog.write('INFO', tunnelOrigin ? 'server.tunnel.enabled' : 'server.started');
     backups.start();
@@ -123,7 +125,17 @@ async function listenLanServer(server, port, host) {
 }
 
 function stopLanServer(server) {
-  server.close();
+  if (!server.stopRequested) {
+    server.stopRequested = true;
+    server.close();
+    server.closeIdleConnections?.();
+    // Như app cước phí: yêu cầu đang dở có 3 giây để hoàn tất, sau đó ngắt hẳn để thoát
+    // ứng dụng hay cài bản cập nhật không bị treo vì một kết nối còn mở.
+    const force = setTimeout(() => server.closeAllConnections?.(), 3000);
+    force.unref();
+    const clear = () => clearTimeout(force);
+    server.dataClosed.then(clear, clear);
+  }
   return server.dataClosed;
 }
 

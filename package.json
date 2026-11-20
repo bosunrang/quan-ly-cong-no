@@ -1,6 +1,6 @@
 {
   "name": "app-cong-no",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "packageManager": "pnpm@11.25.0",
   "type": "module",
@@ -26,7 +26,7 @@
     "desktop:lan": "pnpm build:domain && electron . --lan",
     "dist": "pnpm build && node electron/build-windows.mjs",
     "dev:init-admin": "pnpm build:domain && node server/init-dev-admin.cjs",
-    "test:desktop": "pnpm build:domain && node tests/electron-http-smoke.cjs && node tests/electron-workstation-smoke.cjs",
+    "test:desktop": "pnpm build:domain && node tests/electron-http-smoke.cjs && node tests/electron-first-admin-smoke.cjs && node tests/electron-workstation-smoke.cjs",
     "test:release": "node --test tests/release-artifacts.test.cjs",
     "build:domain": "node server/build-domain.mjs",
     "test:golden": "pnpm build:domain && vitest run tests/golden-numbers.test.ts",
@@ -42,11 +42,13 @@
       "dist/**/*",
       "electron/**/*",
       "server/**/*",
+      "public/assets/app-icon.png",
       "src/domain/settings/business-data.rules.mjs",
       "src/domain/access/permissions.mjs",
       "package.json"
     ],
     "win": {
+      "icon": "public/assets/app-icon.png",
       "target": [
         {
           "target": "nsis",

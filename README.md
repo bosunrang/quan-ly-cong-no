@@ -14,14 +14,16 @@
 
 ```powershell
 pnpm install
-pnpm dev:init-admin
 pnpm dev
 ```
 
-Mở `http://127.0.0.1:5176`. Lệnh `dev:init-admin` chỉ chạy lần đầu: ghi lại mật khẩu tạm và đổi
-mật khẩu ở lần đăng nhập đầu. `pnpm dev` tự mở máy chủ loopback và chuyển tiếp HTTP qua Vite;
-dữ liệu ở `data/dev/cong-no.sqlite`, không phụ thuộc địa chỉ trình duyệt. Đặt `CONG_NO_DEV_DATA_DIR`
-để chọn kho phát triển khác; dùng cùng biến khi tạo admin và chạy dev.
+Mở `http://127.0.0.1:5176`. Vite tự đăng nhập quản trị khi chưa có phiên và chỉ cho phép
+tự đăng nhập từ cùng địa chỉ cục bộ. Kho dev ở `data/dev/cong-no.sqlite`. Nếu kho chưa có
+quản trị viên đã sẵn sàng, lần tự đăng nhập đầu sẽ tạo tài khoản `dev-admin` với mật khẩu ngẫu nhiên.
+Đặt `CONG_NO_DEV_DATA_DIR` để chọn kho phát triển khác.
+
+Để thử màn đăng nhập thủ công, khởi động Vite với `$env:CONG_NO_DEV_AUTO_LOGIN = '0'` và
+mở cửa sổ InPrivate. Với kho trống, chạy `pnpm dev:init-admin` trước để lấy mật khẩu tạm.
 
 `pnpm build` rồi `pnpm preview` để thử bản build qua HTTP với cùng kho phát triển.
 Bản mở trực tiếp bằng `file://` và chế độ lưu nghiệp vụ trên trình duyệt đã được bỏ.
@@ -47,7 +49,7 @@ trong mạng) hay **Máy trạm** (chỉ kết nối tới máy chủ) và ghi n
 - **Máy Tường Khuê**. Mở ứng dụng và chọn **Tường Khuê** → **Máy chủ**.
 - **Máy Winbio**. Mở ứng dụng và chọn **Winbio** → **Máy chủ**.
 
-Khi mở công ty lần đầu, tạo tài khoản quản trị nếu được hỏi. Ghi lại mật khẩu tạm thời hiển thị và đổi mật khẩu ở lần đăng nhập đầu. Có thể tạo sau bằng mục **Tạo tài khoản quản trị…** dưới khay.
+Lần đầu mở một công ty ở chế độ máy chủ, app tự tạo tài khoản quản trị `admin` với mật khẩu mặc định `admin` (như app cước phí) và hiện thông báo kèm địa chỉ cho máy nhân viên. Ở lần đăng nhập đầu, app bắt đặt mật khẩu riêng trước khi xem hay sửa dữ liệu, nên hãy đăng nhập và đổi mật khẩu ngay sau khi cài.
 
 Bấm **X** để ẩn cửa sổ xuống khay và giữ máy chủ chạy. Bấm đúp biểu tượng để mở cửa sổ. Trong menu chuột phải, chọn **Địa chỉ cho máy nhân viên…** để xem địa chỉ kết nối. Chọn **Thoát và dừng máy chủ** để kết thúc máy chủ của công ty đó.
 
@@ -133,8 +135,9 @@ Lệnh trên build giao diện rồi mở ứng dụng Electron.
 
 Mở bản cài, chọn công ty, chọn **Máy trạm** (chỉ hỏi lần đầu), rồi nhập địa chỉ máy chủ do quản trị viên cung cấp
 (ví dụ `http://192.168.1.20:3300` trong LAN hoặc `https://congno.example.com` từ xa).
-Địa chỉ được lưu cho các lần mở tiếp theo. Trong cửa sổ, menu **Máy trạm** có mục đổi địa chỉ,
-kết nối lại và mở trong trình duyệt. Cửa sổ dùng giao diện, tài khoản và dữ liệu do máy chủ cung cấp.
+Địa chỉ được lưu cho các lần mở tiếp theo. Giống máy chủ, máy trạm có biểu tượng dưới khay: bấm **X** chỉ ẩn cửa sổ,
+bấm đúp biểu tượng để mở lại. Menu chuột phải có **Đổi máy chủ…**, **Kết nối lại**, **Mở bằng trình duyệt** và **Thoát**.
+Cửa sổ dùng giao diện, tài khoản và dữ liệu do máy chủ cung cấp.
 
 Vai trò được nhớ theo từng công ty trong `lan-profiles/<mã-công-ty>/machine.json` (thư mục dữ liệu của app);
 xóa tệp này để được hỏi lại. Có thể mở thẳng chế độ máy trạm với `--client` hoặc `--client --server-url=https://congno.example.com`
@@ -156,7 +159,7 @@ sau tên tệp `.exe`. Từ mã nguồn, dùng `pnpm start --client`.
 
 ## Nhật ký và cập nhật Windows
 
-Mở **Mở thư mục nhật ký…** từ khay máy chủ hoặc menu **Máy trạm**. Máy chủ ghi trong
+Mở **Mở thư mục nhật ký…** từ biểu tượng dưới khay của máy chủ hoặc máy trạm. Máy chủ ghi trong
 `logs/<mã-công-ty>` dưới thư mục dữ liệu, bản cục bộ trong `logs/local`, máy trạm trong
 `workstation/logs` dưới thư mục dữ liệu người dùng. Lỗi khởi động desktop nằm trong `logs/desktop`.
 Các tệp theo ngày UTC, giữ 30 ngày, tối đa 5 MB mỗi ngày.
@@ -229,11 +232,11 @@ Trong **Dữ liệu MISA**, chọn file Excel **Sổ chi tiết bán hàng**, ki
 
 ## Người dùng và nhật ký sử dụng
 
-Với bản desktop cục bộ hoặc LAN, tạo quản trị đầu tiên trong hộp thoại khi mở app hoặc mục **Tạo tài khoản quản trị…** dưới khay. Với máy chủ chạy bằng lệnh, dùng `lan:init-admin`; kho phát triển dùng `dev:init-admin`. Mọi chế độ đều yêu cầu đăng nhập. **Quản trị** có quyền truy cập toàn bộ thẻ. Khi tạo hoặc sửa tài khoản **Nhập liệu** hay **Chỉ xem**, chọn từng thẻ trong giới hạn của vai trò. Tài khoản cũ chưa có danh sách thẻ riêng dùng quyền mặc định của vai trò. Khóa tài khoản, đổi quyền truy cập hoặc đổi mật khẩu sẽ vô hiệu hóa phiên cũ của tài khoản đó.
+Với bản desktop cục bộ hoặc LAN, app tự tạo quản trị đầu tiên `admin` / `admin` khi kho chưa có tài khoản và bắt đổi mật khẩu ở lần đăng nhập đầu. Với máy chủ chạy bằng lệnh, dùng `lan:init-admin`. Kho phát triển có `dev:init-admin` để tạo tài khoản thủ công khi kho còn trống. **Quản trị** có quyền truy cập toàn bộ thẻ. Khi tạo hoặc sửa tài khoản **Nhập liệu** hay **Chỉ xem**, chọn từng thẻ trong giới hạn của vai trò. Tài khoản cũ chưa có danh sách thẻ riêng dùng quyền mặc định của vai trò. Khóa tài khoản, đổi quyền truy cập hoặc đổi mật khẩu sẽ vô hiệu hóa phiên cũ của tài khoản đó.
 
 Mật khẩu quản trị cấp khi tạo hoặc đặt lại cho người khác là mật khẩu tạm thời. Người dùng đăng nhập bằng mật khẩu đó, đặt mật khẩu riêng rồi mới vào các thẻ được cấp. Nhật ký ghi việc đổi mật khẩu mà không lưu nội dung mật khẩu.
 
-**Nhật ký sử dụng** ghi người thực hiện, thời điểm và chi tiết các thao tác kể từ khi tính năng được triển khai. Quản trị có thể lọc theo người, nhóm thao tác và khoảng ngày, rồi xuất kết quả CSV. Xóa dữ liệu nghiệp vụ giữ lại tài khoản và nhật ký.
+**Nhật ký sử dụng** ghi người thực hiện, thời điểm và chi tiết các thao tác kể từ khi tính năng được triển khai. Quản trị có thể tìm kiếm, lọc theo người hoặc nhóm thao tác, rồi xuất kết quả CSV. Xóa dữ liệu nghiệp vụ giữ lại tài khoản và nhật ký.
 
 Máy chủ LAN xác thực tài khoản và lưu nhật ký tập trung trong kho của công ty đang mở.
 

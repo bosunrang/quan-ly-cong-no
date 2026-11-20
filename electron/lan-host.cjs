@@ -1,5 +1,4 @@
 const { app, dialog, Menu, nativeImage, shell, Tray } = require('electron');
-const { randomBytes } = require('node:crypto');
 const { mkdirSync } = require('node:fs');
 const { networkInterfaces } = require('node:os');
 const { join } = require('node:path');
@@ -8,18 +7,37 @@ const { createLanServer, listenLanServer, stopLanServer } = require('../server/l
 const { lanOptions } = require('../server/lan-options.cjs');
 const { createFileLog } = require('../server/file-log.cjs');
 const { loginItem } = require('./lan-startup.cjs');
+const appIcon = require('./app-icon.cjs');
 
-function showLanAddresses(company, settings) {
+function lanAddresses(company, settings) {
   const protocol = settings.tls ? 'https' : 'http';
   const ipv4 = settings.loopback ? [] : Object.values(networkInterfaces())
     .flat().filter((entry) => entry?.family === 'IPv4' && !entry.internal)
     .map((entry) => `${protocol}://${entry.address}:${company.port}/`);
+  return [...new Set([...ipv4, ...(settings.tunnelOrigin ? [settings.tunnelOrigin] : [])])];
+}
+
+function showLanAddresses(company, settings) {
   void dialog.showMessageBox({
     type: 'info',
     title: company.name,
     message: 'Địa chỉ cho máy nhân viên',
-    detail: [...new Set([...ipv4, ...(settings.tunnelOrigin ? [settings.tunnelOrigin] : [])])].join('\n') || 'Máy chủ hiện chỉ truy cập được trên máy này.',
+    detail: lanAddresses(company, settings).join('\n') || 'Máy chủ hiện chỉ truy cập được trên máy này.',
     buttons: ['Đóng'],
+  });
+}
+
+function announceFirstAdministrator(company, settings, administrator) {
+  const addresses = lanAddresses(company, settings);
+  return dialog.showMessageBox({
+    type: 'info',
+    title: company.name,
+    message: 'Đây là lần chạy đầu tiên.',
+    detail: `Tên đăng nhập: ${administrator.username}\nMật khẩu mặc định: ${administrator.password}\n\n` +
+      'Sau khi đăng nhập, ứng dụng sẽ bắt buộc bạn đặt mật khẩu mới trước khi sử dụng.' +
+      (addresses.length ? `\n\nMáy nhân viên truy cập qua:\n${addresses.join('\n')}` : ''),
+    buttons: ['Tiếp tục'],
+    noLink: true,
   });
 }
 
@@ -42,6 +60,19 @@ async function startLanHost(company, { createWindow, configureSession, createUpd
   Menu.setApplicationMenu(null);
   const log = createFileLog(join(settings.directory, 'logs', company.id));
   const server = createLanServer({ ...settings, company, log });
+  // Lần chạy đầu: tạo sẵn tài khoản quản trị trước khi mở cổng, để máy chủ không chạy
+  // trong tình trạng không ai đăng nhập được.
+  // Như app cước phí: tài khoản admin/admin, bắt đổi mật khẩu ở lần đăng nhập đầu.
+  let seeded;
+  try {
+    if (!server.hasAdministrator()) {
+      seeded = await server.initializeDefaultAdministrator();
+      log.write('INFO', 'account.first-admin.created');
+    }
+  } catch (error) {
+    await stopLanServer(server).catch(() => {});
+    throw error;
+  }
   try {
     await listenLanServer(server, company.port, settings.host);
   } catch (error) {
@@ -57,7 +88,6 @@ async function startLanHost(company, { createWindow, configureSession, createUpd
   let exitRequested = false;
   let window;
   let tray;
-  let creatingAdministrator = false;
   const protocol = settings.tls ? 'https' : 'http';
   const port = server.address().port;
   const url = `${protocol}://127.0.0.1:${port}/`;
@@ -114,38 +144,7 @@ async function startLanHost(company, { createWindow, configureSession, createUpd
     window.on('closed', () => { window = undefined; });
   }
 
-  async function setupAdministrator() {
-    if (creatingAdministrator || server.hasAdministrator()) return;
-    creatingAdministrator = true;
-    try {
-      const { response } = await dialog.showMessageBox({
-        type: 'question',
-        title: company.name,
-        message: 'Tạo tài khoản quản trị đầu tiên?',
-        detail: 'App sẽ cấp một mật khẩu tạm thời để đổi ở lần đăng nhập đầu.',
-        buttons: ['Tạo tài khoản', 'Để sau'],
-        cancelId: 1,
-        noLink: true,
-      });
-      if (response !== 0 || quitting) return;
-      const password = randomBytes(12).toString('base64url');
-      await server.initializeAdministrator(password);
-      updateMenu();
-      await dialog.showMessageBox({
-        type: 'info',
-        title: company.name,
-        message: 'Tài khoản quản trị đã được tạo',
-        detail: `Tên đăng nhập: admin\nMật khẩu tạm thời: ${password}\nGhi lại mật khẩu trước khi đóng hộp thoại này.`,
-        buttons: ['Đóng'],
-      });
-    } catch (error) {
-      dialog.showErrorBox('Không thể tạo tài khoản', error.message);
-    } finally {
-      creatingAdministrator = false;
-    }
-  }
-
-  const icon = nativeImage.createFromPath(join(__dirname, 'lan-icon.png'));
+  const icon = nativeImage.createFromPath(appIcon);
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
   tray.setToolTip(`${company.name} · Công nợ · Cổng ${port}${settings.loopback || settings.tls ? '' : ' · HTTP chưa mã hóa'}`);
   function updateMenu() {
@@ -168,9 +167,6 @@ async function startLanHost(company, { createWindow, configureSession, createUpd
         },
       },
     ];
-    if (!server.hasAdministrator()) {
-      items.push({ label: 'Tạo tài khoản quản trị…', click: () => void setupAdministrator() });
-    }
     if (canAutoStart) {
       const status = app.getLoginItemSettings({ path: startup.path, args: startup.args });
       items.push({
@@ -201,8 +197,9 @@ async function startLanHost(company, { createWindow, configureSession, createUpd
   });
   app.on('activate', showWindow);
   if (!hidden) {
+    // Như app cước phí: báo tài khoản mặc định trước khi mở cửa sổ đăng nhập.
+    if (seeded) await announceFirstAdministrator(company, settings, seeded);
     showWindow();
-    if (!server.hasAdministrator()) void setupAdministrator();
   }
 }
 
