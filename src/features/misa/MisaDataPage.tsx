@@ -318,7 +318,6 @@ export function MisaDataPage() {
 				<MisaSalesImportDialog
 					preview={preview}
 					plan={importPlan}
-					existingCount={data?.rowCount ?? 0}
 					choices={importChoices}
 					onChoicesChange={(choices) => void changeChoices(choices)}
 					isSaving={busy}

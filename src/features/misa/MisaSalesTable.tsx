@@ -42,7 +42,9 @@ export function MisaSalesTable({
 							<th
 								key={key}
 								scope="col"
-								className={numericColumns.has(key) ? "numeric" : undefined}
+								className={
+									numericColumns.has(key) ? "misa-sales-number" : undefined
+								}
 							>
 								{salesHeaders[key]}
 							</th>
@@ -63,7 +65,9 @@ export function MisaSalesTable({
 										<td
 											key={key}
 											className={
-												numericColumns.has(key) ? "numeric" : undefined
+												numericColumns.has(key)
+													? "misa-sales-number"
+													: undefined
 											}
 										>
 											{key === "date"

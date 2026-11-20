@@ -34,7 +34,6 @@ interface Props {
 	plan: Omit<SalesImportReview, "issues"> & {
 		issues: ReadonlyMap<number, SalesImportReview["issues"][number][1]>;
 	};
-	existingCount: number;
 	choices: Choices;
 	onChoicesChange: (choices: Choices) => void;
 	isSaving: boolean;
@@ -46,7 +45,6 @@ interface Props {
 export function MisaSalesImportDialog({
 	preview,
 	plan,
-	existingCount,
 	choices,
 	onChoicesChange,
 	isSaving,
@@ -196,12 +194,6 @@ export function MisaSalesImportDialog({
 						<span>{number.format(counts.all)} dòng bán hàng</span>
 					</div>
 				</div>
-				{existingCount > 0 && (
-					<Notice tone="info">
-						Giữ {number.format(existingCount)} dòng đã lưu. Dòng đã có trong sổ
-						sẽ được bỏ qua.
-					</Notice>
-				)}
 				{reviewVouchers > 0 && (
 					<Notice tone="warning" title="Chứng từ cần đối chiếu">
 						{number.format(reviewVouchers)} chứng từ khác sổ đang lưu hoặc có
