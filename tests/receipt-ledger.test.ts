@@ -124,7 +124,38 @@ describe("Dashboard công nợ theo ngày chốt", () => {
 			remaining: 1400,
 			periodReceived: 0,
 			unallocated: 0,
+			periodReversalCount: 0,
 		});
+		// Khoản thu ngày 01/06 bị hủy ngày 07/06: kỳ bắt đầu sau ngày thu phải trừ số tiền đó.
+		const later = at("2024-06-08", "2024-06-02");
+		expect(later).toMatchObject({
+			periodReceived: -1200,
+			periodReversalCount: 1,
+			periodReceipts: [
+				{
+					number: draft.number,
+					date: draft.date,
+					amount: -1200,
+					unallocated: 0,
+					reversedOn: "2024-06-07",
+				},
+			],
+			unallocated: 0,
+		});
+		const trend = later.receiptTrend.buckets;
+		expect(trend.reduce((sum, bucket) => sum + bucket.amount, 0)).toBe(-1200);
+		expect(trend.find(({ reversals }) => reversals)).toMatchObject({
+			from: "2024-06-07",
+			amount: -1200,
+			count: 0,
+			reversals: 1,
+		});
+		// Kỳ kết thúc trước ngày hủy chưa thấy phiếu hủy; kỳ chứa ngày thu thì đã loại khoản thu.
+		expect(at("2024-06-06", "2024-06-02").periodReceived).toBe(0);
+		expect(
+			at("2024-06-30", "2024-06-01").periodReceived +
+				at("2024-07-31", "2024-07-01").periodReceived,
+		).toBe(0);
 	});
 
 	it("chỉ trả hóa đơn còn nợ của khách tại ngày chốt", () => {

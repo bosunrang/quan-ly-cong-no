@@ -7,7 +7,8 @@ const { deleteBusinessGroups, makeBusinessBackup, restoreBusinessData } = requir
 
 const books = require('./books.cjs');
 const accountStore = require('./account-store.cjs');
-const SCHEMA_VERSION = 16;
+const { normalizeVietnamese } = require('../src/domain/customers/vietnamese-text.mjs');
+const SCHEMA_VERSION = 17;
 const DATASET_KEYS = {
   customers: 'cong-no.customers.v2',
   employees: 'cong-no.sales-employees.v2',
@@ -370,6 +371,27 @@ function upgradeSchema(database, currentVersion) {
       database.exec('PRAGMA user_version = 16;');
     });
   }
+  if (currentVersion < 17) {
+    // Nhật ký: tách người thực hiện, nhóm, thao tác và chuỗi tìm kiếm đã bỏ dấu thành cột có chỉ mục
+    // để màn Nhật ký lọc, tìm và phân trang mà không phải đọc JSON của từng dòng.
+    withTransaction(database, () => {
+      const columns = new Set(database.prepare('PRAGMA table_info(activity_log)').all().map(({ name }) => name));
+      for (const column of ['actor_id', 'actor_name', 'category', 'action', 'search_text'])
+        if (!columns.has(column)) database.exec(`ALTER TABLE activity_log ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+      const update = database.prepare(`UPDATE activity_log SET actor_id = ?, actor_name = ?, category = ?, action = ?,
+        search_text = ? WHERE id = ?`);
+      for (const row of database.prepare('SELECT id, payload_json FROM activity_log').all()) {
+        let entry;
+        try { entry = JSON.parse(row.payload_json); } catch { entry = {}; }
+        update.run(...activityColumns(entry), row.id);
+      }
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS activity_log_by_category ON activity_log(category, occurred_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS activity_log_by_actor ON activity_log(actor_id, occurred_at DESC, id DESC);
+        PRAGMA user_version = 17;
+      `);
+    });
+  }
 }
 
 // Trạng thái giao dịch theo từng kết nối: bộ đệm danh mục không dùng khi đang trong giao dịch
@@ -437,8 +459,46 @@ function readVersion(database, key) {
   return database.prepare('SELECT version FROM dataset_versions WHERE dataset_key = ?').get(key);
 }
 
+// Nhật ký lọc và phân trang ngay trong SQLite (cột có chỉ mục, chuỗi tìm kiếm bỏ dấu lưu sẵn):
+// màn Nhật ký không phải tải toàn bộ lịch sử. Lượt chuyển màn hình của bản cũ ("Mở màn hình") không hiển thị.
+const text = (value) => (typeof value === 'string' ? value : '');
+function activityColumns(entry) {
+  return [text(entry.actorId), text(entry.actorName), text(entry.category), text(entry.action),
+    normalizeVietnamese([entry.actorName, entry.action, entry.detail].map(text).join(' '))];
+}
+
+function activityFilter({ needle, actor, category }) {
+  const clauses = ["NOT (category = 'session' AND action = 'Mở màn hình')"];
+  const values = [];
+  if (actor) { clauses.push('actor_id = ?'); values.push(actor); }
+  if (category) { clauses.push('category = ?'); values.push(category); }
+  if (needle) { clauses.push('instr(search_text, ?) > 0'); values.push(normalizeVietnamese(needle)); }
+  return { where: ' WHERE ' + clauses.join(' AND '), values };
+}
+
+function activityPage(database, filter, requested, limit) {
+  const { where, values } = activityFilter(filter);
+  const total = database.prepare('SELECT COUNT(*) total FROM activity_log' + where).get(...values).total;
+  const page = Math.min(requested, Math.max(1, Math.ceil(total / limit)));
+  const items = database.prepare('SELECT payload_json FROM activity_log' + where +
+    ' ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?').all(...values, limit, (page - 1) * limit)
+    .map((row) => JSON.parse(row.payload_json));
+  // Tên mới nhất của từng người thực hiện: SQLite lấy actor_name của dòng có MAX(occurred_at).
+  const actors = database.prepare(`SELECT actor_id, actor_name, MAX(occurred_at) latest FROM activity_log
+    WHERE actor_id <> '' GROUP BY actor_id`).all()
+    .map((row) => [row.actor_id, row.actor_name]).sort((a, b) => a[1].localeCompare(b[1], 'vi'));
+  return { items, total, page, limit, actors };
+}
+
+function activityExport(database, filter) {
+  const { where, values } = activityFilter(filter);
+  return database.prepare('SELECT payload_json FROM activity_log' + where + ' ORDER BY occurred_at DESC, id DESC')
+    .all(...values).map((row) => JSON.parse(row.payload_json));
+}
+
 function appendActivity(database, entry) {
-  database.prepare('INSERT INTO activity_log VALUES (?, ?, ?)').run(entry.id, entry.time, JSON.stringify(entry));
+  database.prepare(`INSERT INTO activity_log (id, occurred_at, payload_json, actor_id, actor_name, category, action, search_text)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(entry.id, entry.time, JSON.stringify(entry), ...activityColumns(entry));
   return true;
 }
 
@@ -900,7 +960,7 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
         const revision = randomUUID();
         const stamp = bookStamp(database, books.LEDGER);
         books.applyLedgerChange(database, before, after, revision, stamp);
-        if (audit) database.prepare('INSERT INTO activity_log VALUES (?, ?, ?)').run(audit.id, audit.time, JSON.stringify(audit));
+        if (audit) appendActivity(database, audit);
         cached?.onWrite?.(`1:${stamp}`, { ...after, revision });
         return revision;
       });
@@ -909,12 +969,14 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
       return withTransaction(database, () => {
         const { book, audit } = work(books.readSales(database) ?? null, (apply) => directoryTransaction(database, apply, false));
         if (book) books.writeSales(database, book, bookStamp(database, books.SALE));
-        if (audit) database.prepare('INSERT INTO activity_log VALUES (?, ?, ?)').run(audit.id, audit.time, JSON.stringify(audit));
+        if (audit) appendActivity(database, audit);
         return books.salesMetadata(database) ?? null;
       });
     },
     clearAllData(branding) { return clearAllData(database, branding); },
     appendActivity(entry) { return appendActivity(database, entry); },
+    activityPage(filter, page, limit) { return activityPage(database, filter, page, limit); },
+    activityExport(filter) { return activityExport(database, filter); },
     readActivities() {
       return database.prepare('SELECT payload_json FROM activity_log ORDER BY occurred_at DESC, id DESC')
         .all().map((row) => JSON.parse(row.payload_json));

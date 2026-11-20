@@ -44,7 +44,35 @@ export function buildDashboardSummary(
 			(a, b) =>
 				b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
 		);
-	const periodReceipts = receiptRows.filter((receipt) => receipt.date >= from);
+	// Khoản thu của kỳ trước bị hủy trong kỳ làm giảm tiền thu của kỳ này (dòng âm theo ngày hủy).
+	// Khoản thu ghi và hủy trong cùng kỳ đã bị loại khỏi sổ tại ngày chốt nên không tính hai lần.
+	const periodReversals = ledger.receipts
+		.filter(
+			({ date, reversal }) =>
+				date < from &&
+				reversal &&
+				reversal.date >= from &&
+				reversal.date <= through,
+		)
+		.map((receipt) => ({
+			...receipt,
+			id: `${receipt.id}:reversal`,
+			amount: -receipt.amount,
+			unallocated: 0,
+			reversedOn: receipt.reversal?.date,
+		}));
+	const effectiveDate = (row: { date: string; reversedOn?: string }) =>
+		row.reversedOn ?? row.date;
+	const periodReceipts = [
+		...receiptRows
+			.filter((receipt) => receipt.date >= from)
+			.map((receipt) => ({ ...receipt, reversedOn: undefined as string | undefined })),
+		...periodReversals,
+	].sort(
+		(a, b) =>
+			effectiveDate(b).localeCompare(effectiveDate(a)) ||
+			b.createdAt.localeCompare(a.createdAt),
+	);
 	const unallocatedReceipts = receiptRows.filter(
 		(receipt) => receipt.unallocated > 0,
 	);
@@ -91,6 +119,7 @@ export function buildDashboardSummary(
 		unallocatedReceipts,
 		remaining: receivables.reduce((sum, row) => sum + row.remaining, 0),
 		periodReceived: periodReceipts.reduce((sum, row) => sum + row.amount, 0),
+		periodReversalCount: periodReversals.length,
 		unallocated: unallocatedReceipts.reduce(
 			(sum, row) => sum + row.unallocated,
 			0,

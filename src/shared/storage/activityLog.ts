@@ -85,9 +85,37 @@ export function subscribeActivities(refresh: () => void) {
 	};
 }
 
-export async function readActivities(): Promise<ActivityEntry[]> {
-	return (await api<ActivityEntry[]>("GET", "activities")).filter(
-		({ category, action }) =>
-			category !== "session" || action !== "Mở màn hình",
+export type ActivityFilter = {
+	q?: string;
+	actor?: string;
+	category?: string;
+};
+
+export type ActivityPage = {
+	items: ActivityEntry[];
+	total: number;
+	page: number;
+	limit: number;
+	/** [mã, tên mới nhất] của những người đã có thao tác. */
+	actors: [string, string][];
+};
+
+function activityQuery(filter: ActivityFilter & { page?: number }) {
+	const query = new URLSearchParams();
+	for (const [key, value] of Object.entries(filter))
+		if (value !== undefined && value !== "") query.set(key, String(value));
+	return query.size ? `?${query}` : "";
+}
+
+/** Máy chủ lọc, bỏ lượt chuyển màn hình của bản cũ và phân trang nhật ký. */
+export function activityResource(filter: ActivityFilter & { page?: number }) {
+	return `activities${activityQuery(filter)}`;
+}
+
+/** Toàn bộ thao tác khớp bộ lọc, chỉ tải khi xuất CSV. */
+export function readActivitiesForExport(filter: ActivityFilter) {
+	return api<ActivityEntry[]>(
+		"GET",
+		`activities/export${activityQuery(filter)}`,
 	);
 }

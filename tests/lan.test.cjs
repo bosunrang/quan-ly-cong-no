@@ -188,7 +188,7 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     ['GET', 'reports/statements/c'], ['GET', 'receipts'], ['GET', 'receipts/next-number'], ['GET', 'receipts/r'],
     ['GET', 'receipts/r/candidates'], ['GET', 'receipts/r/candidates/matches'], ['GET', 'receipts/r/candidates/i'],
     ['POST', 'receipts', {}], ['POST', 'receipts/r/allocations', {}], ['POST', 'receipts/r/reversal', {}],
-    ['POST', 'allocations/a/reversal', {}], ['GET', 'activities'], ['POST', 'activities', {}],
+    ['POST', 'allocations/a/reversal', {}], ['GET', 'activities'], ['GET', 'activities/export'], ['POST', 'activities', {}],
     ['GET', 'business-backup'], ['POST', 'business-backup/restore', {}], ['DELETE', 'business-data', {}],
     ['GET', 'automatic-backups'], ['POST', 'automatic-backups/missing/restore'], ['GET', 'status'],
   ];
@@ -203,7 +203,7 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     assert.equal((await call(method, resource, body)).status, 401, method + ' ' + resource);
     if (noDashboard.has(resource) ||
         (method !== 'GET' && ['customers', 'employees', 'sales-book', 'receipt-ledger', 'settings'].includes(resource)) ||
-        (method === 'GET' && resource === 'activities'))
+        (method === 'GET' && resource.startsWith('activities')))
       assert.equal((await call(method, resource, body, guest)).status, 403, method + ' ' + resource);
   }
   assert.equal((await call('POST', '', {}, actor)).status, 404);
@@ -312,7 +312,7 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   assert.equal((await call('POST', 'receipts/' + receiptId + '/reversal', { ...reversal, revision: fresh }, actor)).status, 200);
   const reversed = (await call('GET', 'receipts/' + receiptId, undefined, actor)).value;
   assert.ok(reversed.receipt.reversal && reversed.allocations[0].reversal);
-  const audit = (await call('GET', 'activities', undefined, actor)).value;
+  const audit = (await call('GET', 'activities/export', undefined, actor)).value;
   for (const action of ['Ghi khoản thu', 'Lưu phân bổ', 'Hủy khoản thu']) assert.ok(audit.some((row) => row.action === action));
   const ledger = (await call('GET', 'business-backup', undefined, actor)).value.data.ledger;
   const settings = await call('GET', 'settings', undefined, actor);
@@ -391,7 +391,14 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   assert.equal((await call('POST', 'activities', { category: 'data', action: 'Thao tác mẫu', detail: '', actorId: 'fake' }, actor)).status, 400);
   assert.equal((await call('POST', 'activities', { category: 'reports', action: 'Thao tác mẫu', detail: '' }, actor)).status, 400);
   assert.equal((await call('POST', 'activities', { category: 'reports', action: 'Xuất Excel biên bản đối chiếu', detail: 'Thao tác mẫu', actorId: 'fake' }, actor)).status, 200);
-  const activity = (await call('GET', 'activities', undefined, actor)).value;
+  const activity = (await call('GET', 'activities/export', undefined, actor)).value;
+  // Trang nhật ký lọc ở máy chủ: cùng dữ liệu với tệp xuất, theo trang và theo nhóm thao tác.
+  const firstPage = (await call('GET', 'activities?limit=2', undefined, actor)).value;
+  assert.deepEqual([firstPage.items, firstPage.total], [activity.slice(0, 2), activity.length]);
+  const dataOnly = (await call('GET', 'activities?category=data&q=khach%20hang&limit=100', undefined, actor)).value;
+  assert.ok(dataOnly.total > 0 && dataOnly.items.every((row) => row.category === 'data' &&
+    /khách hàng/i.test(row.action + ' ' + row.detail)));
+  assert.equal((await call('GET', 'activities?limit=500', undefined, actor)).status, 400);
   assert.equal(activity.some(({ action }) => action === 'Thao tác mẫu'), false);
   assert.equal(activity.find(({ detail }) => detail === 'Thao tác mẫu').actorId, viewer.value.profile.id);
   // Thay đổi danh mục được máy chủ ghi nhật ký cùng giao dịch.
@@ -404,7 +411,7 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     assert.equal((await sibling('GET', 'sales-book', undefined, cookie)).value.book, null);
     assert.equal((await sibling('GET', 'receipts', undefined, cookie)).value.count, 0);
     assert.deepEqual((await sibling('GET', 'customers', undefined, cookie)).value, []);
-    assert.ok(!(await sibling('GET', 'activities', undefined, cookie)).value.some(({ detail }) => detail === 'Thao tác mẫu'));
+    assert.ok(!(await sibling('GET', 'activities/export', undefined, cookie)).value.some(({ detail }) => detail === 'Thao tác mẫu'));
   }
   for (const directory of new Set(dataDirectories.values())) {
     const stored = (await readdir(directory)).filter((name) => name.endsWith('.sqlite')).sort();

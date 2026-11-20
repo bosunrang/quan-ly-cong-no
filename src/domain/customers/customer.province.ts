@@ -1,3 +1,5 @@
+import { normalizeVietnamese } from "./vietnamese-text.mjs";
+
 export const provinces = [
 	"An Giang",
 	"Bắc Ninh",
@@ -35,16 +37,8 @@ export const provinces = [
 	"Vĩnh Long",
 ] as const;
 
-export function normalizeVietnamese(value: unknown): string {
-	return String(value ?? "")
-		.normalize("NFD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.replace(/đ/g, "d")
-		.replace(/Đ/g, "D")
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, " ")
-		.trim();
-}
+// Quy tắc bỏ dấu nằm ở tệp .mjs để máy chủ (SQLite) dùng đúng cùng một hàm.
+export { normalizeVietnamese };
 
 const provinceAliases: Record<(typeof provinces)[number], string[]> = {
 	"An Giang": ["an giang", "kien giang"],

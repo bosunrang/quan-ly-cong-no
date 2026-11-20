@@ -45,6 +45,7 @@
       "public/assets/app-icon.png",
       "src/domain/settings/business-data.rules.mjs",
       "src/domain/access/permissions.mjs",
+      "src/domain/customers/vietnamese-text.mjs",
       "package.json"
     ],
     "win": {

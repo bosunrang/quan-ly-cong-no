@@ -1,17 +1,19 @@
 import { Download, History, Search } from "lucide-react";
-import { useDeferredValue, useEffect, useRef, useState } from "react";
-import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import { usePagination } from "../../shared/hooks/usePagination";
+import { useEffect, useState } from "react";
+import { pageControls, useServerData } from "../../shared/hooks/useServerData";
 import { formatTimestamp } from "../../shared/lib/date";
 import {
-	activityCategories,
 	type ActivityEntry,
-	readActivities,
+	type ActivityPage as ActivityPageData,
+	activityCategories,
+	activityResource,
+	readActivitiesForExport,
 	subscribeActivities,
 } from "../../shared/storage/activityLog";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 
+const searchDelay = 250;
 const time = new Intl.DateTimeFormat("vi-VN", {
 	hour: "2-digit",
 	minute: "2-digit",
@@ -56,57 +58,53 @@ function exportActivity(rows: ActivityEntry[]) {
 }
 
 export function ActivityPage() {
-	const [entries, setEntries] = useState<ActivityEntry[]>();
-	const [error, setError] = useState("");
 	const [query, setQuery] = useState("");
-	// Ô tìm kiếm cập nhật ngay; danh sách lọc lại sau đó để gõ phím không bị khựng.
-	const searchQuery = useDeferredValue(query);
-	const [actor, setActor] = useState("");
-	const [category, setCategory] = useState("");
-	const refresh = useRef<() => void>(() => undefined);
-
+	const [filters, setFilters] = useState({
+		q: "",
+		actor: "",
+		category: "",
+		page: 1,
+	});
+	const [exporting, setExporting] = useState(false);
+	const [exportError, setExportError] = useState("");
+	const search = query.trim();
+	// Gõ tìm kiếm cập nhật ngay trong ô; máy chủ chỉ được hỏi khi người dùng ngừng gõ.
 	useEffect(() => {
-		let request = 0;
-		const read = () => {
-			const pending = ++request;
-			void readActivities()
-				.then((result) => {
-					if (request !== pending) return;
-					setEntries(result);
-					setError("");
-				})
-				.catch((reason: unknown) => {
-					if (request === pending)
-						setError(
-							reason instanceof Error
-								? reason.message
-								: "Không thể đọc nhật ký.",
-						);
-				});
-		};
-		refresh.current = read;
-		const unsubscribe = subscribeActivities(read);
-		read();
-		return () => {
-			request += 1;
-			unsubscribe();
-		};
-	}, []);
+		if (search === filters.q) return;
+		const timer = window.setTimeout(
+			() => setFilters((current) => ({ ...current, q: search, page: 1 })),
+			searchDelay,
+		);
+		return () => window.clearTimeout(timer);
+	}, [search, filters.q]);
+	const response = useServerData<ActivityPageData>(activityResource(filters));
+	const { refresh } = response;
+	useEffect(() => subscribeActivities(refresh), [refresh]);
+	const data = response.data ?? response.previous;
+	const error = response.error ?? "";
+	const rows = data?.items ?? [];
+	const total = data?.total ?? 0;
+	const currentPage = data?.page ?? filters.page;
+	const pagination = pageControls(currentPage, data?.limit ?? 25, total);
+	const { actor, category } = filters;
+	const setFilter = (change: Partial<typeof filters>) =>
+		setFilters((current) => ({ ...current, ...change, page: 1 }));
 
-	const actors = new Map<string, string>();
-	for (const row of entries ?? []) {
-		if (!actors.has(row.actorId)) actors.set(row.actorId, row.actorName);
+	async function exportFiltered() {
+		setExporting(true);
+		setExportError("");
+		try {
+			exportActivity(
+				await readActivitiesForExport({ q: filters.q, actor, category }),
+			);
+		} catch (reason) {
+			setExportError(
+				reason instanceof Error ? reason.message : "Không thể xuất nhật ký.",
+			);
+		} finally {
+			setExporting(false);
+		}
 	}
-	const needle = normalizeVietnamese(searchQuery);
-	const filtered = (entries ?? []).filter(
-		(row) =>
-			(!actor || row.actorId === actor) &&
-			(!category || row.category === category) &&
-			normalizeVietnamese(
-				`${row.actorName} ${row.action} ${row.detail}`,
-			).includes(needle),
-	);
-	const pagination = usePagination(filtered);
 
 	return (
 		<div className="page-stack">
@@ -123,12 +121,17 @@ export function ActivityPage() {
 				<button
 					className="button secondary"
 					type="button"
-					disabled={Boolean(error) || !filtered.length}
-					onClick={() => exportActivity(filtered)}
+					disabled={Boolean(error) || !total || exporting}
+					onClick={() => void exportFiltered()}
 				>
 					<Download className="icon-size-16" aria-hidden="true" /> Xuất CSV
 				</button>
 			</section>
+			{exportError && (
+				<Notice tone="danger" announce>
+					{exportError}
+				</Notice>
+			)}
 			<section className="panel data-panel" aria-label="Nhật ký sử dụng">
 				<div className="data-toolbar activity-filters">
 					<label className="table-search">
@@ -138,36 +141,25 @@ export function ActivityPage() {
 							aria-label="Tìm thao tác hoặc chi tiết"
 							placeholder="Tìm thao tác hoặc chi tiết"
 							value={query}
-							onChange={(event) => {
-								setQuery(event.target.value);
-								pagination.resetPage();
-							}}
+							onChange={(event) => setQuery(event.target.value)}
 						/>
 					</label>
 					<select
 						aria-label="Người thực hiện"
 						value={actor}
-						onChange={(event) => {
-							setActor(event.target.value);
-							pagination.resetPage();
-						}}
+						onChange={(event) => setFilter({ actor: event.target.value })}
 					>
 						<option value="">Tất cả người dùng</option>
-						{[...actors]
-							.sort((a, b) => a[1].localeCompare(b[1], "vi"))
-							.map(([id, name]) => (
-								<option key={id} value={id}>
-									{name}
-								</option>
-							))}
+						{(data?.actors ?? []).map(([id, name]) => (
+							<option key={id} value={id}>
+								{name}
+							</option>
+						))}
 					</select>
 					<select
 						aria-label="Nhóm thao tác"
 						value={category}
-						onChange={(event) => {
-							setCategory(event.target.value);
-							pagination.resetPage();
-						}}
+						onChange={(event) => setFilter({ category: event.target.value })}
 					>
 						<option value="">Tất cả thao tác</option>
 						{Object.entries(activityCategories).map(([key, label]) => (
@@ -185,12 +177,12 @@ export function ActivityPage() {
 						<button
 							className="button secondary"
 							type="button"
-							onClick={() => refresh.current()}
+							onClick={refresh}
 						>
 							Thử lại
 						</button>
 					</div>
-				) : entries === undefined ? (
+				) : data === undefined ? (
 					<p className="empty-state" role="status">
 						Đang đọc nhật ký…
 					</p>
@@ -208,7 +200,7 @@ export function ActivityPage() {
 									</tr>
 								</thead>
 								<tbody>
-									{pagination.pageItems.map((row) => (
+									{rows.map((row) => (
 										<tr key={row.id}>
 											<td>{entryTime(row.time)}</td>
 											<td>{row.actorName}</td>
@@ -221,7 +213,7 @@ export function ActivityPage() {
 											<td>{row.detail || "—"}</td>
 										</tr>
 									))}
-									{!filtered.length && (
+									{!rows.length && (
 										<tr>
 											<td className="empty-state" colSpan={5}>
 												Không có thao tác phù hợp.
@@ -234,12 +226,15 @@ export function ActivityPage() {
 						<footer className="access-table-footer">
 							<span>
 								{pagination.firstVisible}–{pagination.lastVisible} /{" "}
-								{filtered.length} thao tác
+								{total} thao tác
 							</span>
 							<PaginationControls
-								currentPage={pagination.currentPage}
+								currentPage={currentPage}
 								pageCount={pagination.pageCount}
-								onPageChange={pagination.setCurrentPage}
+								onPageChange={(page) =>
+									setFilters((current) => ({ ...current, page }))
+								}
+								disabled={response.loading}
 								previousLabel="Trang nhật ký trước"
 								nextLabel="Trang nhật ký sau"
 							/>

@@ -276,5 +276,5 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   const formerLink = (await read('admin', 'employees')).value.find(({ id }) => id === 'e-one');
   assert.deepEqual(formerLink, unlinkedEmployee);
   assert.deepEqual((await read('admin', 'customers')).value, before);
-  assert.ok((await read('admin', 'activities')).value.some(({ action, detail }) => action === 'Xóa tài khoản' && detail === 'one'));
+  assert.ok((await read('admin', 'activities/export')).value.some(({ action, detail }) => action === 'Xóa tài khoản' && detail === 'one'));
 });

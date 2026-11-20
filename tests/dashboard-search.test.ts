@@ -20,11 +20,24 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 	const summary: DashboardView = {
 		remaining: 100,
 		periodReceived: 200,
+		periodReversalCount: 0,
 		receiptTrend: {
 			daysPerBucket: 1,
 			buckets: [
-				{ from: "2026-11-01", through: "2026-11-01", amount: 80, count: 1 },
-				{ from: "2026-11-02", through: "2026-11-02", amount: 120, count: 1 },
+				{
+					from: "2026-11-01",
+					through: "2026-11-01",
+					amount: 80,
+					count: 1,
+					reversals: 0,
+				},
+				{
+					from: "2026-11-02",
+					through: "2026-11-02",
+					amount: 120,
+					count: 1,
+					reversals: 0,
+				},
 			],
 		},
 		unallocated: 0,

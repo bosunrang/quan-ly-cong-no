@@ -92,10 +92,15 @@ export function DashboardInsights({
 	);
 }
 
+const receiptCount = (count: number, reversals: number) =>
+	`${money.format(count)} khoản thu${reversals ? ` · ${money.format(reversals)} khoản thu kỳ trước bị hủy` : ""}`;
+
 function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 	const { buckets, daysPerBucket } = trend;
 	const [selected, setSelected] = useState<string>();
-	const receiptBuckets = buckets.filter(({ count }) => count > 0);
+	const receiptBuckets = buckets.filter(
+		({ count, reversals }) => count > 0 || reversals > 0,
+	);
 	const active =
 		buckets.find((bucket) => bucket.from === selected) ?? receiptBuckets.at(-1);
 	const max = Math.max(0, ...buckets.map(({ amount }) => amount));
@@ -125,7 +130,7 @@ function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 						<strong>{money.format(active.amount)}</strong>
 						<span>
 							{dateRange(active.from, active.through)} ·{" "}
-							{money.format(active.count)} khoản thu
+							{receiptCount(active.count, active.reversals)}
 						</span>
 					</div>
 					<div
@@ -140,8 +145,8 @@ function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 							<legend className="visually-hidden">
 								Khoản thu theo ngày hoặc nhóm ngày
 							</legend>
-							{buckets.map(({ from, through, amount, count }) => {
-								const label = `${dateRange(from, through)} · ${money.format(amount)} · ${money.format(count)} khoản thu`;
+							{buckets.map(({ from, through, amount, count, reversals }) => {
+								const label = `${dateRange(from, through)} · ${money.format(amount)} · ${receiptCount(count, reversals)}`;
 								return (
 									<button
 										key={from}
@@ -153,7 +158,7 @@ function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 									>
 										<span
 											aria-hidden="true"
-											style={{ height: `${(amount / max) * 100}%` }}
+											style={{ height: `${(Math.max(0, amount) / max) * 100}%` }}
 										/>
 									</button>
 								);

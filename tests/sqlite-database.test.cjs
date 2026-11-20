@@ -28,6 +28,37 @@ test('SQLite giữ tài khoản và nhật ký khi xóa dữ liệu nghiệp v�
   }
 });
 
+test('nhật ký lọc, tìm không dấu và phân trang ngay trong SQLite', () => {
+  const database = openDatabase(':memory:');
+  try {
+    const entry = (index, extra) => ({ id: 'event-' + String(index).padStart(3, '0'),
+      time: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(), actorId: 'kt-1', actorName: 'Kế toán A',
+      category: 'payments', action: 'Ghi khoản thu', detail: 'PT-2026-' + index, ...extra });
+    for (let index = 0; index < 30; index++) database.appendActivity(entry(index));
+    database.appendActivity(entry(30, { category: 'session', action: 'Mở màn hình', detail: 'Dashboard' }));
+    database.appendActivity(entry(31, { actorId: 'kt-2', actorName: 'Kế toán B (cũ)', category: 'data', action: 'Thêm khách hàng', detail: 'Bệnh viện Tâm' }));
+    database.appendActivity(entry(32, { actorId: 'kt-2', actorName: 'Kế toán B', category: 'data', action: 'Xóa khách hàng', detail: 'Nhà thuốc Đức' }));
+
+    const first = database.activityPage({}, 1, 25);
+    assert.equal(first.total, 32, 'không tính lượt chuyển màn hình của bản cũ');
+    assert.deepEqual(first.items.slice(0, 2).map(({ id }) => id), ['event-032', 'event-031']);
+    assert.equal(first.items.length, 25);
+    assert.deepEqual(first.actors, [['kt-1', 'Kế toán A'], ['kt-2', 'Kế toán B']]);
+    // Trang vượt quá số trang được đưa về trang cuối.
+    const last = database.activityPage({}, 9, 25);
+    assert.deepEqual([last.page, last.items.length, last.items.at(-1).id], [2, 7, 'event-000']);
+
+    assert.equal(database.activityPage({ actor: 'kt-2' }, 1, 25).total, 2);
+    assert.equal(database.activityPage({ category: 'payments' }, 1, 25).total, 30);
+    assert.deepEqual(database.activityPage({ needle: 'benh vien' }, 1, 25).items.map(({ id }) => id), ['event-031']);
+    assert.deepEqual(database.activityPage({ needle: 'ĐỨC', category: 'data' }, 1, 25).items.map(({ id }) => id), ['event-032']);
+    assert.equal(database.activityPage({ needle: 'kế toán b' }, 1, 25).total, 2);
+    assert.equal(database.activityExport({ category: 'payments' }).length, 30);
+  } finally {
+    database.close();
+  }
+});
+
 const sampleSale = { rowNumber: 2, date: '2026-01-01', documentNumber: 'BH001', invoiceNumber: '1',
   customerName: 'A', productName: 'B', unit: 'Hộp', quantity: 1, unitPrice: 100, salesAmount: 100, paymentTotal: 110 };
 
@@ -80,12 +111,18 @@ test('v16 bỏ số dư đầu kỳ nhập tay và cất nguyên văn số dư c
     raw.exec('ALTER TABLE customers ADD COLUMN opening_balance_json TEXT; PRAGMA user_version = 15;');
     raw.prepare("UPDATE customers SET opening_balance_json = ? WHERE id = 'c-1'")
       .run(JSON.stringify({ amount: 900, date: '2026-01-06' }));
+    // Dòng nhật ký ghi theo kiểu cũ (chỉ có JSON): v17 phải tách cột và chuỗi tìm kiếm.
+    raw.prepare('INSERT INTO activity_log (id, occurred_at, payload_json) VALUES (?, ?, ?)').run('old-event', time,
+      JSON.stringify({ id: 'old-event', time, actorId: 'kt-1', actorName: 'Kế toán A', category: 'data',
+        action: 'Thêm khách hàng', detail: 'Bệnh viện Đức' }));
     raw.close();
 
     const upgraded = openDatabase(databasePath);
     assert.equal(upgraded.status().schemaVersion, SCHEMA_VERSION);
     assert.deepEqual(upgraded.readDataset(DATASET_KEYS.customers).data.map(({ id, openingBalance }) => [id, openingBalance]),
       [['c-1', undefined], ['c-2', undefined]]);
+    const legacyLog = upgraded.activityPage({ needle: 'benh vien duc', category: 'data' }, 1, 25);
+    assert.deepEqual([legacyLog.total, legacyLog.items[0].id, legacyLog.actors], [1, 'old-event', [['kt-1', 'Kế toán A']]]);
     upgraded.writeDataset(DATASET_KEYS.customers, 2, [customer]);
     upgraded.close();
 

@@ -127,7 +127,7 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
 - Dữ liệu ghi theo envelope `{ version, data }`; máy chủ và SQLite là nguồn duy nhất, không dùng bản sao trên trình duyệt thay thế.
 - Lỗi đọc dữ liệu báo lên toàn ứng dụng và không ghi đè gì. UI chỉ báo thành công sau khi repository xác nhận đã ghi.
 - Sao lưu tự động 14 bản theo ngày, và bản JSON trước mỗi thao tác xóa/khôi phục.
-- Schema hiện tại là **16** (`SCHEMA_VERSION` trong `server/database.cjs`). Bước v13 tách dòng bán hàng, khoản thu, phân bổ và đảo phiếu thành các bảng riêng. SQLite kiểm tra dữ liệu sau khi chuyển và hủy bước nâng cấp nếu có sai lệch.
+- Schema hiện tại là **17** (`SCHEMA_VERSION` trong `server/database.cjs`). Bước v13 tách dòng bán hàng, khoản thu, phân bổ và đảo phiếu thành các bảng riêng. SQLite kiểm tra dữ liệu sau khi chuyển và hủy bước nâng cấp nếu có sai lệch.
   Bản sao lưu SQLite cũ được nâng cấp trên bản chép tạm khi đọc, tệp sao lưu gốc giữ nguyên.
 - Bước v14 chuyển khối JSON tài khoản `cong-no.accounts.v1` sang các bảng `users` và `user_pages`,
   đối chiếu toàn bộ tài khoản trước khi bỏ khối cũ. Bảng `sessions` lưu bản băm token, tài khoản,
@@ -137,6 +137,9 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
   số dư đã nhập được cất nguyên văn vào bảng `legacy_opening_balances` rồi cột bị xóa. Công nợ chỉ
   tính từ sổ bán hàng MISA và khoản thu; phân bổ cũ vào số dư đầu kỳ (nếu có) hiện là phân bổ chưa khớp
   sổ MISA và được hoàn tác ở màn Đối soát khoản thu.
+- Bước v17 tách người thực hiện, nhóm, thao tác và chuỗi tìm kiếm đã bỏ dấu của nhật ký thành cột
+  có chỉ mục (điền lại cho dòng cũ). Màn Nhật ký lọc và phân trang ở máy chủ; quy tắc bỏ dấu dùng chung
+  nằm ở `src/domain/customers/vietnamese-text.mjs`.
 
 ## API và lưu danh mục
 

@@ -1,33 +1,32 @@
 import * as transport from "../src/shared/api/client";
 import { afterEach, expect, it, vi } from "vitest";
 import {
-	type ActivityEntry,
-	readActivities,
+	activityResource,
+	readActivitiesForExport,
 } from "../src/shared/storage/activityLog";
 
 afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-it("ẩn lịch sử chuyển thẻ nhưng giữ các thao tác quan trọng", async () => {
-	const entry: ActivityEntry = {
-		id: "navigation",
-		time: "2026-11-19T10:00:00.000Z",
-		actorId: "admin",
-		actorName: "Quản trị viên",
-		category: "session",
-		action: "Mở màn hình",
-		detail: "Nhật ký sử dụng",
-	};
-	const login = { ...entry, id: "login", action: "Đăng nhập", detail: "" };
-	const importBook = {
-		...entry,
-		id: "import",
-		category: "data",
-		action: "Nhập sổ bán hàng MISA",
-		detail: "Sổ bán hàng.xlsx",
-	};
-	vi.spyOn(transport, "api").mockResolvedValue([entry, login, importBook]);
+it("gửi bộ lọc nhật ký lên máy chủ và bỏ các ô trống", () => {
+	expect(activityResource({ q: "", actor: "", category: "", page: 1 })).toBe(
+		"activities?page=1",
+	);
+	expect(
+		activityResource({
+			q: "khách hàng",
+			actor: "kt-1",
+			category: "data",
+			page: 3,
+		}),
+	).toBe(
+		"activities?q=kh%C3%A1ch+h%C3%A0ng&actor=kt-1&category=data&page=3",
+	);
+});
 
-	expect(await readActivities()).toEqual([login, importBook]);
+it("chỉ tải toàn bộ thao tác khớp bộ lọc khi xuất CSV", async () => {
+	const api = vi.spyOn(transport, "api").mockResolvedValue([]);
+	await readActivitiesForExport({ q: "", actor: "kt-1", category: "" });
+	expect(api).toHaveBeenCalledWith("GET", "activities/export?actor=kt-1");
 });

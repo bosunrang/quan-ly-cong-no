@@ -162,7 +162,11 @@ export function Dashboard({
 			: summary.salesRowCount
 				? "Chưa có chứng từ đủ điều kiện"
 				: "Chưa có dữ liệu MISA tại ngày chốt",
-		period: `${number.format(summary.periodCount)} khoản thu trong kỳ`,
+		period: `${number.format(summary.periodCount - summary.periodReversalCount)} khoản thu trong kỳ${
+			summary.periodReversalCount
+				? ` · trừ ${number.format(summary.periodReversalCount)} khoản kỳ trước bị hủy`
+				: ""
+		}`,
 		unallocated: `${number.format(summary.unallocatedCount)} khoản thu còn tiền chờ phân bổ`,
 	};
 	const headings = isReceivables
@@ -434,6 +438,11 @@ export function Dashboard({
 														<tr key={row.id}>
 															<td>
 																<strong>{row.number}</strong>
+																{row.reversedOn && (
+																	<small className="cell-meta">
+																		Hủy ngày {formatDateOnly(row.reversedOn)}
+																	</small>
+																)}
 															</td>
 															<td>{formatDateOnly(row.date)}</td>
 															<td>
@@ -446,7 +455,9 @@ export function Dashboard({
 															</td>
 															<td>{number.format(row.amount)}</td>
 															<td className="strong-number">
-																{number.format(row.unallocated)}
+																{row.reversedOn
+																	? "—"
+																	: number.format(row.unallocated)}
 															</td>
 														</tr>
 													),
