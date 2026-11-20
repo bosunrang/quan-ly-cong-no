@@ -13,23 +13,19 @@ function requireLinkedEmployee(db, account, status = 403) {
   if (employee.status !== 'active') fail(status, 'Nhân viên liên kết đã ngừng hoạt động. Vui lòng liên hệ quản trị viên.');
 }
 
-// Tính lại ở mỗi yêu cầu: chuyển giao khách hoặc bỏ liên kết có hiệu lực ngay cả với phiên cũ.
-function customerScope(db, account) {
-  const unrestricted = account.role === 'admin';
-  let ids;
-  function assignedIds() {
-    if (ids) return ids;
-    ids = new Set();
-    const employee = linkedEmployee(db, account);
-    if (employee?.status === 'active') {
-      const customers = db.readDataset(DATASET_KEYS.customers)?.data ?? [];
-      for (const customer of customers) {
-        const assignment = customer.assignments.find(({ effectiveTo }) => !effectiveTo);
-        if (assignment?.employeeId === employee.id) ids.add(customer.id);
-      }
-    }
-    return ids;
+function assignedCustomerIds(customers, employeeId) {
+  const ids = new Set();
+  for (const customer of customers) {
+    const assignment = customer.assignments.find(({ effectiveTo }) => !effectiveTo);
+    if (assignment?.employeeId === employeeId) ids.add(customer.id);
   }
+  return ids;
+}
+
+function createScope(loadIds) {
+  const unrestricted = !loadIds;
+  let ids;
+  const assignedIds = () => ids ??= loadIds();
   const allows = (id) => unrestricted || assignedIds().has(id);
   return {
     unrestricted,
@@ -54,4 +50,20 @@ function customerScope(db, account) {
   };
 }
 
-module.exports = { linkedEmployee, requireLinkedEmployee, customerScope };
+// Tính lại ở mỗi yêu cầu: chuyển giao khách hoặc bỏ liên kết có hiệu lực ngay cả với phiên cũ.
+function customerScope(db, account) {
+  if (account.role === 'admin') return createScope();
+  return createScope(() => {
+    const employee = linkedEmployee(db, account);
+    if (employee?.status !== 'active') return new Set();
+    return assignedCustomerIds(db.readDataset(DATASET_KEYS.customers)?.data ?? [], employee.id);
+  });
+}
+
+function scopeForDashboard(customers, { employee, province }) {
+  const area = province === '?' ? '' : province;
+  const directory = province ? customers.filter((customer) => customer.province.trim() === area) : customers;
+  return createScope(() => employee ? assignedCustomerIds(directory, employee) : new Set(directory.map(({ id }) => id)));
+}
+
+module.exports = { linkedEmployee, requireLinkedEmployee, customerScope, scopeForDashboard };

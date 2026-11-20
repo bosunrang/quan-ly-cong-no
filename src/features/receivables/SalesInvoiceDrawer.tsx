@@ -24,10 +24,14 @@ export function SalesInvoiceDrawer({
 	customer,
 	asOfDate,
 	from,
+	employee,
+	province,
 	onClose,
 }: {
 	customer: InvoiceCustomer;
 	from?: string;
+	employee?: string;
+	province?: string;
 	asOfDate?: string;
 	onClose: () => void;
 }) {
@@ -39,15 +43,16 @@ export function SalesInvoiceDrawer({
 	const [page, setPage] = useState(1);
 	const search = useDeferredValue(query);
 	const base = `receivables/${encodeURIComponent(customer.id)}/invoices`;
+	const periodScope = { through: asOfDate, from, employee, province };
 	const response = useServerData<Page<InvoiceRow>>(
-		resourceWithQuery(base, { q: search, page, through: asOfDate, from }),
+		resourceWithQuery(base, { q: search, page, ...periodScope }),
 	);
 	const detailResponse = useServerData<ReceivableDocument>(
 		detail
-			? resourceWithQuery(`${base}/${encodeURIComponent(detail.documentId)}`, {
-					through: asOfDate,
-					from,
-				})
+			? resourceWithQuery(
+					`${base}/${encodeURIComponent(detail.documentId)}`,
+					periodScope,
+				)
 			: undefined,
 	);
 	const openedDocument = detailResponse.data;
@@ -235,7 +240,11 @@ export function SalesInvoiceDrawer({
 								</tbody>
 							</table>
 							{!total && !response.loading && !response.error && (
-								<p className="empty-state">Không tìm thấy chứng từ phù hợp.</p>
+								<p className="empty-state">
+									{asOfDate && !search.trim()
+										? "Không có chứng từ còn nợ được tính tại ngày chốt."
+										: "Không tìm thấy chứng từ phù hợp."}
+								</p>
 							)}
 						</section>
 						<footer className="receivable-footer">

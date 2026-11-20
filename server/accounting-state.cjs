@@ -4,6 +4,7 @@ const { DATASET_KEYS } = require('./database.cjs');
 const { SALE, LEDGER } = require('./books.cjs');
 const domain = require('./domain.cjs');
 const { period } = require('./routes/helpers.cjs');
+const { scopeForDashboard } = require('./customer-scope.cjs');
 
 function createAccountingState(db) {
   // Reuse decoded SQLite rows on this server until the corresponding book changes.
@@ -20,13 +21,21 @@ function createAccountingState(db) {
   };
   const sales = bookReader(SALE, (data) => data ?? null);
   const ledger = bookReader(LEDGER, (data) => domain.migrateReceiptLedger(data ?? domain.emptyReceiptLedger));
-  const customers = () => db.readDataset(DATASET_KEYS.customers)?.data ?? [];
-  const employees = () => db.readDataset(DATASET_KEYS.employees)?.data ?? [];
-  // Danh mục đọc lại mỗi lần (nhỏ); khóa nội dung dùng để biết kết quả đã dựng còn dùng được không.
+  const none = Object.freeze([]);
+  const customers = () => db.readDataset(DATASET_KEYS.customers)?.data ?? none;
+  const employees = () => db.readDataset(DATASET_KEYS.employees)?.data ?? none;
+  // SQLite trả lại cùng một bản danh mục khi chưa có gì được ghi, nên chỉ dựng khóa nội dung khi
+  // bản đọc đổi. `version` chỉ tăng khi nội dung đổi, dùng làm khóa ngắn cho bộ đệm Dashboard.
+  let lastCatalog;
+  let catalogVersion = 0;
   function catalog() {
     const directory = customers();
     const staff = employees();
-    return { directory, staff, key: JSON.stringify([directory, staff]) };
+    if (lastCatalog?.directory === directory && lastCatalog.staff === staff) return lastCatalog;
+    const key = JSON.stringify([directory, staff]);
+    const version = lastCatalog?.key === key ? lastCatalog.version : ++catalogVersion;
+    lastCatalog = { directory, staff, key, version };
+    return lastCatalog;
   }
 
   // Dựng sổ theo khách hàng là bước tốn nhất (đọc toàn bộ dòng bán hàng). Chỉ dựng lại khi sổ
@@ -70,33 +79,53 @@ function createAccountingState(db) {
     return lastView.result;
   }
 
+  function dashboardScope(query, scope, current) {
+    const employee = scope?.unrestricted ? query.get('employee') : null;
+    const province = query.get('province');
+    return employee || province
+      ? scopeForDashboard(scope ? scope.customers(current.directory) : current.directory, { employee, province })
+      : scope;
+  }
+
   // Nhớ vài kỳ Dashboard gần nhất: nhiều người xem các kỳ khác nhau không phải tính lại liên tục.
-  const summaries = new Map();
-  function summary(query, scope) {
+  // Kết quả toàn công ty (tốn nhất) giữ riêng để lọc theo nhiều nhân viên/khu vực không đẩy nó ra.
+  const summaries = { all: new Map(), filtered: new Map() };
+  const summaryLimits = { all: 8, filtered: 32 };
+  function summary(query, scope, current = catalog()) {
     const book = sales();
     const data = ledger();
-    const current = catalog();
     const [from, through] = period(query);
-    const key = JSON.stringify([current.key, from, through, scope?.key ?? '*']);
-    const cached = summaries.get(key);
+    const visibleScope = dashboardScope(query, scope, current);
+    const scopeKey = visibleScope && !visibleScope.unrestricted ? visibleScope.key : '*';
+    const bucket = scopeKey === '*' ? 'all' : 'filtered';
+    const cache = summaries[bucket];
+    const key = JSON.stringify([current.version, from, through, scopeKey]);
+    const cached = cache.get(key);
     if (cached && cached.book === book && cached.data === data) {
-      summaries.delete(key);
-      summaries.set(key, cached);
+      cache.delete(key);
+      cache.set(key, cached);
       return cached.result;
     }
     const groups = groupsThrough(book, current, through);
-    const visibleGroups = scope ? scope.groups(groups) : groups;
-    const visibleLines = scope && !scope.unrestricted
+    const visibleGroups = visibleScope ? visibleScope.groups(groups) : groups;
+    const visibleLines = visibleScope && !visibleScope.unrestricted
       ? new Set(visibleGroups.flatMap((group) => group.documents.flatMap((document) => document.lines))) : null;
     const visibleBook = book && visibleLines ? { ...book, rows: book.rows.filter((row) => visibleLines.has(row)) } : book;
-    const result = domain.buildDashboardSummary(visibleBook, scope ? scope.ledger(data) : data,
+    const result = domain.buildDashboardSummary(visibleBook, visibleScope ? visibleScope.ledger(data) : data,
       current.directory, current.staff, from, through, visibleGroups);
-    summaries.delete(key);
-    summaries.set(key, { book, data, result });
-    while (summaries.size > 12) summaries.delete(summaries.keys().next().value);
+    cache.delete(key);
+    cache.set(key, { book, data, result });
+    while (cache.size > summaryLimits[bucket]) cache.delete(cache.keys().next().value);
     return result;
   }
-  return { sales, ledger, customers, employees, catalog, groupsFor, sourcesFor, projected, summary };
+
+  // Dựng sẵn sổ theo khách và Dashboard mặc định (đầu tháng đến hôm nay) để người mở đầu tiên
+  // sau khi khởi động không phải chờ dựng toàn bộ sổ.
+  function warm() {
+    const through = domain.todayLocal();
+    summary(new URLSearchParams({ from: through.slice(0, 8) + '01', through }));
+  }
+  return { sales, ledger, customers, employees, catalog, groupsFor, sourcesFor, projected, dashboardScope, summary, warm };
 }
 
 module.exports = { createAccountingState };

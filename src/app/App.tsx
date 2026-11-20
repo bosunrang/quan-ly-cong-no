@@ -275,7 +275,7 @@ function App() {
 		if (activePage === "dashboard")
 			return (
 				<Dashboard
-					onOpenMisa={openMisa}
+					showEmployeeFilter={role === "admin"}
 					onOpenPayments={openPayments}
 					InvoiceDrawer={DashboardInvoiceDrawer}
 				/>

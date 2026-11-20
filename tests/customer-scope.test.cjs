@@ -86,13 +86,60 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
     assert.equal(result.value.periodReceived, user === 'admin' ? 200 : user === 'empty' ? 0 : 100);
     assert.equal(result.value.unallocated, user === 'admin' ? 100 : user === 'empty' ? 0 : 50);
     assert.equal(result.value.salesRowCount, user === 'admin' ? 5 : user === 'empty' ? 0 : 1);
+    assert.equal(result.value.receiptTrend.buckets.reduce((sum, bucket) => sum + bucket.amount, 0), result.value.periodReceived);
+    assert.equal(result.value.receiptTrend.buckets[0].from, '2026-01-01');
+    assert.equal(result.value.receiptTrend.buckets.at(-1).through, '2026-12-31');
+    assert.deepEqual(result.value.topDebtors.map(({ id }) => id), user === 'admin'
+      ? result.value.rows.items.map(({ id }) => id) : user === 'empty' ? [] : ['catalog:c-' + user]);
     if (user !== 'admin') assert.ok(result.value.rows.items.every(({ id }) => id === 'catalog:c-' + user));
   }
   for (const view of ['period', 'unallocated']) {
     const result = (await read('one', 'dashboard?' + period + '&view=' + view)).value;
     assert.equal(result.rows.total, 1);
     assert.equal(result.rows.items[0].customerId, 'c-one');
+    assert.deepEqual(result.topDebtors.map(({ id }) => id), ['catalog:c-one']);
   }
+  const dailyTrend = (await read('one', 'dashboard?from=2026-01-01&through=2026-01-03')).value.receiptTrend;
+  assert.equal(dailyTrend.daysPerBucket, 1);
+  assert.deepEqual(dailyTrend.buckets.map(({ amount, count }) => [amount, count]), [[0, 0], [100, 1], [0, 0]]);
+  for (const employee of ['e-one', 'e-two']) {
+    const ownId = 'c-' + employee.slice(2);
+    const target = 'dashboard?' + period + '&employee=' + employee;
+    const detail = (await read('admin', target)).value;
+    assert.deepEqual([detail.remaining, detail.periodReceived, detail.unallocated], [150, 100, 50]);
+    assert.deepEqual(detail.topDebtors.map(({ id }) => id), ['catalog:' + ownId]);
+    assert.deepEqual(detail.rows.items.map(({ id }) => id), ['catalog:' + ownId]);
+    assert.equal(detail.receiptTrend.buckets.reduce((sum, bucket) => sum + bucket.amount, 0), 100);
+    for (const view of ['period', 'unallocated'])
+      assert.deepEqual((await read('admin', target + '&view=' + view)).value.rows.items.map(({ customerId }) => customerId), [ownId]);
+  }
+  const filteredInvoiceList = 'receivables/catalog%3Ac-one/invoices?' + period + '&employee=';
+  assert.equal((await read('admin', filteredInvoiceList + 'e-one')).status, 200);
+  assert.equal((await read('admin', filteredInvoiceList + 'e-two')).status, 404);
+  const selectedByStaff = (await read('one', 'dashboard?' + period + '&employee=e-two')).value;
+  assert.deepEqual(selectedByStaff.topDebtors.map(({ id }) => id), ['catalog:c-one']);
+  assert.deepEqual(selectedByStaff.provinceOptions, ['one']);
+  const region = (await read('admin', 'dashboard?' + period + '&province=two')).value;
+  assert.deepEqual(region.topDebtors.map(({ id }) => id), ['catalog:c-two']);
+  assert.deepEqual([region.remaining, region.periodReceived, region.unallocated], [150, 100, 50]);
+  assert.ok(region.provinceOptions.includes('one') && region.provinceOptions.includes('two'));
+  const combined = (await read('admin', 'dashboard?' + period + '&employee=e-one&province=two')).value;
+  assert.deepEqual([combined.remaining, combined.periodReceived, combined.unallocated], [0, 0, 0]);
+  const outsideRegion = (await read('one', 'dashboard?' + period + '&province=two')).value;
+  assert.deepEqual(outsideRegion.rows.items, []);
+  assert.deepEqual(outsideRegion.provinceOptions, ['one']);
+  assert.equal((await read('admin', filteredInvoiceList + 'e-one&province=two')).status, 404);
+  const lookup = 'dashboard/customers?' + period;
+  const foundCustomer = { id: 'catalog:c-one', name: 'Khách one', customerCode: 'one' };
+  assert.deepEqual((await read('admin', lookup + '&employee=e-one&province=one&q=khach+one')).value, [foundCustomer]);
+  assert.deepEqual((await read('admin', lookup + '&employee=e-one&province=two&q=one')).value, []);
+  assert.deepEqual((await read('one', lookup + '&q=two')).value, []);
+  assert.deepEqual((await read('one', lookup + '&employee=e-two&q=one')).value, [foundCustomer]);
+  const earlyPeriod = 'from=2026-01-01&through=2026-01-01';
+  assert.deepEqual((await read('one', 'dashboard/customers?' + earlyPeriod + '&q=one')).value, [foundCustomer]);
+  const noDebt = await read('one', 'receivables/catalog%3Ac-one/invoices?' + earlyPeriod);
+  assert.equal(noDebt.status, 200);
+  assert.deepEqual(noDebt.value.items, []);
   assert.deepEqual((await read('one', 'customers')).value.map(({ id }) => id), ['c-one']);
   const receivables = (await read('one', 'receivables')).value;
   assert.equal(receivables.rows.total, 1);

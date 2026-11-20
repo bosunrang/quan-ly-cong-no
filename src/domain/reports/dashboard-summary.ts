@@ -12,6 +12,7 @@ import {
 	totalsByReceipt,
 } from "../payments/receipt-ledger";
 import { projectReceiptReceivables } from "../payments/receipt-receivables";
+import { receiptTrend } from "./receipt-trend";
 
 export function buildDashboardSummary(
 	book: MisaSalesBook | null,
@@ -71,6 +72,7 @@ export function buildDashboardSummary(
 	return {
 		receivables,
 		periodReceipts,
+		receiptTrend: receiptTrend(periodReceipts, from, through),
 		unallocatedReceipts,
 		remaining: receivables.reduce((sum, row) => sum + row.remaining, 0),
 		periodReceived: periodReceipts.reduce((sum, row) => sum + row.amount, 0),

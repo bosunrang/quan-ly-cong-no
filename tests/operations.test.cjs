@@ -16,6 +16,9 @@ const { parseTunnelOrigin, requestPeer } = require('../server/client-address.cjs
 const { createFileLog } = require('../server/file-log.cjs');
 const { createLanServer, listenLanServer, stopLanServer } = require('../server/lan.cjs');
 const { startDevelopmentServer } = require('../server/development.cjs');
+const { openDatabase, DATASET_KEYS } = require('../server/database.cjs');
+const { createAccountingState } = require('../server/accounting-state.cjs');
+const { customerScope } = require('../server/customer-scope.cjs');
 
 function workspace(t) {
   const directory = mkdtempSync(join(tmpdir(), 'cong-no-operations-'));
@@ -37,6 +40,39 @@ function http(port, headers, { method = 'GET', url = '/', body } = {}) {
     req.end(body && JSON.stringify(body));
   });
 }
+
+test('Dashboard giữ kết quả toàn công ty khi lọc nhiều nhân viên và tính lại khi danh mục đổi', (t) => {
+  const db = openDatabase(join(workspace(t), 'cong-no.sqlite'));
+  try {
+    const time = '2026-01-01T00:00:00.000Z';
+    const customers = Array.from({ length: 40 }, (_, i) => ({ id: 'c' + i, misaCode: 'KH' + i, name: 'Khách ' + i,
+      group: 'unknown', taxCode: '', province: 'Tỉnh ' + (i % 4), address: '', status: 'active', createdAt: time, updatedAt: time,
+      assignments: [{ id: 'a' + i, employeeId: 'e' + (i % 20), employeeName: 'NV ' + (i % 20), province: '', source: 'direct',
+        effectiveFrom: '2026-01-01', effectiveTo: null }] }));
+    db.writeDataset(DATASET_KEYS.customers, 2, customers);
+    db.writeMisaSalesBook(null, { fileName: 'a.xlsx', importedAt: time, rows: customers.map((customer, i) => ({
+      rowNumber: i + 2, date: '2026-01-02', documentNumber: 'BH' + i, invoiceNumber: String(i), customerName: customer.name,
+      productName: 'Hàng', unit: 'Hộp', quantity: 1, unitPrice: 100, salesAmount: 100, paymentTotal: 100,
+      source: { customerCode: customer.misaCode, invoiceSeries: 'C26', invoiceDate: '2026-01-02', debitAccount: '131' } })) });
+    const state = createAccountingState(db);
+    const query = (extra = '') => new URLSearchParams('from=2026-01-01&through=2026-01-31' + extra);
+    const admin = customerScope(db, { role: 'admin' });
+    const whole = state.summary(query(), admin);
+    assert.equal(whole.remaining, 4000);
+    for (let i = 0; i < 20; i++) assert.equal(state.summary(query('&employee=e' + i), admin).remaining, 200);
+    assert.equal(state.summary(query('&province=T%E1%BB%89nh%201'), admin).remaining, 1000);
+    assert.equal(state.summary(query(), admin), whole, 'kết quả toàn công ty không bị đẩy khỏi bộ đệm');
+    assert.equal(state.catalog(), state.catalog(), 'không dựng lại khóa danh mục khi chưa có gì ghi');
+
+    db.writeDataset(DATASET_KEYS.customers, 2, customers.slice(1));
+    const changed = state.summary(query(), admin);
+    assert.notEqual(changed, whole);
+    assert.equal(changed.remaining, 3900);
+    state.warm();
+  } finally {
+    db.close();
+  }
+});
 
 test('tự đăng nhập dev cần khóa nội bộ, cấp phiên quản trị và giữ tài khoản đang chờ đổi mật khẩu', async (t) => {
   const directory = workspace(t);

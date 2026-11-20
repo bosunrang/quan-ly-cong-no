@@ -29,6 +29,17 @@ const documentSummary = ({ lines, ...item }) => item;
 const find = (items, id, label) => items.find((item) => item.id === id) ?? fail(404, 'Không tìm thấy ' + label + '.');
 const search = (query) => normalize(query.get('q') ?? '');
 
+// Chuỗi tìm kiếm đã bỏ dấu của từng bản ghi. Danh mục và kết quả Dashboard được dùng lại giữa các
+// yêu cầu nên chỉ chuẩn hóa một lần cho mỗi bản ghi thay vì mỗi lần gõ phím.
+const searchTexts = new WeakMap();
+function searchText(item, field, text) {
+  let fields = searchTexts.get(item);
+  if (!fields) searchTexts.set(item, fields = new Map());
+  let value = fields.get(field);
+  if (value === undefined) fields.set(field, value = normalize(text(item)));
+  return value;
+}
+
 function period(query) {
   const from = query.get('from');
   const through = query.get('through');
@@ -49,4 +60,4 @@ function domainChange(action) {
 }
 
 module.exports = { small, large, opts, normalize, docOrder, paging, pageOf, customerSummary, documentSummary,
-  find, search, period, domainChange };
+  find, search, searchText, period, domainChange };

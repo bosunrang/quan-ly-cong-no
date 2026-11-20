@@ -372,8 +372,19 @@ function upgradeSchema(database, currentVersion) {
   }
 }
 
+// Trạng thái giao dịch theo từng kết nối: bộ đệm danh mục không dùng khi đang trong giao dịch
+// (có thể bị hủy) và bỏ bản đã nhớ sau mỗi giao dịch, kể cả giao dịch bị hủy.
+const transactions = new WeakMap();
+function transactionState(database) {
+  let state = transactions.get(database);
+  if (!state) transactions.set(database, state = { depth: 0, generation: 0 });
+  return state;
+}
+
 function withTransaction(database, action) {
+  const state = transactionState(database);
   database.exec('BEGIN IMMEDIATE');
+  state.depth += 1;
   try {
     const result = action();
     database.exec('COMMIT');
@@ -382,7 +393,38 @@ function withTransaction(database, action) {
     // Keep the original failure even if SQLite already rolled the transaction back.
     try { database.exec('ROLLBACK'); } catch { /* no active transaction */ }
     throw error;
+  } finally {
+    state.depth -= 1;
+    state.generation += 1;
   }
+}
+
+const freezeAll = (items, nested) => {
+  for (const item of items) {
+    if (nested && Array.isArray(item[nested])) freezeAll(item[nested], null);
+    Object.freeze(item);
+  }
+  return Object.freeze(items);
+};
+
+// Danh mục khách hàng và nhân viên được đọc ở hầu hết yêu cầu (phạm vi dữ liệu, Dashboard, công nợ).
+// Giữ bản đã đọc (đóng băng, dùng chung) đến khi kết nối này ghi bất kỳ gì, một giao dịch kết thúc
+// hoặc kết nối khác ghi vào tệp (PRAGMA data_version).
+function directoryCache(database) {
+  const state = transactionState(database);
+  const changes = database.prepare('SELECT total_changes() AS total');
+  const version = database.prepare('PRAGMA data_version');
+  const entries = new Map();
+  return (key, read) => {
+    if (state.depth) return read();
+    const token = `${state.generation}:${changes.get().total}:${version.get().data_version}`;
+    const cached = entries.get(key);
+    if (cached?.token === token) return cached.value;
+    const value = read();
+    if (Array.isArray(value?.data)) freezeAll(value.data, key === DATASET_KEYS.customers ? 'assignments' : null);
+    entries.set(key, { token, value });
+    return value;
+  };
 }
 
 function writeVersion(database, key, version) {
@@ -744,6 +786,7 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
     database.close();
     throw error;
   }
+  const cachedDirectory = directoryCache(database);
   return {
     datasetStamp(key) { return datasetStamp(database, key); },
     readDataset(key) {
@@ -756,9 +799,14 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
         if (data) return { version: 1, data };
         return undefined;
       }
+      if (key === DATASET_KEYS.customers || key === DATASET_KEYS.employees) {
+        const read = key === DATASET_KEYS.customers ? readCustomers : readEmployees;
+        return cachedDirectory(key, () => {
+          const row = readVersion(database, key);
+          return row ? read(database, row.version) : readGeneric(database, key);
+        });
+      }
       const versionRow = readVersion(database, key);
-      if (key === DATASET_KEYS.customers && versionRow) return readCustomers(database, versionRow.version);
-      if (key === DATASET_KEYS.employees && versionRow) return readEmployees(database, versionRow.version);
       if (key === DATASET_KEYS.settings && versionRow) return readSettings(database, versionRow.version);
       return readGeneric(database, key);
     },

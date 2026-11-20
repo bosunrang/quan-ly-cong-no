@@ -16,7 +16,11 @@ interface Props {
 	options: readonly string[];
 	normalize: (value: string) => string;
 	placeholder?: string;
+	disabled?: boolean;
+	loading?: boolean;
+	emptyMessage?: string;
 	onChange: (value: string) => void;
+	onSelect?: (value: string) => void;
 }
 
 export function SearchableInput({
@@ -26,7 +30,11 @@ export function SearchableInput({
 	options,
 	normalize,
 	placeholder,
+	disabled,
+	loading,
+	emptyMessage = "Không có gợi ý phù hợp.",
 	onChange,
+	onSelect,
 }: Props) {
 	const listId = useId();
 	const anchor = useRef<HTMLDivElement>(null);
@@ -90,11 +98,11 @@ export function SearchableInput({
 		if (open && positioned && active >= 0)
 			document
 				.getElementById(`${listId}-option-${active}`)
-				?.scrollIntoView({ block: "nearest" });
+				?.scrollIntoView?.({ block: "nearest" });
 	}, [active, listId, open, positioned]);
 
 	function choose(option: string) {
-		onChange(option);
+		(onSelect ?? onChange)(option);
 		setOpen(false);
 		setActive(-1);
 		setFilterText("");
@@ -131,6 +139,7 @@ export function SearchableInput({
 			<input
 				ref={input}
 				id={id}
+				disabled={disabled}
 				role="combobox"
 				aria-autocomplete="list"
 				aria-expanded={open}
@@ -158,6 +167,7 @@ export function SearchableInput({
 				type="button"
 				tabIndex={-1}
 				className="ui-combobox-toggle"
+				disabled={disabled}
 				aria-label={`Mở danh sách ${label}`}
 				aria-expanded={open}
 				onPointerDown={(event) => event.preventDefault()}
@@ -170,7 +180,8 @@ export function SearchableInput({
 			>
 				<ChevronDown className="icon-size-16" aria-hidden="true" />
 			</button>
-			{open &&
+			{!disabled &&
+				open &&
 				placement &&
 				createPortal(
 					<div
@@ -200,7 +211,7 @@ export function SearchableInput({
 						</div>
 						{matches.length === 0 && (
 							<p className="ui-dropdown-empty" role="status">
-								Không có gợi ý phù hợp.
+								{loading ? "Đang tìm…" : emptyMessage}
 							</p>
 						)}
 					</div>,

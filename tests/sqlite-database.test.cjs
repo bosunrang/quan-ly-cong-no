@@ -99,6 +99,38 @@ test('v16 bỏ số dư đầu kỳ nhập tay và cất nguyên văn số dư c
   }
 });
 
+test('danh mục đọc ra được dùng lại đến khi có thay đổi, kể cả từ kết nối khác', () => withDatabase((database, databasePath) => {
+  const time = '2026-01-01T00:00:00.000Z';
+  const customer = (id, name) => ({ id, misaCode: id.toUpperCase(), name, group: 'unknown', taxCode: '', province: '',
+    address: '', status: 'active', createdAt: time, updatedAt: time, assignments: [{ id: 'a-' + id, employeeId: 'e-1',
+      employeeName: 'NV', province: '', source: 'direct', effectiveFrom: '2026-01-01', effectiveTo: null }] });
+  database.writeDataset(DATASET_KEYS.customers, 2, [customer('c-1', 'Khách 1')]);
+  const first = database.readDataset(DATASET_KEYS.customers);
+  assert.equal(database.readDataset(DATASET_KEYS.customers), first);
+  assert.ok(Object.isFrozen(first.data[0]) && Object.isFrozen(first.data[0].assignments[0]));
+  // Ghi ngoài danh mục (nhật ký) vẫn làm bản nhớ hết hiệu lực: an toàn hơn là bỏ sót.
+  database.appendActivity({ id: 'event-cache', time, actorId: 'a', actorName: 'A', category: 'data', action: 'x', detail: '' });
+  const afterActivity = database.readDataset(DATASET_KEYS.customers);
+  assert.notEqual(afterActivity, first);
+  assert.deepEqual(afterActivity, first);
+
+  database.writeDataset(DATASET_KEYS.customers, 2, [customer('c-1', 'Khách đổi tên')]);
+  assert.equal(database.readDataset(DATASET_KEYS.customers).data[0].name, 'Khách đổi tên');
+
+  // Giao dịch bị hủy: dữ liệu đọc trong giao dịch không được nhớ lại.
+  assert.throws(() => database.changeDirectory((tx) => {
+    tx.updateCustomer({ ...customer('c-1', 'Tên chưa lưu'), updatedAt: '2026-02-01T00:00:00.000Z' });
+    assert.equal(database.readDataset(DATASET_KEYS.customers).data[0].name, 'Tên chưa lưu');
+    throw new Error('hủy');
+  }), /hủy/);
+  assert.equal(database.readDataset(DATASET_KEYS.customers).data[0].name, 'Khách đổi tên');
+
+  const other = new DatabaseSync(databasePath);
+  other.prepare("UPDATE customers SET name = 'Kết nối khác' WHERE id = 'c-1'").run();
+  other.close();
+  assert.equal(database.readDataset(DATASET_KEYS.customers).data[0].name, 'Kết nối khác');
+}));
+
 test('SQLite đổi dấu thay đổi sau mỗi lần ghi sổ, kể cả ghi liên tiếp', () => withDatabase((database) => {
   const key = 'cong-no.misa-sales-book.v1';
   assert.equal(database.datasetStamp(key), null);

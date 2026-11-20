@@ -23,6 +23,8 @@ function createApi(tenant) {
   require('./routes/customers.cjs').register(router, db, directoryReaders);
   require('./routes/employees.cjs').register(router, db, directoryReaders);
   const state = createAccountingState(db);
+  // Dựng sẵn sau khi máy chủ mở cổng; lỗi (kho trống, đang đóng) để yêu cầu đầu tiên tự dựng.
+  setImmediate(() => { try { state.warm(); } catch { /* dựng lại khi có yêu cầu */ } });
   for (const name of ['misa', 'dashboard', 'receivables', 'reports', 'payments'])
     require('./routes/' + name + '.cjs').register(router, db, state);
   require('./routes/audit.cjs').register(router, tenant);

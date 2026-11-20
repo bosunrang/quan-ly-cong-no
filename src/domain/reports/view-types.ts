@@ -54,6 +54,8 @@ export type DashboardView = Omit<
 	"receivables" | "periodReceipts" | "unallocatedReceipts"
 > & {
 	rows: Page<DashboardRow>;
+	topDebtors: DashboardCustomer[];
+	provinceOptions: string[];
 	receivablesCount: number;
 	periodCount: number;
 	unallocatedCount: number;
