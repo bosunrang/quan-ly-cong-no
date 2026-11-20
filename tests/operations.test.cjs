@@ -130,6 +130,7 @@ test('Windows updates require a provisioned HTTPS source and user consent before
   assert.throws(() => updateConfig('http://updates.example.test', 'Example Org'));
   assert.throws(() => updateConfig('https://updates.example.test'));
   const events = [];
+  const notifications = [];
   const logs = [];
   const updater = new EventEmitter();
   updater.quitAndInstall = (...args) => events.push(['install', ...args]);
@@ -142,7 +143,7 @@ test('Windows updates require a provisioned HTTPS source and user consent before
   };
   const controller = createUpdateController({
     updater, log: { write: (_level, event) => logs.push(event) }, onChanged() {},
-    notify: async () => ({ response }), claimInstall: () => () => {},
+    notify: async (options) => { notifications.push(options); return { response }; }, claimInstall: () => () => {},
     prepareInstall: async () => { events.push('closed-server'); }, onInstallFailure: assert.fail,
   });
   try {
@@ -154,9 +155,11 @@ test('Windows updates require a provisioned HTTPS source and user consent before
     assert.deepEqual(logs, ['update.failed']);
     updater.emit('update-available');
     assert.equal(controller.menuItem().enabled, false);
+    const beforeDownload = notifications.length;
     updater.emit('update-downloaded');
-    controller.menuItem().click();
     await setImmediate();
+    assert.equal(notifications.length, beforeDownload + 1, 'download completion automatically asks before installing');
+    assert.equal(notifications.at(-1).defaultId, 1);
     assert.deepEqual(events, []);
     response = 0;
     controller.menuItem().click();

@@ -41,6 +41,7 @@ function createUpdateController({ updater, log, onChanged, prepareInstall, claim
   updater.on('update-downloaded', () => {
     log.write('INFO', 'update.ready');
     change('ready');
+    void install().catch(failed);
   });
 
   async function check(interactive = false) {

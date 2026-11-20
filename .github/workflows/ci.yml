@@ -1,0 +1,45 @@
+name: Kiểm tra mã nguồn
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Lấy mã nguồn
+        uses: actions/checkout@v7
+
+      - name: Cài Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Cài pnpm theo package.json
+        uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - name: Cài thư viện theo lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Kiểm tra chất lượng và nghiệp vụ
+        run: pnpm check
+
+      - name: Build giao diện và nghiệp vụ máy chủ
+        run: pnpm build
+
+      - name: Kiểm tra Electron cục bộ và máy trạm
+        run: pnpm test:desktop

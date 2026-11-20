@@ -182,8 +182,12 @@ hàng chỉ tải khi mở chứng từ. Các route báo cáo trả dữ liệu 
   Cấu hình Cloudflare Access khi cần giới hạn danh tính bên ngoài. Giữ cổng HTTP gốc trong LAN hoặc trên loopback.
 - Nhật ký vận hành theo chế độ, ghi JSON Lines theo ngày UTC, giữ 30 ngày và tối đa 5 MB mỗi ngày.
   Chỉ ghi thời điểm, mức độ, mã sự kiện và mã lỗi. Nhật ký thao tác nghiệp vụ vẫn ở SQLite.
-- Kênh cập nhật Windows dùng nguồn HTTPS và yêu cầu ký mã. Bản có kênh cập nhật kiểm tra định kỳ,
-  tải nền, xác minh nhà phát hành và đợi người dùng xác nhận cài. Đóng các phiên khác trước khi cài và
+- Kênh cập nhật Windows mặc định dùng GitHub Releases qua HTTPS, được bật trong bộ cài bởi
+  `electron/build-windows.mjs`. GitHub Actions kiểm tra tag/phiên bản, kiểm thử, build và công bố
+  bộ cài cùng `.blockmap`/`latest.yml` sau khi tải đủ tệp. Có thể cấu hình chứng thư bằng secrets
+  để ký mã; nguồn HTTPS riêng qua `CONG_NO_UPDATE_URL`/`CONG_NO_UPDATE_PUBLISHER` vẫn bắt buộc ký.
+  App kiểm tra định kỳ, tải nền, kiểm tra chữ ký khi có cấu hình nhà phát hành và đợi người dùng xác nhận cài.
+  Đóng các phiên khác trước khi cài và
   dừng máy chủ của phiên hiện tại trước khi chạy trình cài.
 
 ## Giới hạn hiện tại
@@ -191,8 +195,8 @@ hàng chỉ tải khi mở chứng từ. Các route báo cáo trả dữ liệu 
 - App nhận mẫu Sổ chi tiết bán hàng MISA có tiêu đề cột đã biết.
 - Máy trạm cần kết nối đến máy chủ để đọc và ghi. Với luồng xác thực Cloudflare Access chuyển sang
   tên miền của nhà cung cấp danh tính, mở ứng dụng bằng trình duyệt từ menu Máy trạm.
-- HTTPS cho Tunnel do Cloudflare cung cấp. Tên miền, connector, chứng thư ký mã và kênh cập nhật
-  do đơn vị vận hành cấu hình trước khi sử dụng.
+- HTTPS cho Tunnel do Cloudflare cung cấp. Tên miền và connector do đơn vị vận hành cấu hình.
+  Kênh cập nhật GitHub có sẵn; chứng thư ký mã Windows hoặc nguồn cập nhật riêng cần cấu hình bổ sung.
 
 `pnpm check` kiểm tra kiến trúc, nghiệp vụ, SQLite và LAN. `pnpm test:golden` đối chiếu số tiền qua API.
 Sau `pnpm build`, `pnpm test:desktop` mở Electron với kho tạm, kiểm tra luồng cục bộ trên SQLite cũ

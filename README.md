@@ -161,15 +161,41 @@ Mở **Mở thư mục nhật ký…** từ khay máy chủ hoặc menu **Máy t
 `workstation/logs` dưới thư mục dữ liệu người dùng. Lỗi khởi động desktop nằm trong `logs/desktop`.
 Các tệp theo ngày UTC, giữ 30 ngày, tối đa 5 MB mỗi ngày.
 
-`pnpm dist` tạo bộ cài Windows. Để bật kênh cập nhật, đặt `CONG_NO_UPDATE_URL` tới thư mục phát
-hành HTTPS và `CONG_NO_UPDATE_PUBLISHER` đúng tên nhà phát hành trong chứng thư ký mã Windows.
-Cấu hình chứng thư cho electron-builder trước khi chạy `pnpm dist`. Sau khi build có ký, tải bộ
-cài, tệp `.blockmap` và `latest.yml` lên nguồn cập nhật. Tải `latest.yml` lên sau các tệp
-bộ cài. Khi phát hành bản mới, tăng phiên bản trong `package.json` và duy trì danh tính nhà phát hành.
+`pnpm dist` tạo bộ cài Windows có sẵn kênh cập nhật từ
+[GitHub Releases](https://github.com/bosunrang/quan-ly-cong-no/releases). Cài bộ cài từ đây lần đầu
+để nhận các bản mới; bản cài cũ chưa có kênh cập nhật cần cài lại một lần.
+
+GitHub Actions tự kiểm tra mã nguồn trên mỗi lần đẩy `main` và mỗi pull request. Khi đẩy tag
+`v<phiên-bản>`, workflow **Phát hành Windows** kiểm tra tag trùng `package.json`, chạy toàn bộ test,
+build bộ cài x64, kiểm tra Electron và mã SHA-512, rồi đăng `.exe`, `.exe.blockmap` và `latest.yml`
+vào cùng một Release. Release chỉ được công bố sau khi tải đủ tệp. Node.js 24 và pnpm 11.25.0
+được dùng trên runner Windows; thư viện được cài bằng `pnpm install --frozen-lockfile`.
+
+Sau khi commit thay đổi và tăng phiên bản, phát hành lần đầu bằng tag tương ứng, ví dụ:
+
+```powershell
+git push origin HEAD:main
+git tag v0.1.3
+git push origin v0.1.3
+```
+
+Các lần tiếp theo có thể dùng `npm version patch` để tăng phiên bản, commit và tạo tag, rồi
+`git push origin HEAD:main --follow-tags`. Có thể chạy lại workflow từ trang **Actions** với tag đã có;
+workflow chỉ tiếp tục bản nháp chưa công bố, không ghi đè phiên bản đã phát hành.
+
+Workflow dùng `GITHUB_TOKEN` có sẵn của repository để đăng Release, không cần token riêng.
+Nếu có chứng thư ký mã Windows, thêm secrets `WINDOWS_CSC_LINK` (URL hoặc nội dung base64 của tệp PFX)
+và `WINDOWS_CSC_KEY_PASSWORD` (mật khẩu PFX) để electron-builder ký bộ cài. Khi chưa cấu hình chứng thư,
+bộ cài vẫn được phát hành như app cước phí nhưng chưa có chữ ký nhà phát hành Windows.
+
+Để dùng nguồn HTTPS riêng có ký mã thay GitHub, đặt cả `CONG_NO_UPDATE_URL` và
+`CONG_NO_UPDATE_PUBLISHER` khớp chứng thư khi build. Chế độ này bắt buộc ký mã; tải bộ cài,
+`.blockmap` rồi `latest.yml` lên nguồn riêng. Giữ cùng danh tính nhà phát hành giữa các bản có ký.
 [Hướng dẫn auto-update của electron-builder](https://www.electron.build/docs/features/auto-update/)
 
-Bản Windows có cấu hình nguồn cập nhật kiểm tra định kỳ và tải nền. Chọn **Cài bản cập nhật…** trên máy trạm
-hoặc trong menu khay. Trên máy chạy nhiều công ty, đóng các phiên công ty còn lại trước khi cài vì bộ cài
+Bản Windows kiểm tra sau khi mở và mỗi 6 giờ, tải nền rồi hỏi trước khi cài. Chọn **Để sau** để
+tiếp tục làm việc; có thể cài sau bằng **Cài bản cập nhật…** trên máy trạm hoặc trong menu khay.
+Trên máy chạy nhiều công ty, đóng các phiên công ty còn lại trước khi cài vì bộ cài
 dùng chung. App dừng máy chủ, chờ tác vụ sao lưu đang chạy kết thúc rồi khởi động trình cài.
 
 ## Kiểm tra chất lượng
@@ -184,6 +210,8 @@ pnpm test:performance
 ```
 
 `pnpm check` chạy lint, typecheck và các test tự động. `pnpm test:golden` đối chiếu số tiền mẫu qua API. `pnpm test:performance` đo thời gian và dung lượng phản hồi trên kho tạm 50.000 dòng. Báo cáo coverage HTML được tạo tại `coverage/index.html`.
+Sau `pnpm dist`, chạy `pnpm test:release` để kiểm tra nội dung bộ cài, kênh cập nhật GitHub và
+độ khớp phiên bản, kích thước, SHA-512 giữa bộ cài và `latest.yml`. Workflow phát hành chạy bước này tự động.
 
 ## Quy ước kiến trúc
 

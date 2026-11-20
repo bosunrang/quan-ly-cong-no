@@ -8,10 +8,12 @@ const feed = updateConfig(process.env.CONG_NO_UPDATE_URL, process.env.CONG_NO_UP
 await build({
   targets: Platform.WINDOWS.createTarget(["nsis"], Arch.x64),
   publish: "never",
-  config: feed ? {
-    forceCodeSigning: true,
-    win: { publisherName: [feed.publisher], verifyUpdateCodeSignature: true },
-    publish: [{ provider: "generic", url: feed.url }],
+  config: {
     extraMetadata: { congNoUpdate: true },
-  } : {},
+    ...(feed ? {
+      forceCodeSigning: true,
+      win: { publisherName: [feed.publisher], verifyUpdateCodeSignature: true },
+      publish: [{ provider: "generic", url: feed.url }],
+    } : {}),
+  },
 });
