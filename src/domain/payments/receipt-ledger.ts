@@ -1,4 +1,5 @@
 import { isIsoDate, todayLocal } from "../../shared/lib/date";
+import { InputError } from "../../shared/lib/inputError";
 import { randomId } from "../../shared/lib/randomId";
 import type { Customer } from "../customers/customer.model";
 import type { MisaSalesBook } from "../misa/misa.sales-book";
@@ -108,7 +109,7 @@ const positiveMoney = (value: unknown): value is number =>
 
 function checkDate(date: string, label: string) {
 	if (!isIsoDate(date) || date > todayLocal())
-		throw new Error(`${label} phải hợp lệ và không sau hôm nay.`);
+		throw new InputError(`${label} phải hợp lệ và không sau hôm nay.`);
 }
 
 export function nextReceiptNumber(receipts: readonly Receipt[], date: string) {
@@ -134,9 +135,9 @@ export function recordReceipt(
 	checkDate(date, "Ngày hạch toán khoản thu");
 	const number =
 		draft.number?.trim() ?? nextReceiptNumber(ledger.receipts, date);
-	if (!number) throw new Error("Nhập số chứng từ thu.");
+	if (!number) throw new InputError("Nhập số chứng từ thu.");
 	if (!positiveMoney(amount))
-		throw new Error("Số tiền thu phải là số nguyên dương (đồng).");
+		throw new InputError("Số tiền thu phải là số nguyên dương (đồng).");
 	if (
 		ledger.receipts.some(
 			(receipt) =>
@@ -466,13 +467,14 @@ export function allocateReceipt(
 	checkDate(date, "Ngày phân bổ");
 	const receipt = ledger.receipts.find((item) => item.id === receiptId);
 	if (receipt?.reversal) throw new Error("Khoản thu đã hủy.");
-	if (!receipt || date < receipt.date)
-		throw new Error("Ngày phân bổ phải từ ngày hạch toán khoản thu.");
+	if (!receipt) throw new Error("Khoản thu không còn trong sổ.");
+	if (date < receipt.date)
+		throw new InputError("Ngày phân bổ phải từ ngày hạch toán khoản thu.");
 	if (
 		!lines.length ||
 		new Set(lines.map(({ invoice }) => invoice.id)).size !== lines.length
 	)
-		throw new Error(
+		throw new InputError(
 			"Chọn ít nhất một chứng từ. Mỗi chứng từ chỉ xuất hiện một lần.",
 		);
 	let total = 0;
@@ -483,7 +485,7 @@ export function allocateReceipt(
 			date < invoice.date ||
 			!positiveMoney(amount)
 		)
-			throw new Error(
+			throw new InputError(
 				"Kiểm tra lại khách hàng, ngày chứng từ và số tiền từng dòng.",
 			);
 		const { changed } = invoiceBalance(ledger, invoice, index);
@@ -528,7 +530,9 @@ export function reverseAllocation(
 	if (!entry || entry.reversal)
 		throw new Error("Đợt phân bổ không còn hiệu lực.");
 	if (date < entry.date || !reason.trim())
-		throw new Error("Nhập lý do và chọn ngày hoàn tác từ ngày phân bổ trở đi.");
+		throw new InputError(
+			"Nhập lý do và chọn ngày hoàn tác từ ngày phân bổ trở đi.",
+		);
 	return {
 		...ledger,
 		allocations: ledger.allocations.map((item) =>
@@ -564,7 +568,7 @@ export function reverseReceipt(
 		date < receipt.date ||
 		history.some((entry) => date < (entry.reversal?.date ?? entry.date))
 	)
-		throw new Error(
+		throw new InputError(
 			"Nhập lý do và chọn ngày hủy từ ngày hạch toán và ngày xử lý phân bổ gần nhất trở đi.",
 		);
 	const reversal = {

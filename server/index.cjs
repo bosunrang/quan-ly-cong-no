@@ -7,7 +7,8 @@ const { registerDirectoryRoutes } = require('./directory.cjs');
 const { deleteBusinessGroups, isValidSettings, validateBusinessBackup } = require('../src/domain/settings/business-data.rules.mjs');
 
 const directoryReaders = ['dashboard', 'misa', 'payments', 'receivables', 'reports', 'customers', 'sales'];
-const activityCategories = new Set(['session', 'accounts', 'data', 'payments', 'reports', 'settings']);
+// Máy trạm chỉ tự ghi được việc chỉ xảy ra ở máy trạm (in, xuất Excel); mọi thay đổi dữ liệu do máy chủ ghi.
+const clientActivities = new Set(['Mở hộp thoại in biên bản', 'Xuất Excel biên bản đối chiếu']);
 const PUBLIC_ROUTES = new Set(['POST /api/session', 'GET /api/branding']);
 const SMALL = 16 * 1024;
 const LARGE = 64 * 1024 * 1024;
@@ -70,11 +71,12 @@ function createApi(tenant, tls) {
     const data = settingsOf(tenant);
     return { data, revision: settingsRevision(data) };
   }, pages([]));
-  router.put('/api/settings', ({ body }) => {
+  router.put('/api/settings', ({ body, account }) => {
     if (!isValidSettings(body.data)) fail(400, 'Cài đặt không hợp lệ.');
     if (body.expected !== settingsRevision(settingsOf(tenant)))
       fail(409, 'Cài đặt vừa thay đổi. Hãy tải lại trước khi lưu.');
     db.writeDataset(DATASET_KEYS.settings, 2, body.data);
+    audit(db, account, 'settings', 'Lưu cấu hình ứng dụng');
     const data = settingsOf(tenant);
     return { data, revision: settingsRevision(data) };
   }, pages(['settings'], 2 * 1024 * 1024));
@@ -84,12 +86,10 @@ function createApi(tenant, tls) {
 
   router.get('/api/activities', () => db.readActivities(), pages(['audit']));
   router.post('/api/activities', ({ body: { category, action, detail }, account }) => {
-    if (!activityCategories.has(category) || typeof action !== 'string' ||
-        !action || action.length > 140 || typeof detail !== 'string')
+    if (category !== 'reports' || !clientActivities.has(action) || typeof detail !== 'string')
       fail(400, 'Bản ghi nhật ký không hợp lệ.');
-    if (category === 'session' && action === 'Mở màn hình') return true;
     return audit(db, account, category, action, detail);
-  }, pages([], SMALL));
+  }, pages(['reports'], SMALL));
   router.get('/api/business-backup', ({ account }) => {
     const backup = db.exportBusinessBackup(backupCompany(tenant));
     audit(db, account, 'settings', 'Xuất bản sao lưu');

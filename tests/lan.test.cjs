@@ -262,6 +262,9 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   const receiptInput = { id: 'req-receipt-0001', customerId: createdCustomer.id, customerCode: createdCustomer.misaCode,
     date: '2026-01-02', amount: 100, reference: '' };
   assert.equal((await call('POST', 'receipts', { ...receiptInput, id: undefined }, actor)).status, 400);
+  // Dữ liệu nhập sai là 400, không phải xung đột (409).
+  assert.equal((await call('POST', 'receipts', { ...receiptInput, id: 'req-bad-amount', amount: 1.5 }, actor)).status, 400);
+  assert.equal((await call('POST', 'receipts', { ...receiptInput, id: 'req-bad-date-1', date: '2999-01-01' }, actor)).status, 400);
   const receipt = (await call('POST', 'receipts', receiptInput, actor));
   assert.equal(receipt.status, 200);
   // Gửi lại cùng mã (bấm hai lần, lỗi mạng) không ghi thêm; dùng mã cho khoản khác thì bị từ chối.
@@ -341,18 +344,24 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   assert.equal(removed.value[0].id, otherAssigned.id);
   assert.equal(removed.value[0].assignments[0].effectiveTo, '2026-02-03');
 
-  assert.equal((await call('POST', 'activities', { category: 'data', action: 'Thao tác mẫu', detail: '', actorId: 'fake' }, actor)).status, 200);
-  assert.equal((await call('POST', 'activities', { category: 'session', action: 'Mở màn hình', detail: 'Nhật ký sử dụng' }, actor)).status, 200);
+  // Máy trạm không tự ghi được nhật ký thay đổi dữ liệu; chỉ ghi được việc in/xuất biên bản.
+  assert.equal((await call('POST', 'activities', { category: 'data', action: 'Thao tác mẫu', detail: '', actorId: 'fake' }, actor)).status, 400);
+  assert.equal((await call('POST', 'activities', { category: 'reports', action: 'Thao tác mẫu', detail: '' }, actor)).status, 400);
+  assert.equal((await call('POST', 'activities', { category: 'reports', action: 'Xuất Excel biên bản đối chiếu', detail: 'Thao tác mẫu', actorId: 'fake' }, actor)).status, 200);
   const activity = (await call('GET', 'activities', undefined, actor)).value;
-  assert.equal(activity.some(({ action }) => action === 'Mở màn hình'), false);
-  assert.equal(activity.find(({ action }) => action === 'Thao tác mẫu').actorId, viewer.value.profile.id);
+  assert.equal(activity.some(({ action }) => action === 'Thao tác mẫu'), false);
+  assert.equal(activity.find(({ detail }) => detail === 'Thao tác mẫu').actorId, viewer.value.profile.id);
+  // Thay đổi danh mục được máy chủ ghi nhật ký cùng giao dịch.
+  for (const action of ['Thêm khách hàng', 'Xóa khách hàng', 'Thêm nhân viên', 'Phân công khách hàng',
+    'Bỏ phân công khách hàng', 'Xóa nhân viên'])
+    assert.ok(activity.some((row) => row.action === action && row.category === 'data'), action);
   for (const company of [tk, wb, naviva]) {
     const sibling = clients.get(company.id);
     const cookie = cookies.get(company.id);
     assert.equal((await sibling('GET', 'sales-book', undefined, cookie)).value.book, null);
     assert.equal((await sibling('GET', 'receipts', undefined, cookie)).value.count, 0);
     assert.deepEqual((await sibling('GET', 'customers', undefined, cookie)).value, []);
-    assert.ok(!(await sibling('GET', 'activities', undefined, cookie)).value.some(({ action }) => action === 'Thao tác mẫu'));
+    assert.ok(!(await sibling('GET', 'activities', undefined, cookie)).value.some(({ detail }) => detail === 'Thao tác mẫu'));
   }
   for (const directory of new Set(dataDirectories.values())) {
     const stored = (await readdir(directory)).filter((name) => name.endsWith('.sqlite')).sort();

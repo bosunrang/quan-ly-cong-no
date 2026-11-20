@@ -12,7 +12,6 @@ import {
 } from "../../domain/customers/customer.repository";
 import { readDirectory } from "../../domain/customers/directory.repository";
 import { useAsyncData } from "../../shared/hooks/useAsyncData";
-import { recordActivity } from "../../shared/storage/activityLog";
 
 const empty = { customers: [], employees: [] };
 
@@ -40,11 +39,6 @@ export function useCustomers() {
 					? list.map((item) => (item.id === saved.id ? saved : item))
 					: [saved, ...list],
 			);
-			void recordActivity(
-				"data",
-				current ? "Cập nhật khách hàng" : "Thêm khách hàng",
-				`${saved.misaCode} · ${saved.name}`,
-			);
 			return true;
 		},
 		async importCustomers(drafts: CustomerImportDraft[]) {
@@ -52,20 +46,10 @@ export function useCustomers() {
 				drafts.map(customerImportFields),
 			);
 			updateList((list) => [...records, ...list]);
-			void recordActivity(
-				"data",
-				"Nhập danh mục khách hàng",
-				`${records.length} khách hàng`,
-			);
 		},
 		async deleteCustomer(target: Customer) {
 			await removeCustomer(target);
 			updateList((list) => list.filter((item) => item.id !== target.id));
-			void recordActivity(
-				"data",
-				"Xóa khách hàng",
-				`${target.misaCode} · ${target.name}`,
-			);
 			return true;
 		},
 	};

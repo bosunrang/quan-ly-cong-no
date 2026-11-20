@@ -382,6 +382,30 @@ test('v13 nâng cấp sổ có trường lạ của bản cũ và cất lại ng
   } finally { check.close(); }
 }));
 
+test('v13 chuẩn hóa mã hóa đơn kiểu cũ của phân bổ và cất bản gốc', () => withDatabase((database, location) => {
+  const time = '2026-01-02T00:00:00.000Z';
+  const invoice = { id: JSON.stringify(['KH001', 'BH001']), customerId: 'c1', invoiceNumber: '1', invoiceSeries: '',
+    documentNumber: 'BH001', sourceFile: 'a.xlsx', date: '2026-01-01', amount: 110 };
+  const ledger = { revision: 'r1',
+    receipts: [{ id: 'r', number: 'PT-1', customerId: 'c1', customerName: 'A', customerCode: 'KH001', reference: '',
+      date: '2026-01-02', createdAt: time, amount: 50 }],
+    allocations: [{ id: 'a', receiptId: 'r', date: '2026-01-02', createdAt: time, lines: [{ amount: 50, invoice }] }] };
+  const raw = new DatabaseSync(location);
+  schemaV12(raw);
+  raw.prepare('INSERT INTO app_datasets VALUES (?, 1, ?, ?)').run('cong-no.receipt-ledger.v1', JSON.stringify(ledger), time);
+  raw.close();
+  const upgraded = openDatabase(location);
+  try {
+    const stored = upgraded.readDataset('cong-no.receipt-ledger.v1').data;
+    assert.equal(stored.allocations[0].lines[0].invoice.id, JSON.stringify(['KH001', 'BH001', '2026']));
+    assert.equal(stored.allocations[0].lines[0].amount, 50);
+  } finally { upgraded.close(); }
+  const check = new DatabaseSync(location, { readOnly: true });
+  try {
+    assert.deepEqual(JSON.parse(check.prepare('SELECT payload_json FROM legacy_books').get().payload_json), ledger);
+  } finally { check.close(); }
+}));
+
 test('v13 hủy nâng cấp khi số tiền bị lệch và không tạo thêm bản sao khi mở lại', () => withDatabase((database, location) => {
   const raw = new DatabaseSync(location);
   const sales = { fileName: 'source.xlsx', importedAt: '2026-01-01T00:00:00.000Z', rows: [sampleSale] };

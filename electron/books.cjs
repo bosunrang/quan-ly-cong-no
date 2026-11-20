@@ -216,6 +216,30 @@ function moneyView(key, data) {
         clean(line.invoice.documentNumber)])])];
 }
 
+const isoDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+
+// Mã hóa đơn kiểu cũ [mã khách, số chứng từ] thành [mã khách, số chứng từ, năm], cùng quy tắc với
+// migrateReceiptLedger trong src/domain, để bảng allocation_lines chỉ chứa mã kiểu mới.
+function normalizeLegacyInvoiceIds(ledger) {
+  let changed = false;
+  const allocations = ledger.allocations.map((allocation) => {
+    let lineChanged = false;
+    const lines = allocation.lines.map((line) => {
+      let parts;
+      try { parts = JSON.parse(line.invoice.id); } catch { return line; }
+      if (!Array.isArray(parts) || parts.length !== 2 || !parts.every((part) => typeof part === 'string') ||
+          !isoDate(line.invoice.date)) return line;
+      lineChanged = true;
+      return { ...line, invoice: { ...line.invoice, id: JSON.stringify([parts[0], parts[1], line.invoice.date.slice(0, 4)]) } };
+    });
+    if (!lineChanged) return allocation;
+    changed = true;
+    return { ...allocation, lines };
+  });
+  return changed ? { ...ledger, allocations } : ledger;
+}
+
 // Giữ nguyên văn khối JSON cũ khi bảng mới không chép lại được y hệt, để không mất gì.
 function keepLegacy(db, row, reason) {
   db.exec(`CREATE TABLE IF NOT EXISTS legacy_books (dataset_key TEXT PRIMARY KEY, version INTEGER NOT NULL,
@@ -243,13 +267,16 @@ function migrateBooks(db) {
       continue;
     }
     if (row.version !== 1 || !validate(data)) throw new Error('Không thể nâng cấp sổ không hợp lệ: ' + key);
-    write(db, data, row.updated_at);
+    const expected = key === LEDGER ? normalizeLegacyInvoiceIds(data) : data;
+    write(db, expected, row.updated_at);
     const stored = read(db);
     // So từng dòng và từng số tiền, kể cả đảo phiếu và thứ tự, trước khi bỏ bản JSON.
-    if (!isDeepStrictEqual(stored, data)) {
-      if (JSON.stringify(moneyView(key, stored)) !== JSON.stringify(moneyView(key, data)))
+    if (!isDeepStrictEqual(stored, expected)) {
+      if (JSON.stringify(moneyView(key, stored)) !== JSON.stringify(moneyView(key, expected)))
         throw new Error('Dữ liệu hoặc số tiền sổ bị lệch sau khi nâng cấp: ' + key);
       keepLegacy(db, row, 'Bảng mới không giữ được nguyên văn (trường thêm hoặc ký tự lỗi); số tiền đã khớp');
+    } else if (expected !== data) {
+      keepLegacy(db, row, 'Đã chuẩn hóa mã hóa đơn kiểu cũ của phân bổ');
     }
     db.prepare('DELETE FROM app_datasets WHERE dataset_key = ?').run(key);
   }

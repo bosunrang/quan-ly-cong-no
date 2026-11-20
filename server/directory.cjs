@@ -1,7 +1,7 @@
 const { randomUUID } = require('node:crypto');
 const { isDeepStrictEqual } = require('node:util');
 const { DATASET_KEYS } = require('../electron/database.cjs');
-const { fail } = require('./access.cjs');
+const { activityEntry, fail } = require('./access.cjs');
 const { isValidCustomerList, isValidEmployeeList } = require('../src/domain/settings/business-data.rules.mjs');
 
 const FORM = 64 * 1024;
@@ -82,13 +82,15 @@ function finishEmployeeAssignments(tx, id, effectiveTo) {
 }
 
 function registerDirectoryRoutes(router, db, readers) {
+  // Nhật ký ghi trên máy chủ, trong cùng giao dịch với thay đổi: không bị bỏ sót hay giả mạo.
+  const log = (account, action, detail) => db.appendActivity(activityEntry(account, 'data', action, detail));
   const customers = '/api/customers';
   const employees = '/api/employees';
   const list = (key) => db.readDataset(key)?.data ?? [];
   router.get(customers, () => list(DATASET_KEYS.customers), options(readers));
   router.get(employees, () => list(DATASET_KEYS.employees), options(readers));
 
-  function addCustomers(records, prepend) {
+  function addCustomers(records, prepend, account, action) {
     const additions = records.map((input) => customerData(input));
     return change(db, (tx) => {
       const existing = tx.customerCodes();
@@ -103,17 +105,20 @@ function registerDirectoryRoutes(router, db, readers) {
         if (item.taxCode) taxCodes.add(item.taxCode);
         tx.insertCustomer(item, order++);
       }
+      log(account, action, additions.length === 1
+        ? `${additions[0].misaCode} · ${additions[0].name}` : `${additions.length} khách hàng`);
       return additions;
     });
   }
 
-  router.post(customers, ({ body }) => addCustomers([body], true)[0], options(['customers'], FORM));
-  router.post(customers + '/imports', ({ body }) => {
+  router.post(customers, ({ body, account }) =>
+    addCustomers([body], true, account, 'Thêm khách hàng')[0], options(['customers'], FORM));
+  router.post(customers + '/imports', ({ body, account }) => {
     if (!Array.isArray(body.customers) || !body.customers.length)
       fail(400, 'Danh sách nhập khách hàng không hợp lệ.');
-    return addCustomers(body.customers, true);
+    return addCustomers(body.customers, true, account, 'Nhập danh mục khách hàng');
   }, options(['customers'], BATCH));
-  router.patch(customers + '/:id', ({ body, params }) => change(db, (tx) => {
+  router.patch(customers + '/:id', ({ body, params, account }) => change(db, (tx) => {
     const current = customerAt(tx, params.id, body.expected);
     const item = customerData(body.customer, current);
     const code = normalize(item.misaCode);
@@ -127,13 +132,15 @@ function registerDirectoryRoutes(router, db, readers) {
     if (item.taxCode && item.taxCode !== current.taxCode && others.some(({ tax_code }) => tax_code === item.taxCode))
       fail(409, 'Mã số thuế đã được sử dụng.');
     tx.updateCustomer(item);
+    log(account, 'Cập nhật khách hàng', `${item.misaCode} · ${item.name}`);
     return item;
   }), options(['customers'], FORM));
-  router.delete(customers + '/:id', ({ body, params }) => change(db, (tx) => {
+  router.delete(customers + '/:id', ({ body, params, account }) => change(db, (tx) => {
     const current = customerAt(tx, params.id, body.expected);
     if (tx.customerHasReceipts(current.id))
       fail(409, 'Khách hàng đã có chứng từ thu. Hãy chuyển sang trạng thái tạm dừng.');
     tx.deleteCustomer(current.id);
+    log(account, 'Xóa khách hàng', `${current.misaCode} · ${current.name}`);
     return true;
   }), options(['customers'], FORM));
 
@@ -141,6 +148,7 @@ function registerDirectoryRoutes(router, db, readers) {
     const item = employeeData(body, undefined, account);
     ensureEmployeeCode(tx, item);
     tx.saveEmployee(item);
+    log(account, 'Thêm nhân viên', `${item.code} · ${item.name}`);
     return tx.employee(item.id);
   }), options(['sales'], FORM));
   router.patch(employees + '/:id', ({ body, params, account }) => change(db, (tx) => {
@@ -152,6 +160,9 @@ function registerDirectoryRoutes(router, db, readers) {
     if (item.status === 'inactive') finishEmployeeAssignments(tx, item.id, body.effectiveTo);
     if (item.name !== current.name) tx.renameEmployeeAssignments(item.id, item.name);
     tx.saveEmployee(item);
+    if (item.status === 'inactive' && current.status !== 'inactive')
+      log(account, 'Ngừng hoạt động nhân viên', `${item.name} · Đến ${body.effectiveTo}`);
+    else log(account, 'Cập nhật nhân viên', `${item.code} · ${item.name}`);
     return { employee: tx.employee(item.id), customers: affectedCustomers(tx, affected) };
   }), options(['sales'], FORM));
   router.delete(employees + '/:id', ({ body, params, account }) => change(db, (tx) => {
@@ -161,10 +172,11 @@ function registerDirectoryRoutes(router, db, readers) {
     const affected = tx.employeeAssignments(item.id, true);
     finishEmployeeAssignments(tx, item.id, body.effectiveTo);
     tx.deleteEmployee(item.id);
+    log(account, 'Xóa nhân viên', item.name);
     return affectedCustomers(tx, affected);
   }), options(['sales'], FORM));
 
-  router.post('/api/assignments', ({ body }) => change(db, (tx) => {
+  router.post('/api/assignments', ({ body, account }) => change(db, (tx) => {
     const { customers: targets, employeeId, employeeName, effectiveFrom } = body;
     if (!validDate(effectiveFrom) || typeof employeeId !== 'string' || !Array.isArray(targets) ||
         !targets.length || targets.some((item) => typeof item?.id !== 'string') ||
@@ -173,6 +185,7 @@ function registerDirectoryRoutes(router, db, readers) {
     const employee = tx.employee(employeeId);
     if (employee?.status !== 'active' || employee.name !== employeeName)
       fail(409, 'Thông tin nhân viên đã thay đổi. Hãy chọn lại người phụ trách.');
+    log(account, 'Phân công khách hàng', `${targets.length} khách hàng · ${employeeName} · Từ ${effectiveFrom}`);
     return targets.map(({ id, expected }) => {
       const item = customerAt(tx, id, expected);
       const active = item.assignments.find((assignment) => !assignment.effectiveTo);
@@ -184,13 +197,14 @@ function registerDirectoryRoutes(router, db, readers) {
       return tx.customer(id);
     });
   }), options(['sales'], BATCH));
-  router.patch('/api/assignments/:id', ({ body, params }) => change(db, (tx) => {
+  router.patch('/api/assignments/:id', ({ body, params, account }) => change(db, (tx) => {
     const item = tx.assignment(params.id);
     if (!item) fail(404, 'Không tìm thấy phân công.');
-    customerAt(tx, item.customer_id, body.expected);
+    const owner = customerAt(tx, item.customer_id, body.expected);
     if (item.effective_to !== null || !validDate(body.effectiveTo) || body.effectiveTo < item.effective_from)
       fail(409, 'Phân công đã kết thúc hoặc ngày kết thúc không hợp lệ.');
     tx.endAssignment(item.id, body.effectiveTo, item.customer_id);
+    log(account, 'Bỏ phân công khách hàng', `${owner.name} · Đến ${body.effectiveTo}`);
     return tx.customer(item.customer_id);
   }), options(['sales'], FORM));
 }

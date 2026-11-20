@@ -8,7 +8,6 @@ import {
 	type AppSettings,
 	defaultSettings,
 } from "../../domain/settings/settings.model";
-import { recordActivity } from "../../shared/storage/activityLog";
 import { reportStorageIssue } from "../../shared/storage/storageIssues";
 
 type State = {
@@ -52,7 +51,6 @@ export function useAppSettings(session?: string) {
 			const saved = await writeSettings(next, current.revision);
 			if (request.current === id) {
 				setSnapshot({ ...saved, session });
-				void recordActivity("settings", "Lưu cấu hình ứng dụng");
 			}
 			return true;
 		} catch (reason) {

@@ -101,7 +101,7 @@ function sendJson(res, status, value) {
 
 function sendError(res, error) {
   const status = Number.isInteger(error.status) ? error.status : 500;
-  if (status >= 500) console.error('Lỗi máy chủ công nợ:', error.message);
+  if (status >= 500) console.error('Lỗi máy chủ công nợ:', error.stack || error.message);
   if (status === 413) res.setHeader("Connection", "close");
   sendJson(res, status, { ok: false, code: 'HTTP_' + status,
     error: status >= 500 ? 'Máy chủ không thể hoàn tất thao tác.' : error.message });

@@ -17,7 +17,6 @@ import {
 	updateSalesEmployee,
 } from "../../domain/employees/employee.repository";
 import { useAsyncData } from "../../shared/hooks/useAsyncData";
-import { recordActivity } from "../../shared/storage/activityLog";
 import { reportStorageIssue } from "../../shared/storage/storageIssues";
 
 const empty = { customers: [], employees: [] };
@@ -93,11 +92,6 @@ export function useSalesAssignments() {
 					effectiveFrom,
 				);
 				updateDirectory(records);
-				void recordActivity(
-					"data",
-					"Phân công khách hàng",
-					`${records.length} khách hàng · ${employee.name} · Từ ${effectiveFrom}`,
-				);
 				return { count: records.length };
 			});
 		},
@@ -113,11 +107,6 @@ export function useSalesAssignments() {
 				updateDirectory([
 					await endAssignment(assignment.id, customer, effectiveTo),
 				]);
-				void recordActivity(
-					"data",
-					"Bỏ phân công khách hàng",
-					`${customer.name} · Đến ${effectiveTo}`,
-				);
 				return true;
 			});
 		},
@@ -125,11 +114,6 @@ export function useSalesAssignments() {
 			return run(async () => {
 				const employee = await addSalesEmployee(createEmployee(draft));
 				updateDirectory([], (list) => [...list, employee]);
-				void recordActivity(
-					"data",
-					"Thêm nhân viên",
-					`${employee.code} · ${employee.name}`,
-				);
 				return employee.id;
 			});
 		},
@@ -137,17 +121,12 @@ export function useSalesAssignments() {
 			const current = employees.find((item) => item.id === employeeId);
 			if (!current) return false;
 			return run(async () => {
-				const saved = await editEmployee(current, {
+				await editEmployee(current, {
 					...current,
 					...draft,
 					code: draft.code.trim(),
 					name: draft.name.trim(),
 				});
-				void recordActivity(
-					"data",
-					"Cập nhật nhân viên",
-					`${saved.code} · ${saved.name}`,
-				);
 				return true;
 			});
 		},
@@ -160,11 +139,6 @@ export function useSalesAssignments() {
 					{ ...current, status: "inactive" },
 					effectiveTo,
 				);
-				void recordActivity(
-					"data",
-					"Ngừng hoạt động nhân viên",
-					`${current.name} · Đến ${effectiveTo}`,
-				);
 				return true;
 			});
 		},
@@ -176,7 +150,6 @@ export function useSalesAssignments() {
 				updateDirectory(records, (list) =>
 					list.filter((item) => item.id !== employeeId),
 				);
-				void recordActivity("data", "Xóa nhân viên", current.name);
 				return true;
 			});
 		},

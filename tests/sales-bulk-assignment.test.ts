@@ -10,6 +10,9 @@ import type { SalesEmployee } from "../src/domain/employees/employee.model";
 import { emptyReceiptLedger } from "../src/domain/payments/receipt-ledger";
 import { receivablesView } from "./fixtures/receivables-view";
 
+// Trang tải riêng (React.lazy) và đọc dữ liệu qua HTTP: khi chạy cả bộ test, 1 giây mặc định có thể chưa đủ.
+const pageLoad = { timeout: 10_000, interval: 50 };
+
 it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nhận", async () => {
 	const date = "2025-01-01T00:00:00.000Z";
 	const employee: SalesEmployee = {
@@ -153,7 +156,7 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 			);
 			if (!element) throw new Error("Thiếu ô chọn tất cả");
 			return element;
-		});
+		}, pageLoad);
 		expect(selectAll.disabled).toBe(true);
 		await select("Chọn tỉnh thành", "Hà Nội");
 		const firstCustomer = container.querySelector<HTMLInputElement>(
@@ -196,7 +199,7 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 				)
 			)
 				throw new Error("Trang công nợ chưa hiện");
-		});
+		}, pageLoad);
 		await select("Lọc theo nhân viên phụ trách", employee.id);
 		expect(container.textContent).toContain("/ 29 khách hàng");
 		expect(container.querySelector("tbody")?.textContent).not.toContain(
@@ -211,4 +214,4 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 		else Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
 		vi.unstubAllGlobals();
 	}
-});
+}, 30_000);

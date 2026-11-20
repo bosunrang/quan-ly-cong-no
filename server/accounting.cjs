@@ -40,10 +40,13 @@ function period(query) {
   return [from, through];
 }
 
+// Lỗi có mã (400 dữ liệu nhập sai, 404, 409...) giữ nguyên; lỗi lập trình (TypeError...) để thành
+// 500 và được ghi log; còn lại là xung đột nghiệp vụ với sổ hiện tại (409).
+const programmingErrors = [TypeError, ReferenceError, RangeError, SyntaxError];
 function domainChange(action) {
   try { return action(); }
   catch (error) {
-    if (error.status) throw error;
+    if (error.status || programmingErrors.some((type) => error instanceof type)) throw error;
     fail(409, error.message);
   }
 }

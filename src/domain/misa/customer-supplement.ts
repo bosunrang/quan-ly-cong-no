@@ -1,3 +1,4 @@
+import { InputError } from "../../shared/lib/inputError";
 import type {
 	Customer,
 	CustomerImportDraft,
@@ -70,7 +71,7 @@ export function planMisaCustomerSupplement(
 			original.source?.customerCode || row.source?.customerCode || "";
 		const key = codeKey(customerCode);
 		if (!key || !row.customerName.trim()) {
-			throw new Error(
+			throw new InputError(
 				`Dòng Excel ${row.rowNumber} thiếu mã hoặc tên khách hàng.`,
 			);
 		}
