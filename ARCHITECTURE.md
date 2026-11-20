@@ -41,8 +41,14 @@ src/
     foundation/        Font, token, reset/base và typography
     layout/            App shell và responsive toàn ứng dụng
     shared/            Style của component dùng chung
-electron/              Vỏ desktop, máy trạm, cập nhật Windows, mô-đun SQLite thuần Node
-server/                Máy chủ dùng chung, định tuyến (http.cjs), API (index.cjs), sao lưu và khởi chạy dev
+electron/              Vỏ desktop, máy trạm, cập nhật Windows (không chứa mã dữ liệu)
+server/                Máy chủ một công ty (chạy được không cần Electron)
+  database.cjs         SQLite và migration; books.cjs (sổ bán hàng, sổ thu); account-store.cjs (users, user_pages, sessions)
+  access.cjs           Đăng nhập, phiên, giới hạn đăng nhập sai, kiểm quyền (requirePage)
+  index.cjs            Ráp các route, mặc định cấm ngoài PUBLIC_ROUTES
+  accounting-state.cjs Bộ đệm sổ và kết quả đã dựng, dùng chung cho các route tính tiền
+  routes/              Mỗi màn hình một tệp: auth, settings, customers, employees, misa, dashboard,
+                       receivables, reports, payments, audit
 tests/                 Vitest cho src, node --test cho SQLite và LAN, smoke test cho Electron
 ```
 
@@ -61,7 +67,7 @@ tests/                 Vitest cho src, node --test cho SQLite và LAN, smoke tes
 9. CSS riêng của feature đặt cạnh feature đó; CSS nền chỉ import qua `styles/index.css`.
 10. Feature không import model, logic hoặc CSS của feature khác. Phần dùng chung chuyển vào `domain` hoặc `shared`.
 11. Page chỉ điều phối state và use case; khối giao diện có trách nhiệm riêng tách vào `components`.
-12. Khóa lưu trữ (`cong-no.*`) và migration thuộc repository/`electron/database.cjs`. Không đổi khóa khi refactor; nếu bắt buộc phải đổi thì làm bằng bước migration (như v12).
+12. Khóa lưu trữ (`cong-no.*`) và migration thuộc repository/`server/database.cjs`. Không đổi khóa khi refactor; nếu bắt buộc phải đổi thì làm bằng bước migration (như v12).
 13. Schema SQLite đổi bằng bước migration mới, chạy trong transaction; không sửa bước đã chạy. App tạo bản sao tệp trước mỗi lần nâng cấp.
 14. Người thực hiện và công ty được lấy từ phiên và cấu hình máy chủ. Với thao tác nghiệp vụ thay đổi
     nhiều dữ liệu, lưu thay đổi và nhật ký cùng một giao dịch SQLite.
@@ -81,8 +87,8 @@ shared  -X-> features/domain nghiệp vụ
 Electron ──> server ──> nghiệp vụ đã build và mô-đun SQLite thuần Node
 ```
 
-`domain` phải chạy được không cần React. `shared/ui` chỉ chứa giao diện tổng quát. `server/start.cjs` chạy được bằng Node.js độc lập. Các mô-đun
-SQLite trong `electron/` giữ đường dẫn hiện tại và chỉ phụ thuộc Node.js.
+`domain` phải chạy được không cần React. `shared/ui` chỉ chứa giao diện tổng quát. `server/start.cjs` chạy được bằng Node.js độc lập;
+`server/` không phụ thuộc `electron/` (Electron chỉ khởi động máy chủ).
 
 ## Luồng dữ liệu
 
@@ -119,8 +125,12 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
 - Dữ liệu ghi theo envelope `{ version, data }`; máy chủ và SQLite là nguồn duy nhất, không dùng bản sao trên trình duyệt thay thế.
 - Lỗi đọc dữ liệu báo lên toàn ứng dụng và không ghi đè gì. UI chỉ báo thành công sau khi repository xác nhận đã ghi.
 - Sao lưu tự động 14 bản theo ngày, và bản JSON trước mỗi thao tác xóa/khôi phục.
-- Schema hiện tại là 13. Bước v13 tách dòng bán hàng, khoản thu, phân bổ và đảo phiếu thành các bảng riêng. SQLite kiểm tra dữ liệu sau khi chuyển và hủy bước nâng cấp nếu có sai lệch.
+- Schema hiện tại là **14** (`SCHEMA_VERSION` trong `server/database.cjs`). Bước v13 tách dòng bán hàng, khoản thu, phân bổ và đảo phiếu thành các bảng riêng. SQLite kiểm tra dữ liệu sau khi chuyển và hủy bước nâng cấp nếu có sai lệch.
   Bản sao lưu SQLite cũ được nâng cấp trên bản chép tạm khi đọc, tệp sao lưu gốc giữ nguyên.
+- Bước v14 chuyển khối JSON tài khoản `cong-no.accounts.v1` sang các bảng `users` và `user_pages`,
+  đối chiếu toàn bộ tài khoản trước khi bỏ khối cũ. Bảng `sessions` lưu bản băm token, tài khoản,
+  phiên bản phiên và thời hạn; phiên còn hiệu lực được giữ khi khởi động lại máy chủ.
+  Thông tin tài khoản, quyền, mật khẩu đã băm và các trường bổ sung được giữ nguyên khi nâng cấp.
 
 ## API và lưu danh mục
 
@@ -146,15 +156,16 @@ hàng chỉ tải khi mở chứng từ. Các route báo cáo trả dữ liệu 
 | Phạm vi | Cách kiểm tra |
 | --- | --- |
 | Công ty | Công ty gắn với máy chủ HTTP và kho SQLite của cổng đang mở. |
-| Phiên | `server/access.cjs` kiểm tra cookie, trạng thái tài khoản và phiên bản phiên. |
+| Phiên | `server/access.cjs` kiểm tra cookie, trạng thái tài khoản và phiên bản phiên. Phiên lưu ở bảng `sessions` (chỉ bản băm của token), còn sau khi khởi động lại máy chủ. |
 | Thẻ | Vai trò và thẻ được cấp giới hạn route. Thẻ quản trị người dùng, cấu hình và nhật ký thuộc quản trị viên. |
 | Bản ghi | Máy chủ áp dụng điều kiện của từng nghiệp vụ, gồm ràng buộc chứng từ, phân bổ và phiên bản khi ghi. |
 
 ## Thêm một màn hình mới
 
-1. Khai báo mã màn hình, quyền và mục điều hướng theo cấu trúc hiện tại trong `src/app` và
-   `server/access.cjs`. Thẻ được cấp phải nằm trong danh sách của vai trò.
-2. Khai báo route ở mô-đun máy chủ tương ứng. Đặt giới hạn dữ liệu đầu vào, quyền và quy tắc kiểm tra ở route.
+1. Thêm một dòng vào `src/domain/access/permissions.mjs` (mã thẻ và vai trò được cấp): đây là nguồn quyền
+   duy nhất cho cả máy chủ và giao diện. Thêm `PageId` trong `src/types.ts`, mục điều hướng trong `src/app`.
+2. Tạo `server/routes/<tên>.cjs` và đăng ký trong `server/index.cjs`. Mỗi route khai báo thẻ cần có và
+   giới hạn dữ liệu gửi lên; đặt quy tắc kiểm tra ở route.
 3. Dùng repository trong `src/domain/` gọi client HTTP. Đặt trang và các component trong `src/features/`.
 4. Khi phải thay đổi SQLite, thêm migration mới, thử với kho cũ và giữ định dạng xuất sao lưu tương thích.
 5. Kiểm thử route, quyền và nghiệp vụ. Chạy cả bộ số tiền chuẩn nếu thay đổi sổ, khoản thu, đối chiếu

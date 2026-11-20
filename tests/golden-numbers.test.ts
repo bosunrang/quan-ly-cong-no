@@ -54,7 +54,7 @@ describe("Số tiền chuẩn", () => {
 
 	it("đi qua SQLite (khôi phục rồi xuất lại) vẫn ra đúng số chuẩn", () => {
 		const require = createRequire(join(process.cwd(), "package.json"));
-		const { openDatabase } = require("./electron/database.cjs");
+		const { openDatabase } = require("./server/database.cjs");
 		const database = openDatabase(":memory:");
 		try {
 			database.changeBusinessData({ type: "restore", backup });

@@ -4,14 +4,17 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { DatabaseSync } = require('node:sqlite');
-const { DATASET_KEYS, SCHEMA_VERSION, openDatabase } = require('../electron/database.cjs');
+const { DATASET_KEYS, SCHEMA_VERSION, openDatabase } = require('../server/database.cjs');
+
+const testAccount = (id, extra = {}) => ({ id, username: id, name: 'Tài khoản ' + id, role: 'admin',
+  active: true, mustChangePassword: false, sessionVersion: 'v-' + id, proof: { salt: 'aa', hash: 'bb' }, ...extra });
 
 test('SQLite giữ tài khoản và nhật ký khi xóa dữ liệu nghiệp vụ', () => {
   const database = openDatabase(':memory:');
   try {
-    const accounts = [{ id: 'qa-admin' }];
+    const accounts = [testAccount('qa-admin')];
     assert.equal(database.writeAccounts([], accounts), true);
-    assert.equal(database.writeAccounts([], [{ id: 'stale-admin' }]), false);
+    assert.equal(database.writeAccounts([], [testAccount('stale-admin')]), false);
     const entry = { id: 'event-1', time: '2026-06-01T01:00:00.000Z', actorId: 'qa-admin',
       actorName: 'Tài khoản thử', category: 'data', action: 'Nhập dữ liệu', detail: '' };
     assert.equal(database.appendActivity(entry), true);
@@ -82,7 +85,7 @@ test('SQLite lưu và gỡ liên kết tài khoản của nhân viên', () => wi
     phone: '0901', email: 'employee@example.test', createdAt: '2026-01-01T00:00:00.000Z',
   };
   const key = DATASET_KEYS.employees;
-  assert.equal(database.writeAccounts([], [{ id: 'account-1' }]), true);
+  assert.equal(database.writeAccounts([], [testAccount('account-1')]), true);
   const linked = { ...employee, linkedAccountId: 'account-1' };
   database.writeDataset(key, 2, [linked]);
   assert.deepEqual(database.readDataset(key).data, [linked]);
@@ -340,7 +343,7 @@ test('v13 moves both legacy books, verifies amounts and keeps the v12 backup int
   } finally { raw.close(); }
   const upgraded = openDatabase(location);
   try {
-    assert.equal(upgraded.status().schemaVersion, 13);
+    assert.equal(upgraded.status().schemaVersion, SCHEMA_VERSION);
     assert.deepEqual(upgraded.exportBusinessBackup().data.salesBook, salesBook);
     assert.deepEqual(upgraded.exportBusinessBackup().data.ledger, ledger);
     const sql = new DatabaseSync(location, { readOnly: true });
@@ -377,7 +380,7 @@ test('v13 nâng cấp sổ có trường lạ của bản cũ và cất lại ng
   } finally { upgraded.close(); }
   const check = new DatabaseSync(location, { readOnly: true });
   try {
-    assert.equal(check.prepare('PRAGMA user_version').get().user_version, 13);
+    assert.equal(check.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
     assert.deepEqual(JSON.parse(check.prepare('SELECT payload_json FROM legacy_books').get().payload_json), sales);
   } finally { check.close(); }
 }));
@@ -430,4 +433,39 @@ test('v13 hủy nâng cấp khi số tiền bị lệch và không tạo thêm b
     assert.deepEqual(JSON.parse(unchanged.prepare('SELECT payload_json FROM app_datasets').get().payload_json), sales);
     assert.equal(unchanged.prepare('SELECT COUNT(*) AS n FROM sales_lines').get().n, 0);
   } finally { unchanged.close(); }
+}));
+
+test('v14 chuyển tài khoản từ khối JSON sang bảng users/user_pages, giữ trường lạ', () => withDatabase((database, location) => {
+  const accounts = [testAccount('admin'),
+    testAccount('ketoan', { role: 'editor', pages: ['dashboard', 'payments'], linkedNote: 'giữ nguyên' }),
+    testAccount('xem', { role: 'viewer', active: false })];
+  const raw = new DatabaseSync(location);
+  raw.exec('DELETE FROM user_pages; DELETE FROM users; PRAGMA user_version = 13;');
+  raw.prepare('INSERT INTO app_datasets VALUES (?, 1, ?, ?)').run('cong-no.accounts.v1', JSON.stringify(accounts), '2026-01-01T00:00:00.000Z');
+  raw.close();
+  const upgraded = openDatabase(location);
+  try {
+    assert.deepEqual(upgraded.readDataset('cong-no.accounts.v1').data, accounts);
+  } finally { upgraded.close(); }
+  const check = new DatabaseSync(location, { readOnly: true });
+  try {
+    assert.equal(check.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+    assert.equal(check.prepare("SELECT COUNT(*) AS n FROM app_datasets WHERE dataset_key = 'cong-no.accounts.v1'").get().n, 0);
+    assert.deepEqual(check.prepare("SELECT page FROM user_pages WHERE user_id = 'ketoan' ORDER BY position").all().map(({ page }) => page),
+      ['dashboard', 'payments']);
+  } finally { check.close(); }
+}));
+
+test('lưu lại tài khoản giữ phiên của tài khoản khác và đổi được tên đăng nhập hai tài khoản cho nhau', () => withDatabase((database) => {
+  const a = testAccount('a');
+  const b = testAccount('b');
+  assert.equal(database.writeAccounts([], [a, b]), true);
+  database.saveSession('token-a', 'a', a.sessionVersion, Date.now() + 60_000);
+  const swapped = [{ ...a, username: 'b' }, { ...b, username: 'a' }];
+  assert.equal(database.writeAccounts([a, b], swapped), true);
+  assert.deepEqual(database.readDataset('cong-no.accounts.v1').data, swapped);
+  assert.equal(database.findSession('token-a').id, 'a');
+  // Xóa tài khoản thì xóa luôn phiên của tài khoản đó.
+  assert.equal(database.writeAccounts(swapped, [swapped[1]]), true);
+  assert.equal(database.findSession('token-a'), undefined);
 }));

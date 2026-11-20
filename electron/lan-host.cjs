@@ -3,29 +3,11 @@ const { randomBytes } = require('node:crypto');
 const { mkdirSync } = require('node:fs');
 const { networkInterfaces } = require('node:os');
 const { join } = require('node:path');
-const { companies, getCompany } = require('../server/companies.cjs');
 const { backupDirectory } = require('../server/automatic-backup.cjs');
 const { createLanServer, listenLanServer, stopLanServer } = require('../server/lan.cjs');
 const { lanOptions } = require('../server/lan-options.cjs');
 const { createFileLog } = require('../server/file-log.cjs');
 const { loginItem } = require('./lan-startup.cjs');
-
-async function chooseMode(argv) {
-  const option = argv.find((item) => item.startsWith('--company='));
-  if (option) return getCompany(option.slice('--company='.length));
-  const { response } = await dialog.showMessageBox({
-    type: 'question',
-    title: 'Mở Quản lý công nợ',
-    message: 'Chọn công ty trên máy chủ này',
-    detail: 'Trên máy chung, mở ứng dụng hai lần và chọn Nam Hưng Việt ở một lần, Naviva Group ở lần kia.',
-    buttons: [...companies.map((company) => company.name), 'Bản cục bộ', 'Máy trạm…', 'Thoát'],
-    cancelId: companies.length + 2,
-    noLink: true,
-  });
-  if (response === companies.length) return 'local';
-  if (response === companies.length + 1) return 'client';
-  return companies[response];
-}
 
 function showLanAddresses(company, settings) {
   const protocol = settings.tls ? 'https' : 'http';
@@ -224,4 +206,4 @@ async function startLanHost(company, { createWindow, configureSession, createUpd
   }
 }
 
-module.exports = { chooseMode, startLanHost };
+module.exports = { startLanHost };

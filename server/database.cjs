@@ -6,7 +6,8 @@ const { DatabaseSync } = require('node:sqlite');
 const { deleteBusinessGroups, makeBusinessBackup, restoreBusinessData } = require('../src/domain/settings/business-data.rules.mjs');
 
 const books = require('./books.cjs');
-const SCHEMA_VERSION = 13;
+const accountStore = require('./account-store.cjs');
+const SCHEMA_VERSION = 14;
 const DATASET_KEYS = {
   customers: 'cong-no.customers.v2',
   employees: 'cong-no.sales-employees.v2',
@@ -340,6 +341,13 @@ function upgradeSchema(database, currentVersion) {
       database.exec('PRAGMA user_version = 13;');
     });
   }
+  if (currentVersion < 14) {
+    // Tài khoản vào bảng users/user_pages; thêm bảng sessions để phiên còn sau khi khởi động lại.
+    withTransaction(database, () => {
+      accountStore.migrateAccounts(database);
+      database.exec('PRAGMA user_version = 14;');
+    });
+  }
 }
 
 function withTransaction(database, action) {
@@ -412,7 +420,7 @@ function readCustomer(database, id) {
 function writeEmployees(database, version, employees) {
   const links = employees.map((employee) => employee.linkedAccountId).filter((id) => id !== undefined);
   if (links.length) {
-    const accounts = readGeneric(database, 'cong-no.accounts.v1')?.data ?? [];
+    const accounts = accountStore.readAccounts(database);
     const accountIds = new Set(accounts.map(({ id }) => id));
     if (links.some((id) => !accountIds.has(id))) {
       throw Object.assign(new Error('Tài khoản liên kết không còn tồn tại.'), { status: 400 });
@@ -491,7 +499,7 @@ function directoryTransaction(database, work, transaction = true) {
     },
     saveEmployee(item) {
       const link = item.linkedAccountId ?? null;
-      if (link && !(readGeneric(database, 'cong-no.accounts.v1')?.data ?? []).some(({ id }) => id === link))
+      if (link && !accountStore.readAccounts(database).some(({ id }) => id === link))
         throw Object.assign(new Error('Tài khoản liên kết không còn tồn tại.'), { status: 400 });
       database.prepare(`INSERT INTO sales_employees
         (id, code, name, phone, email, status, created_at, sort_order, linked_account_id)
@@ -650,7 +658,7 @@ function changeBusinessData(database, change, companyId, expected, onChange) {
     }
     let next;
     if (change?.type === 'restore') {
-      const accounts = readGeneric(database, 'cong-no.accounts.v1')?.data ?? [];
+      const accounts = accountStore.readAccounts(database);
       next = restoreBusinessData(change.backup, current, companyId, new Set(accounts.map(({ id }) => id)));
     } else if (change?.type === 'delete') {
       next = deleteBusinessGroups(current, change.groups);
@@ -717,6 +725,10 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
   return {
     datasetStamp(key) { return datasetStamp(database, key); },
     readDataset(key) {
+      if (key === accountStore.ACCOUNTS_KEY) {
+        const accounts = accountStore.readAccounts(database);
+        return accounts.length ? { version: 1, data: accounts } : undefined;
+      }
       if (key === books.SALE || key === books.LEDGER) {
         const data = key === books.SALE ? books.readSales(database) : books.readLedger(database);
         if (data) return { version: 1, data };
@@ -749,14 +761,16 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
     changeDirectory(work) { return directoryTransaction(database, work); },
     writeAccounts(expected, accounts) {
       return withTransaction(database, () => {
-        const key = 'cong-no.accounts.v1';
-        const current = readGeneric(database, key);
-        if ((current && current.version !== 1) ||
-            JSON.stringify(current?.data ?? []) !== JSON.stringify(expected)) return false;
-        writeGeneric(database, key, 1, accounts);
+        if (JSON.stringify(accountStore.readAccounts(database)) !== JSON.stringify(expected)) return false;
+        accountStore.writeAccounts(database, accounts);
         return true;
       });
     },
+    saveSession(tokenHash, userId, sessionVersion, expiresAt) {
+      accountStore.saveSession(database, tokenHash, userId, sessionVersion, expiresAt);
+    },
+    findSession(tokenHash) { return accountStore.findSession(database, tokenHash); },
+    deleteSession(tokenHash) { accountStore.deleteSession(database, tokenHash); },
     writeReceiptLedger(revision, data, salesBookImportedAt, { checkNewCustomers = false } = {}) {
       return withTransaction(database, () => {
         const current = books.readLedger(database);

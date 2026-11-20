@@ -5,7 +5,9 @@ const { startWorkstation } = require('./workstation.cjs');
 const { workstationOrigin } = require('./workstation-config.cjs');
 const { registerInstance } = require('./update-instances.cjs');
 const { createFileLog } = require('../server/file-log.cjs');
-const { chooseMode, startLanHost } = require('./lan-host.cjs');
+const { startLanHost } = require('./lan-host.cjs');
+const { chooseCompany, chooseRole } = require('./startup-choice.cjs');
+const { getCompany } = require('../server/companies.cjs');
 
 app.enableSandbox();
 
@@ -73,16 +75,23 @@ app.whenReady().then(async () => {
       return controller;
     };
     const serverUrl = process.argv.find((arg) => arg.startsWith('--server-url='));
-    const mode = serverUrl || process.argv.includes('--client') ? 'client'
-      : process.argv.includes('--local') ? 'local' : await chooseMode(process.argv);
-    if (!mode) return app.quit();
-    if (mode === 'client') {
-      const directory = join(root, 'workstation');
+    const workstation = (directory) => {
       const log = createFileLog(join(directory, 'logs'));
       return startWorkstation({ directory, createWindow, configureSession, log, createUpdater,
         initialOrigin: serverUrl ? workstationOrigin(serverUrl.slice('--server-url='.length)) : undefined });
-    }
-    await startLanHost(mode, { createWindow, configureSession, createUpdater });
+    };
+    // Cờ dòng lệnh cho quản trị và lập trình: --client/--server-url (máy trạm), --local (bản thử một máy).
+    if (serverUrl || process.argv.includes('--client')) return workstation(join(root, 'workstation'));
+    if (process.argv.includes('--local'))
+      return startLanHost('local', { createWindow, configureSession, createUpdater });
+    // Như app cước phí: chọn công ty, rồi vai trò của máy cho công ty đó (chỉ hỏi lần đầu).
+    const option = process.argv.find((arg) => arg.startsWith('--company='));
+    const company = option ? getCompany(option.slice('--company='.length)) : await chooseCompany(root);
+    if (!company) return app.quit();
+    const role = await chooseRole(root, company, { autoStart: Boolean(option) });
+    if (!role) return app.quit();
+    if (role === 'client') return workstation(join(root, 'workstation', company.id));
+    await startLanHost(company, { createWindow, configureSession, createUpdater });
   } catch (error) {
     startupLog.write('ERROR', 'desktop.start.failed', error.code);
     dialog.showErrorBox('Không khởi động được Quản lý công nợ', error.message);

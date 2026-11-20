@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { openDatabase } = require('../electron/database.cjs');
+const { openDatabase } = require('../server/database.cjs');
 const { createAccess, initializeAdministrator } = require('../server/access.cjs');
 const {
   isValidCustomerList, isValidReceiptLedger, isValidSalesBook, isValidSettings,
@@ -83,6 +83,27 @@ test('gửi song song nhiều lần đăng nhập sai vẫn bị giới hạn th
       statusOf(access.handle('login', { username: 'admin', password: `sai-${index}-mat-khau` }, request(), response()))));
     assert.ok(account.filter((status) => status === 401).length <= 6, account.join(','));
     assert.equal(await statusOf(access.handle('login', { username: 'admin', password }, request(), response())), 429);
+  } finally {
+    db.close();
+  }
+});
+
+test('phiên đăng nhập còn sau khi khởi động lại máy chủ, mất khi đăng xuất', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    const password = 'mat-khau-dung-123';
+    await initializeAdministrator(db, password);
+    const first = createAccess(db, company, false);
+    const res = response();
+    await first.handle('login', { username: 'admin', password }, request(), res);
+    const cookie = String(res.headers['Set-Cookie']).split(';')[0];
+    // Bảng sessions chỉ lưu bản băm của token, không lưu token trong cookie.
+    const stored = db.findSession(cookie.split('=')[1]);
+    assert.equal(stored, undefined);
+    const restarted = createAccess(db, company, false);
+    assert.equal(restarted.actor(request(cookie), true).username, 'admin');
+    await restarted.handle('logout', {}, request(cookie), response());
+    assert.throws(() => createAccess(db, company, false).actor(request(cookie), true), { status: 401 });
   } finally {
     db.close();
   }

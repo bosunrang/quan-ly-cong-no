@@ -39,18 +39,23 @@ Bản mở trực tiếp bằng `file://` và chế độ lưu nghiệp vụ tr�
 
 Tạo bộ cài bằng `pnpm dist` trên máy build. Tệp `Quan-Ly-Cong-No-Setup-<phiên-bản>.exe` được tạo trong `release`. Cài trên các máy chủ cần chạy app.
 
-- **Máy chung**. Mở **Quản lý công nợ**, chọn **Nam Hưng Việt**. Mở lại ứng dụng và chọn **Naviva Group**. Windows hiển thị hai biểu tượng dưới khay; rê chuột lên mỗi biểu tượng để xem tên công ty và cổng.
-- **Máy Tường Khuê**. Mở ứng dụng và chọn **Tường Khuê**.
-- **Máy Winbio**. Mở ứng dụng và chọn **Winbio**.
+Khi mở ứng dụng (giống app cước phí), hộp **Chọn công ty** chỉ có bốn công ty và **Thoát**; công ty mở lần
+trước được chọn sẵn. Lần đầu mở một công ty trên máy, app hỏi **Máy chủ** (lưu SQLite, phục vụ các máy
+trong mạng) hay **Máy trạm** (chỉ kết nối tới máy chủ) và ghi nhớ cho các lần sau.
+
+- **Máy chung**. Mở **Quản lý công nợ**, chọn **Nam Hưng Việt** → **Máy chủ**. Mở lại ứng dụng và chọn **Naviva Group** → **Máy chủ**. Windows hiển thị hai biểu tượng dưới khay; rê chuột lên mỗi biểu tượng để xem tên công ty và cổng.
+- **Máy Tường Khuê**. Mở ứng dụng và chọn **Tường Khuê** → **Máy chủ**.
+- **Máy Winbio**. Mở ứng dụng và chọn **Winbio** → **Máy chủ**.
 
 Khi mở công ty lần đầu, tạo tài khoản quản trị nếu được hỏi. Ghi lại mật khẩu tạm thời hiển thị và đổi mật khẩu ở lần đăng nhập đầu. Có thể tạo sau bằng mục **Tạo tài khoản quản trị…** dưới khay.
 
 Bấm **X** để ẩn cửa sổ xuống khay và giữ máy chủ chạy. Bấm đúp biểu tượng để mở cửa sổ. Trong menu chuột phải, chọn **Địa chỉ cho máy nhân viên…** để xem địa chỉ kết nối. Chọn **Thoát và dừng máy chủ** để kết thúc máy chủ của công ty đó.
 
-Trên bản đã cài, tick **Khởi động cùng Windows** ở biểu tượng của từng công ty cần chạy. Máy chung cần tick cả hai biểu tượng. Sau khi đăng nhập vào tài khoản Windows đã bật tùy chọn, mỗi công ty lên thẳng dưới khay. Mở thủ công qua shortcut vẫn cho chọn công ty. Chọn **Bản cục bộ** nếu dùng tệp `cong-no.sqlite` của Electron trước đây. App mở trực tiếp tệp
-đó qua máy chủ chỉ lắng nghe `127.0.0.1`, với cổng tự chọn; không tạo kho nghiệp vụ thay thế.
-Bản cục bộ cũng yêu cầu đăng nhập và dùng luồng tạo quản trị dưới khay như bản LAN.
-Các bản sao lưu JSON cục bộ cũ vẫn khôi phục được (`companyId: null`).
+Trên bản đã cài, tick **Khởi động cùng Windows** ở biểu tượng của từng công ty cần chạy. Máy chung cần tick cả hai biểu tượng. Sau khi đăng nhập vào tài khoản Windows đã bật tùy chọn, mỗi công ty lên thẳng dưới khay. Mở thủ công qua shortcut vẫn cho chọn công ty.
+
+Bản thử một máy (`--local`, dùng cho lập trình qua `pnpm desktop`) không hiện trong hộp chọn công ty. Nó mở
+tệp `cong-no.sqlite` của Electron qua máy chủ chỉ lắng nghe `127.0.0.1`, cũng yêu cầu đăng nhập; các bản
+sao lưu JSON cục bộ cũ vẫn khôi phục được (`companyId: null`).
 
 Bản cài lưu dữ liệu LAN tại `%APPDATA%\QuanLyCongNo\lan`. Nếu máy đã có dữ liệu LAN ở thư mục khác, đặt biến môi trường người dùng `CONG_NO_LAN_DATA_DIR` thành đường dẫn tuyệt đối của thư mục đó trước khi mở bản cài. Mục khởi động Windows ghi nhớ thư mục đang dùng khi bật tùy chọn.
 
@@ -105,6 +110,11 @@ Lệnh chạy từ mã nguồn lưu các tệp trong `data/lan` mặc định. C
 
 ### Sao lưu và khôi phục theo công ty
 
+Schema SQLite hiện tại là **14**. Khi mở kho cũ, máy chủ tạo bản sao trước khi nâng cấp;
+bước v14 chuyển tài khoản và quyền vào `users`/`user_pages`, đồng thời tạo bảng `sessions`
+để giữ phiên đăng nhập còn hiệu lực qua những lần khởi động lại máy chủ. Định dạng sao lưu JSON
+nghiệp vụ vẫn là phiên bản 1; tài khoản và phiên đăng nhập không nằm trong tệp JSON này.
+
 Trong **Cài đặt → Quản trị dữ liệu**, dùng **Xuất sao lưu** và **Nhập sao lưu** để lưu hoặc khôi phục dữ liệu nghiệp vụ bằng tệp JSON. Bản sao LAN chỉ nhập được vào đúng công ty. Tệp chứa sổ MISA, khoản thu, phân bổ, khách hàng, nhân viên và cài đặt doanh nghiệp. Tài khoản và nhật ký nằm ngoài dữ liệu nhập. Dùng **Xóa dữ liệu** để chọn từng nhóm. Với sổ MISA đã có phân bổ hoặc khách hàng đã có khoản thu, chọn cả nhóm **Khoản thu và phân bổ** khi xóa dữ liệu liên quan.
 
 Máy chủ LAN tạo một bản SQLite mỗi ngày khi đang chạy và giữ 14 bản gần nhất trong `backups/<mã-công-ty>` thuộc thư mục dữ liệu LAN. Quản trị viên có thể dùng **Bản sao lưu tự động → Chọn bản sao lưu** để khôi phục ngay trong app. Trước khi khôi phục hoặc xóa theo nhóm, máy chủ lưu thêm một tệp JSON trong cùng thư mục và giữ 5 bản gần nhất. Trên bản Windows, dùng **Mở thư mục sao lưu…** dưới khay hệ thống để lấy các tệp này.
@@ -121,12 +131,13 @@ Lệnh trên build giao diện rồi mở ứng dụng Electron.
 
 ## Dùng Electron làm máy trạm
 
-Mở bản cài, chọn **Máy trạm…**, rồi nhập địa chỉ máy chủ do quản trị viên cung cấp
+Mở bản cài, chọn công ty, chọn **Máy trạm** (chỉ hỏi lần đầu), rồi nhập địa chỉ máy chủ do quản trị viên cung cấp
 (ví dụ `http://192.168.1.20:3300` trong LAN hoặc `https://congno.example.com` từ xa).
 Địa chỉ được lưu cho các lần mở tiếp theo. Trong cửa sổ, menu **Máy trạm** có mục đổi địa chỉ,
 kết nối lại và mở trong trình duyệt. Cửa sổ dùng giao diện, tài khoản và dữ liệu do máy chủ cung cấp.
 
-Có thể mở thẳng chế độ này với `--client` hoặc `--client --server-url=https://congno.example.com`
+Vai trò được nhớ theo từng công ty trong `lan-profiles/<mã-công-ty>/machine.json` (thư mục dữ liệu của app);
+xóa tệp này để được hỏi lại. Có thể mở thẳng chế độ máy trạm với `--client` hoặc `--client --server-url=https://congno.example.com`
 sau tên tệp `.exe`. Từ mã nguồn, dùng `pnpm start --client`.
 
 ## Truy cập từ xa qua Cloudflare Tunnel

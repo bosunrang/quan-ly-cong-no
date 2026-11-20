@@ -12,7 +12,7 @@
     "build": "pnpm build:domain && tsc -b && vite build",
     "typecheck": "tsc -b && tsc -p tsconfig.test.json",
     "lint": "biome lint src tests vite.config.ts vitest.config.ts --error-on-warnings",
-    "check:electron": "node --check electron/main.cjs && node --check electron/lan-host.cjs && node --check electron/database.cjs && node --check server/development.cjs",
+    "check:electron": "node --check electron/main.cjs && node --check electron/lan-host.cjs && node --check server/database.cjs && node --check server/books.cjs && node --check server/development.cjs",
     "test": "pnpm build:domain && vitest run",
     "test:sqlite": "node --test tests/sqlite-database.test.cjs",
     "test:lan": "pnpm build:domain && node --test tests/lan.test.cjs tests/lan-security.test.cjs tests/operations.test.cjs",
@@ -41,6 +41,7 @@
       "electron/**/*",
       "server/**/*",
       "src/domain/settings/business-data.rules.mjs",
+      "src/domain/access/permissions.mjs",
       "package.json"
     ],
     "win": {

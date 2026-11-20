@@ -1,6 +1,6 @@
 # Kế hoạch chuyển sang kiến trúc của app cước phí
 
-Cập nhật: 19/11/2026. Mục tiêu: app công nợ có **một đường dữ liệu duy nhất qua máy chủ** như app
+Cập nhật: 20/11/2026. Schema SQLite hiện tại: **14**. Mục tiêu: app công nợ có **một đường dữ liệu duy nhất qua máy chủ** như app
 "Quản lý cước phí", nhưng giữ nguyên phần tính tiền TypeScript đã có kiểm thử.
 
 ## Vì sao phải chuyển
@@ -136,6 +136,28 @@ tên miền Tunnel cấu hình theo công ty. Xem hướng dẫn vận hành tro
 tắc triển khai trong [ARCHITECTURE.md](../ARCHITECTURE.md). Kiểm thử cục bộ dùng máy chủ, cấu hình
 proxy và bộ cập nhật mô phỏng. Phát hành và truy cập từ xa cần nguồn cập nhật, chứng thư ký mã và
 tên miền Tunnel của đơn vị vận hành.
+
+## Đồng bộ nốt với app cước phí (20/11/2026)
+
+- Lớp SQLite chuyển từ `electron/` sang `server/` (`database.cjs`, `books.cjs`); `server/` không còn phụ thuộc `electron/`.
+- Schema v14: tài khoản vào bảng `users` và `user_pages` (thay khối JSON); phiên đăng nhập lưu ở bảng
+  `sessions`, chỉ giữ bản băm token, nên khởi động lại hay cập nhật máy chủ không đăng xuất người dùng.
+- Route tách mỗi màn hình một tệp trong `server/routes/` (auth, settings, customers, employees, misa,
+  dashboard, receivables, reports, payments, audit); bộ đệm sổ dùng chung ở `server/accounting-state.cjs`.
+- Danh sách thẻ và quyền theo vai trò chỉ còn một nguồn: `src/domain/access/permissions.mjs`, dùng cho cả
+  máy chủ và giao diện.
+
+### Kiểm chứng schema 14 (20/11/2026)
+
+- `pnpm check`: lint, TypeScript, kiểm tra cú pháp và toàn bộ 157 test đều đạt
+  (122 Vitest, gồm bộ số tiền chuẩn; 20 SQLite; 15 LAN/phân quyền/vận hành).
+- Kiểm tra cú pháp bổ sung cho toàn bộ 43 module `.cjs`/`.mjs` trong `server/` và `electron/`
+  (không tính mã được sinh tự động) đều đạt.
+- `pnpm build` thành công; còn cảnh báo kích thước chunk ExcelJS lớn hơn 500 kB.
+- `pnpm test:desktop`: cả hai smoke test Electron cục bộ và máy trạm đều đạt, gồm đăng nhập,
+  đổi mật khẩu, khôi phục phiên cookie và không có cầu nối truy cập SQLite từ giao diện.
+- `pnpm test:performance`: đạt với 50.000 dòng bán hàng và 500 khách hàng; Dashboard lần đầu
+  khoảng 909 ms, đọc lại khoảng 11 ms; trang 10 khách công nợ khoảng 3,4 KB.
 
 ## Quyết định đã chốt (19/11/2026)
 

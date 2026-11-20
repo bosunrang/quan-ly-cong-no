@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { URL } from "node:url";
 import { describe, expect, it } from "vitest";
-import electronDatabase from "../electron/database.cjs?raw";
+import electronDatabase from "../server/database.cjs?raw";
 import electronMain from "../electron/main.cjs?raw";
 import indexHtml from "../index.html?raw";
 
@@ -214,7 +214,7 @@ describe("architecture guardrails", () => {
 		expect(electronMain).toContain("setWindowOpenHandler");
 		expect(electronMain).toContain("on('will-navigate'");
 		expect(electronMain).toContain("window.loadURL(url)");
-		expect(electronMain).toContain("startLanHost(mode");
+		expect(electronMain).toContain("startLanHost(company");
 		expect(electronMain).not.toMatch(/ipcMain|preload|loadFile|openDatabase/);
 		for (const [path, source] of Object.entries(sourceModules)) {
 			expect(source, path).not.toMatch(

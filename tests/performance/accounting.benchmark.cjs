@@ -3,7 +3,7 @@ const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { performance } = require('node:perf_hooks');
-const { openDatabase, DATASET_KEYS } = require('../../electron/database.cjs');
+const { openDatabase, DATASET_KEYS } = require('../../server/database.cjs');
 const { startDevelopmentServer } = require('../../server/development.cjs');
 
 async function main() {

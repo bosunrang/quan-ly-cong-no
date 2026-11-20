@@ -1,6 +1,6 @@
 const { fail } = require('./access-errors.cjs');
 const { requestPeer } = require('./client-address.cjs');
-const { pbkdf2, randomBytes, randomUUID, timingSafeEqual } = require('node:crypto');
+const { createHash, pbkdf2, randomBytes, randomUUID, timingSafeEqual } = require('node:crypto');
 const { promisify } = require('node:util');
 
 const derive = promisify(pbkdf2);
@@ -11,15 +11,13 @@ const ADDRESS_LIMIT = 15;
 const ADDRESS_WINDOW = 2 * MINUTE;
 const ACCOUNT_FREE_FAILURES = 5;
 const ACCOUNT_MAX_LOCK = 30 * MINUTE;
-const pagesByRole = {
-  editor: ['dashboard', 'misa', 'receivables', 'payments', 'reports', 'customers', 'sales'],
-  viewer: ['dashboard', 'receivables', 'reports'],
-};
+// Thẻ và quyền theo vai trò lấy từ một nguồn chung với giao diện.
+const { canOpen, pagesByRole } = require('../src/domain/access/permissions.mjs');
 
-
-function canOpen(account, page) {
-  return account.role === 'admin' ||
-    (pagesByRole[account.role]?.includes(page) && (!account.pages || account.pages.includes(page)));
+/** Chặn nếu tài khoản không mở được thẻ nào trong danh sách (danh sách rỗng: chỉ cần đăng nhập). */
+function requirePage(account, allowed) {
+  if (allowed.length && !allowed.some((page) => canOpen(account, page)))
+    fail(403, 'Tài khoản chưa có quyền truy cập dữ liệu này.');
 }
 
 function accountsOf(db) {
@@ -93,8 +91,11 @@ async function initializeAdministrator(db, password, username = 'admin') {
   storeAccounts(db, [], [account]);
 }
 
+// Phiên lưu trong bảng sessions của từng công ty, chỉ giữ bản băm của token trong cookie:
+// khởi động lại hay cập nhật máy chủ không làm người dùng bị đăng xuất.
+const tokenHash = (token) => createHash('sha256').update(token).digest('hex');
+
 function createAccess(db, company, tls, tunnelOrigin) {
-  const sessions = new Map();
   // Lần đăng nhập sai được đếm theo máy và theo tên đăng nhập. Đăng nhập đúng chỉ
   // xóa bộ đếm của chính tài khoản đó, nên không thể dùng tài khoản của mình để
   // đặt lại giới hạn rồi dò mật khẩu tài khoản khác.
@@ -139,16 +140,15 @@ function createAccess(db, company, tls, tunnelOrigin) {
     res.setHeader('Set-Cookie', `${cookie}=${value}; Path=/api/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure ? '; Secure' : ''}`);
   }
   function createSession(req, res, account) {
-    sessions.delete(token(req));
-    for (const [key, session] of sessions)
-      if (session.until <= Date.now()) sessions.delete(key);
+    const previous = token(req);
+    if (previous) db.deleteSession(tokenHash(previous));
     const secret = randomBytes(32).toString('base64url');
-    sessions.set(secret, { id: account.id, version: account.sessionVersion, until: Date.now() + 12 * HOUR });
+    db.saveSession(tokenHash(secret), account.id, account.sessionVersion, Date.now() + 12 * HOUR);
     setCookie(req, res, secret, 12 * 3600);
   }
   function actor(req, allowPending = false) {
     const key = token(req);
-    const session = sessions.get(key);
+    const session = key ? db.findSession(tokenHash(key)) : undefined;
     if (session && session.until > Date.now()) {
       const account = accountsOf(db).find((item) =>
         item.id === session.id && item.active && item.sessionVersion === session.version);
@@ -159,7 +159,7 @@ function createAccess(db, company, tls, tunnelOrigin) {
         return account;
       }
     }
-    sessions.delete(key);
+    if (key) db.deleteSession(tokenHash(key));
     fail(401, 'Phiên đăng nhập đã hết hiệu lực.');
   }
   function administrator(req) {
@@ -197,7 +197,7 @@ function createAccess(db, company, tls, tunnelOrigin) {
       if (operation === 'session') return profilesFor(db, actor(req, true));
       if (operation === 'logout') {
         const account = actor(req, true);
-        sessions.delete(token(req));
+        db.deleteSession(tokenHash(token(req)));
         setCookie(req, res, '', 0);
         audit(db, account, 'session', 'Đăng xuất');
         return true;
@@ -259,4 +259,4 @@ function createAccess(db, company, tls, tunnelOrigin) {
   };
 }
 
-module.exports = { createAccess, initializeAdministrator, canOpen, audit, activityEntry, fail };
+module.exports = { createAccess, initializeAdministrator, canOpen, requirePage, audit, activityEntry, fail };

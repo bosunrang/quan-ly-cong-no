@@ -1,4 +1,5 @@
 import type { PageId } from "../../types";
+import { canOpen, grantablePages } from "./permissions.mjs";
 
 export const roleLabels = {
 	admin: "Quản trị",
@@ -29,31 +30,15 @@ export type AccountProfile = Omit<LocalAccount, "proof">;
 
 export const roleOptions: AccountRole[] = ["admin", "editor", "viewer"];
 
-const grantablePages: Record<
-	Exclude<AccountRole, "admin">,
-	readonly PageId[]
-> = {
-	editor: [
-		"dashboard",
-		"misa",
-		"receivables",
-		"payments",
-		"reports",
-		"customers",
-		"sales",
-	],
-	viewer: ["dashboard", "receivables", "reports"],
-};
-
+// Danh sách thẻ theo vai trò nằm ở permissions.mjs, dùng chung với máy chủ.
 export function grantablePagesForRole(role: AccountRole): readonly PageId[] {
-	return role === "admin" ? [] : grantablePages[role];
+	return grantablePages(role);
 }
 
 export type PageAccess = Pick<LocalAccount, "role" | "pages">;
 
-export function canOpenPage({ role, pages }: PageAccess, page: PageId) {
-	if (role === "admin") return true;
-	return grantablePages[role].includes(page) && (pages?.includes(page) ?? true);
+export function canOpenPage(access: PageAccess, page: PageId) {
+	return canOpen(access, page);
 }
 
 export function normalizeUsername(username: string) {

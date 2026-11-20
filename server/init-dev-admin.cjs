@@ -1,5 +1,5 @@
 const { randomBytes } = require('node:crypto');
-const { openDatabase } = require('../electron/database.cjs');
+const { openDatabase } = require('./database.cjs');
 const { developmentOptions } = require('./development.cjs');
 const { initializeAdministrator } = require('./access.cjs');
 const { mkdirSync } = require('node:fs');

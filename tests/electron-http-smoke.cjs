@@ -44,7 +44,7 @@ if (!process.versions.electron) {
   }
 
   app.whenReady().then(async () => {
-    const { openDatabase } = require('../electron/database.cjs');
+    const { openDatabase } = require('../server/database.cjs');
     const { initializeAdministrator } = require('../server/access.cjs');
     const db = openDatabase(join(directory, 'cong-no.sqlite'));
     try {
