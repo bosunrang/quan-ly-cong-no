@@ -1,10 +1,8 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import { readCustomers } from "../src/domain/customers/customer.repository";
 import { seedCustomers } from "./fixtures/seed-customers";
 import type { MisaSalesLine } from "../src/domain/misa/misa.sales-book";
-import { readMisaSalesBook } from "../src/domain/misa/misa.sales-book.repository";
 import { buildSalesReceivables } from "../src/domain/misa/misa.sales-receivables";
 import {
 	allocateReceipt,
@@ -13,29 +11,12 @@ import {
 	recordReceipt,
 	reverseAllocation,
 } from "../src/domain/payments/receipt-ledger";
-import {
-	readReceiptLedger,
-	subscribeReceiptLedger,
-} from "../src/domain/payments/receipt-ledger.repository";
+import { api } from "../src/shared/api/client";
+import { accountingChanged } from "../src/shared/hooks/useServerData";
+import { receivablesView } from "./fixtures/receivables-view";
 import { SalesReceivablesPage } from "../src/features/receivables/SalesReceivablesPage";
 
-vi.mock("../src/domain/customers/customer.repository", () => ({
-	readCustomers: vi.fn(),
-}));
-vi.mock("../src/domain/employees/employee.repository", () => ({
-	readSalesEmployees: async () => [],
-}));
-vi.mock("../src/domain/misa/misa.sales-book.repository", () => ({
-	readMisaSalesBook: vi.fn(),
-}));
-vi.mock("../src/domain/payments/receipt-ledger.repository", () => ({
-	readReceiptLedger: vi.fn(async () => ({
-		revision: "",
-		receipts: [],
-		allocations: [],
-	})),
-	subscribeReceiptLedger: vi.fn(() => () => {}),
-}));
+vi.mock("../src/shared/api/client", () => ({ api: vi.fn() }));
 
 const customer = {
 	...seedCustomers[0],
@@ -231,14 +212,12 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 		"2024-06-08",
 		"Ghép nhầm",
 	);
-	let refresh = () => {};
-	vi.mocked(readCustomers).mockResolvedValue([customer]);
-	vi.mocked(readMisaSalesBook).mockResolvedValue(book);
-	vi.mocked(readReceiptLedger).mockResolvedValue(recorded);
-	vi.mocked(subscribeReceiptLedger).mockImplementation((callback) => {
-		refresh = callback;
-		return () => {};
-	});
+	let currentLedger = recorded;
+	vi.mocked(api).mockImplementation(
+		async (_method, resource) =>
+			receivablesView(resource, book, [customer], currentLedger) as never,
+	);
+	const refresh = accountingChanged;
 
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	const container = document.createElement("div");
@@ -266,7 +245,7 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 		await click(".receivable-invoice-link");
 		expect(amounts(".invoice-lines-balances dd")).toEqual(["0", "110"]);
 
-		vi.mocked(readReceiptLedger).mockResolvedValue(booked);
+		currentLedger = booked;
 		await act(async () => {
 			refresh();
 		});
@@ -293,7 +272,7 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 			["PT-01", "02/06/2024", "03/06/2024", "25"],
 		]);
 
-		vi.mocked(readReceiptLedger).mockResolvedValue(bookedTwice);
+		currentLedger = bookedTwice;
 		await act(async () => {
 			refresh();
 		});
@@ -302,14 +281,14 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 			["PT-02", "04/06/2024", "06/06/2024", "15"],
 			["PT-01", "02/06/2024", "03/06/2024", "25"],
 		]);
-		vi.mocked(readReceiptLedger).mockResolvedValue(reversed);
+		currentLedger = reversed;
 		await act(async () => {
 			refresh();
 		});
 		expect(allocations()).toEqual([
 			["PT-02", "04/06/2024", "06/06/2024", "15"],
 		]);
-		vi.mocked(readReceiptLedger).mockResolvedValue(fullyReversed);
+		currentLedger = fullyReversed;
 		await act(async () => {
 			refresh();
 		});
@@ -324,7 +303,7 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 		await act(async () => root.unmount());
 		container.remove();
 		vi.unstubAllGlobals();
-		vi.mocked(readReceiptLedger).mockResolvedValue(emptyReceiptLedger);
+		currentLedger = emptyReceiptLedger;
 	}
 });
 
@@ -339,8 +318,7 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 		name: "Bệnh viện phía Nam",
 		province: "TP Hồ Chí Minh",
 	};
-	vi.mocked(readCustomers).mockResolvedValue([customer, secondCustomer]);
-	vi.mocked(readMisaSalesBook).mockResolvedValue({
+	const testBook = {
 		fileName: "ban-hang.xlsx",
 		importedAt: "2026-06-01T00:00:00Z",
 		rows: [
@@ -377,7 +355,16 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 				productName: "Hàng của chứng từ khác",
 			},
 		],
-	});
+	};
+	vi.mocked(api).mockImplementation(
+		async (_method, resource) =>
+			receivablesView(
+				resource,
+				testBook,
+				[customer, secondCustomer],
+				emptyReceiptLedger,
+			) as never,
+	);
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	const container = document.createElement("div");
 	document.body.append(container);

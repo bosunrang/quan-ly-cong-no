@@ -6,29 +6,20 @@ import {
 	Search,
 	Wallet,
 } from "lucide-react";
+import { type ComponentType, useDeferredValue, useState } from "react";
+import type {
+	DashboardView,
+	InvoiceCustomer,
+} from "../../domain/reports/view-types";
 import {
-	type ComponentType,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
-import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import { readCustomers } from "../../domain/customers/customer.repository";
-import { readSalesEmployees } from "../../domain/employees/employee.repository";
-import { readMisaSalesBook } from "../../domain/misa/misa.sales-book.repository";
-import {
-	readReceiptLedger,
-	subscribeReceiptLedger,
-} from "../../domain/payments/receipt-ledger.repository";
-import { usePagination } from "../../shared/hooks/usePagination";
-import { formatDateOnly, todayLocal } from "../../shared/lib/date";
-import { sameJson } from "../../shared/lib/sameJson";
+	pageControls,
+	resourceWithQuery,
+	useServerData,
+} from "../../shared/hooks/useServerData";
+import { formatDateOnly, isIsoDate, todayLocal } from "../../shared/lib/date";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
-import { buildDashboardSummary } from "./dashboard.summary";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 
@@ -39,18 +30,6 @@ const views = [
 ] as const;
 
 type View = (typeof views)[number]["id"];
-type Summary = ReturnType<typeof buildDashboardSummary>;
-type CustomerRow = Summary["receivables"][number];
-type Row = CustomerRow | Summary["periodReceipts"][number];
-type DashboardData = {
-	book: Awaited<ReturnType<typeof readMisaSalesBook>>;
-	ledger: Awaited<ReturnType<typeof readReceiptLedger>>;
-	customers: Awaited<ReturnType<typeof readCustomers>>;
-	employees: Awaited<ReturnType<typeof readSalesEmployees>>;
-};
-
-const emptyRows: Row[] = [];
-
 export function Dashboard({
 	onOpenMisa,
 	onOpenPayments,
@@ -59,101 +38,43 @@ export function Dashboard({
 	onOpenMisa?: () => void;
 	onOpenPayments?: () => void;
 	InvoiceDrawer: ComponentType<{
-		customer: CustomerRow;
+		customer: InvoiceCustomer;
+		from: string;
 		asOfDate: string;
 		onClose: () => void;
 	}>;
 }) {
-	const [data, setData] = useState<DashboardData>();
-	const [error, setError] = useState("");
-	const request = useRef(0);
 	const [through, setThrough] = useState(todayLocal);
 	const [periodStart, setPeriodStart] = useState<string>();
 	const from = periodStart ?? (through ? `${through.slice(0, 7)}-01` : "");
 	const [view, setView] = useState<View>("receivables");
 	const [customerQuery, setCustomerQuery] = useState("");
-	const [openedCustomerId, setOpenedCustomerId] = useState<string>();
-
-	const refresh = useCallback(() => {
-		const current = ++request.current;
-		void Promise.all([
-			readMisaSalesBook(),
-			readReceiptLedger(),
-			readCustomers(),
-			readSalesEmployees(),
-		])
-			.then(([book, ledger, customers, employees]) => {
-				if (current !== request.current) return;
-				// Sổ chưa đổi thì giữ nguyên dữ liệu cũ để không tính lại khi chọn lại cửa sổ.
-				setData((previous) =>
-					previous?.book === book &&
-					previous.ledger === ledger &&
-					sameJson(previous.customers, customers) &&
-					sameJson(previous.employees, employees)
-						? previous
-						: { book, ledger, customers, employees },
-				);
-				setError("");
-			})
-			.catch((reason: unknown) => {
-				if (current !== request.current) return;
-				setError(
-					reason instanceof Error
-						? reason.message
-						: "Không thể đọc dữ liệu Dashboard.",
-				);
+	const [openedCustomer, setOpenedCustomer] = useState<InvoiceCustomer>();
+	const [page, setPage] = useState(1);
+	const invalidDates =
+		!isIsoDate(from) || !isIsoDate(through) || from > through;
+	const customerSearch = useDeferredValue(customerQuery);
+	const resource = invalidDates
+		? undefined
+		: resourceWithQuery("dashboard", {
+				from,
+				through,
+				view,
+				q: customerSearch,
+				page,
 			});
-	}, []);
-
-	useEffect(() => {
-		const unsubscribe = subscribeReceiptLedger(refresh);
-		window.addEventListener("focus", refresh);
-		refresh();
-		return () => {
-			request.current += 1;
-			unsubscribe();
-			window.removeEventListener("focus", refresh);
-		};
-	}, [refresh]);
-
-	const invalidDates = !from || !through || from > through;
-	const summary = useMemo(
-		() =>
-			data && !invalidDates
-				? buildDashboardSummary(
-						data.book,
-						data.ledger,
-						data.customers,
-						data.employees,
-						from,
-						through,
-					)
-				: undefined,
-		[data, from, through, invalidDates],
-	);
+	const response = useServerData<DashboardView>(resource);
+	const { error, refresh } = response;
+	const summary = response.data;
 	const isReceivables = view === "receivables";
-	const customerSearch = normalizeVietnamese(customerQuery);
-	const receivableRows = useMemo(() => {
-		const customers = summary?.receivables;
-		if (!customerSearch) return customers;
-		return customers?.filter(({ name, customerCode }) =>
-			normalizeVietnamese(`${name} ${customerCode}`).includes(customerSearch),
-		);
-	}, [summary?.receivables, customerSearch]);
-	const rows =
-		(isReceivables
-			? receivableRows
-			: view === "period"
-				? summary?.periodReceipts
-				: summary?.unallocatedReceipts) ?? emptyRows;
-	const pagination = usePagination<Row>(rows, 10);
-	const openedCustomer = openedCustomerId
-		? summary?.receivables.find(({ id }) => id === openedCustomerId)
-		: undefined;
-
-	useEffect(() => {
-		if (openedCustomerId && !openedCustomer) setOpenedCustomerId(undefined);
-	}, [openedCustomerId, openedCustomer]);
+	const rows = summary?.rows.items ?? [];
+	const pagination = {
+		...pageControls(summary?.rows.page ?? page, 10, summary?.rows.total ?? 0),
+		currentPage: summary?.rows.page ?? page,
+		setCurrentPage: setPage,
+		resetPage: () => setPage(1),
+		pageItems: rows,
+	};
 
 	if (error) {
 		return (
@@ -170,13 +91,6 @@ export function Dashboard({
 		);
 	}
 
-	if (!data)
-		return (
-			<p className="panel empty-state" role="status">
-				Đang tổng hợp công nợ…
-			</p>
-		);
-
 	const amounts = {
 		receivables: summary?.hasVerifiedDocuments ? summary.remaining : null,
 		period: summary?.periodReceived,
@@ -184,12 +98,12 @@ export function Dashboard({
 	};
 	const counts = {
 		receivables: summary?.hasVerifiedDocuments
-			? `${number.format(summary.receivables.length)} khách hàng còn nợ`
+			? `${number.format(summary.receivablesCount)} khách hàng còn nợ`
 			: summary?.salesRowCount
 				? "Chưa có chứng từ đủ điều kiện"
 				: "Chưa có dữ liệu MISA tại ngày chốt",
-		period: `${number.format(summary?.periodReceipts.length ?? 0)} khoản thu trong kỳ`,
-		unallocated: `${number.format(summary?.unallocatedReceipts.length ?? 0)} khoản thu còn tiền chờ phân bổ`,
+		period: `${number.format(summary?.periodCount ?? 0)} khoản thu trong kỳ`,
+		unallocated: `${number.format(summary?.unallocatedCount ?? 0)} khoản thu còn tiền chờ phân bổ`,
 	};
 	const headings = isReceivables
 		? [
@@ -245,7 +159,11 @@ export function Dashboard({
 				)}
 			</section>
 
-			{summary ? (
+			{response.loading ? (
+				<p className="panel empty-state" role="status">
+					Đang tổng hợp công nợ…
+				</p>
+			) : summary ? (
 				<>
 					<section className="dashboard-metrics" aria-label="Chỉ tiêu công nợ">
 						{views.map(({ id, title, icon: Icon }) => (
@@ -353,7 +271,7 @@ export function Dashboard({
 																className="text-button dashboard-customer-link table-customer-name"
 																type="button"
 																aria-haspopup="dialog"
-																onClick={() => setOpenedCustomerId(row.id)}
+																onClick={() => setOpenedCustomer(row)}
 															>
 																{row.name}
 															</button>
@@ -365,7 +283,7 @@ export function Dashboard({
 														</td>
 														<td>{row.employeeName || "—"}</td>
 														<td>{row.province || "—"}</td>
-														<td>{number.format(row.documents.length)}</td>
+														<td>{number.format(row.documentCount)}</td>
 														<td className="strong-number">
 															{number.format(row.remaining)}
 														</td>
@@ -398,7 +316,7 @@ export function Dashboard({
 									<span>
 										{number.format(pagination.firstVisible)}–
 										{number.format(pagination.lastVisible)} /{" "}
-										{number.format(rows.length)}{" "}
+										{number.format(summary.rows.total)}{" "}
 										{isReceivables ? "khách hàng" : "khoản thu"}
 									</span>
 									<PaginationControls
@@ -413,7 +331,7 @@ export function Dashboard({
 						) : (
 							<div className="empty-state">
 								{isReceivables
-									? customerSearch && summary.receivables.length > 0
+									? customerSearch && summary.receivablesCount > 0
 										? "Không tìm thấy khách hàng phù hợp."
 										: summary.salesRowCount
 											? "Chưa có khách hàng còn phải thu theo dữ liệu đủ điều kiện."
@@ -436,7 +354,8 @@ export function Dashboard({
 					key={openedCustomer.id}
 					customer={openedCustomer}
 					asOfDate={through}
-					onClose={() => setOpenedCustomerId(undefined)}
+					from={from}
+					onClose={() => setOpenedCustomer(undefined)}
 				/>
 			)}
 		</div>

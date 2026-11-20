@@ -108,9 +108,14 @@ describe("Tài khoản qua máy chủ, kể cả desktop", () => {
 		const pending = await authenticateAccount(draft.username, temporary);
 		await changeInitialPassword(accountSession(pending), "viewer-password-789");
 		await expect(saveAccount(undefined, draft)).rejects.toThrow();
-		await expect(api("GET", "receipt-ledger")).resolves.toBeNull();
 		await expect(
-			api("PUT", "receipt-ledger", {
+			api(
+				"GET",
+				"reports/statements/missing?from=2026-01-01&through=2026-12-31",
+			),
+		).resolves.toBeNull();
+		await expect(
+			api("POST", "receipts", {
 				revision: "",
 				data: { revision: "r1", receipts: [], allocations: [] },
 			}),

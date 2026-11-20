@@ -4,13 +4,9 @@ const { companySettings } = require('./companies.cjs');
 const { audit, canOpen, fail } = require('./access.cjs');
 const { createRouter, readJsonBody, sendJson } = require('./http.cjs');
 const { registerDirectoryRoutes } = require('./directory.cjs');
-const { deleteBusinessGroups, isValidReceiptLedger, isValidSalesBook,
-  isValidSettings, validateBusinessBackup } = require('../src/domain/settings/business-data.rules.mjs');
+const { deleteBusinessGroups, isValidSettings, validateBusinessBackup } = require('../src/domain/settings/business-data.rules.mjs');
 
-const book = 'cong-no.misa-sales-book.v1';
-const ledger = 'cong-no.receipt-ledger.v1';
 const directoryReaders = ['dashboard', 'misa', 'payments', 'receivables', 'reports', 'customers', 'sales'];
-const ledgerReaders = ['dashboard', 'payments', 'receivables', 'reports'];
 const activityCategories = new Set(['session', 'accounts', 'data', 'payments', 'reports', 'settings']);
 const PUBLIC_ROUTES = new Set(['POST /api/session', 'GET /api/branding']);
 const SMALL = 16 * 1024;
@@ -84,36 +80,7 @@ function createApi(tenant, tls) {
   }, pages(['settings'], 2 * 1024 * 1024));
 
   registerDirectoryRoutes(router, db, directoryReaders);
-  const bookReaders = [...ledgerReaders, 'misa'];
-  for (const [path, key, readers] of [['sales-book', book, bookReaders], ['receipt-ledger', ledger, ledgerReaders]]) {
-    router.get('/api/' + path, () => db.readDataset(key) ?? null, pages(readers));
-    router.get('/api/' + path + '/stamp', () => db.datasetStamp(key), pages(readers));
-  }
-  router.get('/api/sales-book/allocated-documents', () => {
-    const allocations = db.readDataset(ledger)?.data?.allocations ?? [];
-    const documents = new Set();
-    for (const allocation of allocations) {
-      if (!allocation.reversal) {
-        for (const { invoice } of allocation.lines) documents.add(invoice.documentNumber);
-      }
-    }
-    return [...documents];
-  }, pages(['misa']));
-  router.put('/api/sales-book', ({ body }) => {
-    if (!isValidSalesBook(body.data) || (body.expected !== null && typeof body.expected !== 'string'))
-      fail(400, 'Sổ bán hàng không hợp lệ.');
-    if (!db.writeMisaSalesBook(body.expected, body.data))
-      fail(409, 'Sổ bán hàng vừa thay đổi. Kiểm tra lại dữ liệu trước khi xác nhận.');
-    return true;
-  }, pages(['misa'], LARGE));
-  router.put('/api/receipt-ledger', ({ body }) => {
-    if (typeof body.revision !== 'string' || !isValidReceiptLedger(body.data) ||
-        (body.salesBookImportedAt !== undefined && typeof body.salesBookImportedAt !== 'string'))
-      fail(400, 'Sổ đối soát không hợp lệ.');
-    if (!db.writeReceiptLedger(body.revision, body.data, body.salesBookImportedAt, { checkNewCustomers: true }))
-      fail(409, 'Sổ đối soát hoặc sổ bán hàng đã thay đổi. Mở lại thao tác để kiểm tra số liệu mới.');
-    return true;
-  }, pages(['payments'], LARGE));
+  require('./accounting.cjs').registerAccountingRoutes(router, db);
 
   router.get('/api/activities', () => db.readActivities(), pages(['audit']));
   router.post('/api/activities', ({ body: { category, action, detail }, account }) => {
@@ -146,6 +113,7 @@ function createApi(tenant, tls) {
   router.get('/api/status', () => ({ backend: 'lan', schemaVersion: db.status().schemaVersion }), pages([]));
 
   return async (req, res, pathname) => {
+    const query = new URLSearchParams(String(req.url).split("?").slice(1).join("?"));
     if (req.headers['x-cong-no-lan'] !== '1' ||
         (req.headers.origin && req.headers.origin !== (tls ? 'https://' : 'http://') + req.headers.host))
       fail(403, 'Yêu cầu khác nguồn bị từ chối.');
@@ -163,7 +131,7 @@ function createApi(tenant, tls) {
       account = access.actor(req, route.options.allowPending);
       requirePage(account, route.options.pages);
     }
-    const value = await route.handler({ req, res, params: route.params, body, account });
+    const value = await route.handler({ req, res, params: route.params, body, account, query });
     sendJson(res, 200, { ok: true, value });
   };
 }

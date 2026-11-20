@@ -50,7 +50,6 @@ export function useCustomers() {
 		async importCustomers(drafts: CustomerImportDraft[]) {
 			const records = await importCustomerRecords(
 				drafts.map(customerImportFields),
-				"imports",
 			);
 			updateList((list) => [...records, ...list]);
 			void recordActivity(

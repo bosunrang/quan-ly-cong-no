@@ -1,16 +1,15 @@
 import { Download, Printer } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import { readCustomers } from "../../domain/customers/customer.repository";
-import { readMisaSalesBook } from "../../domain/misa/misa.sales-book.repository";
+import type { Customer } from "../../domain/customers/customer.model";
+import type { SalesMetadata } from "../../domain/reports/view-types";
 import {
-	readReceiptLedger,
-	subscribeReceiptLedger,
-} from "../../domain/payments/receipt-ledger.repository";
+	resourceWithQuery,
+	useServerData,
+} from "../../shared/hooks/useServerData";
 import type { AppSettings } from "../../domain/settings/settings.model";
 import { useTransientNotice } from "../../shared/hooks/useTransientNotice";
 import { isIsoDate, todayLocal } from "../../shared/lib/date";
-import { sameJson } from "../../shared/lib/sameJson";
 import {
 	captureActivity,
 	recordActivity,
@@ -19,14 +18,8 @@ import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Notice } from "../../shared/ui/Notice";
 import { SearchableInput } from "../../shared/ui/SearchableInput";
 import { downloadStatementWorkbook } from "./report.export";
-import { buildReceivableStatement, statementSeller } from "./report.model";
+import { type ReceivableStatement, statementSeller } from "./report.model";
 import { StatementDocument } from "./StatementDocument";
-
-type ReportData = {
-	book: Awaited<ReturnType<typeof readMisaSalesBook>>;
-	ledger: Awaited<ReturnType<typeof readReceiptLedger>>;
-	customers: Awaited<ReturnType<typeof readCustomers>>;
-};
 
 export function ReportsPage({
 	settings,
@@ -35,59 +28,18 @@ export function ReportsPage({
 	settings: AppSettings;
 	onOpenMisa?: () => void;
 }) {
-	const [data, setData] = useState<ReportData>();
-	const [error, setError] = useState("");
+	const directory = useServerData<Customer[]>("customers");
+	const sales = useServerData<SalesMetadata | null>("sales-book/status");
 	const [exporting, setExporting] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState("");
 	const [from, setFrom] = useState(() => `${todayLocal().slice(0, 7)}-01`);
 	const [through, setThrough] = useState(todayLocal);
-	const request = useRef(0);
 	const { notice, showNotice, dismissNotice } = useTransientNotice(4500);
 	const issuedOn = todayLocal();
 
-	const refresh = useCallback(() => {
-		const pending = ++request.current;
-		void Promise.all([
-			readMisaSalesBook(),
-			readReceiptLedger(),
-			readCustomers(),
-		])
-			.then(([book, ledger, customers]) => {
-				if (pending !== request.current) return;
-				// Sổ chưa đổi thì giữ nguyên dữ liệu cũ để không tính lại khi chọn lại cửa sổ.
-				setData((previous) =>
-					previous?.book === book &&
-					previous.ledger === ledger &&
-					sameJson(previous.customers, customers)
-						? previous
-						: { book, ledger, customers },
-				);
-				setError("");
-			})
-			.catch((reason: unknown) => {
-				if (pending !== request.current) return;
-				setError(
-					reason instanceof Error
-						? reason.message
-						: "Không thể tải dữ liệu báo cáo.",
-				);
-			});
-	}, []);
-
-	useEffect(() => {
-		const unsubscribe = subscribeReceiptLedger(refresh);
-		window.addEventListener("focus", refresh);
-		refresh();
-		return () => {
-			request.current += 1;
-			unsubscribe();
-			window.removeEventListener("focus", refresh);
-		};
-	}, [refresh]);
-
 	const { customersByLabel, options } = useMemo(() => {
-		const byLabel = new Map<string, ReportData["customers"][number] | null>();
-		for (const customer of data?.customers ?? []) {
+		const byLabel = new Map<string, Customer | null>();
+		for (const customer of directory.data ?? []) {
 			const label = [customer.misaCode, customer.name, customer.taxCode]
 				.filter(Boolean)
 				.join(" · ");
@@ -99,23 +51,24 @@ export function ReportsPage({
 				.filter((label) => byLabel.get(label))
 				.sort((a, b) => a.localeCompare(b, "vi")),
 		};
-	}, [data?.customers]);
+	}, [directory.data]);
 	const customer = customersByLabel.get(selectedCustomer);
 	const validDates = isIsoDate(from) && isIsoDate(through) && from <= through;
-	const statement = useMemo(
-		() =>
-			data?.book && customer && validDates
-				? buildReceivableStatement(
-						data.book,
-						data.ledger,
-						data.customers,
-						customer,
-						from,
-						through,
-					)
-				: null,
-		[customer, data, from, through, validDates],
+	const result = useServerData<ReceivableStatement | null>(
+		sales.data && customer && validDates
+			? resourceWithQuery(
+					`reports/statements/${encodeURIComponent(customer.id)}`,
+					{ from, through },
+				)
+			: undefined,
 	);
+	const statement = result.data;
+	const error = directory.error || sales.error;
+	function refresh() {
+		directory.refresh();
+		sales.refresh();
+	}
+
 	const seller = statementSeller(settings);
 	const canIssue = Boolean(statement && seller.name);
 
@@ -157,7 +110,10 @@ export function ReportsPage({
 				</div>
 			</div>
 		);
-	if (!data)
+	if (
+		(!directory.data && !directory.previous) ||
+		(sales.data === undefined && sales.previous === undefined)
+	)
 		return (
 			<p className="panel empty-state" role="status">
 				Đang đọc sổ công nợ…
@@ -231,7 +187,7 @@ export function ReportsPage({
 				</div>
 			</section>
 
-			{!data.book ? (
+			{!(sales.data ?? sales.previous) ? (
 				<div className="panel empty-state report-empty">
 					<p>Chưa có sổ bán hàng MISA để lập biên bản.</p>
 					{onOpenMisa && (
@@ -248,6 +204,14 @@ export function ReportsPage({
 				<Notice tone="warning" announce>
 					Chọn khoảng thời gian hợp lệ. Từ ngày phải bằng hoặc trước Đến ngày.
 				</Notice>
+			) : result.error ? (
+				<Notice tone="danger" announce>
+					{result.error}
+				</Notice>
+			) : result.loading ? (
+				<p className="panel empty-state" role="status">
+					Đang lập biên bản…
+				</p>
 			) : statement ? (
 				<>
 					{!seller.name && (

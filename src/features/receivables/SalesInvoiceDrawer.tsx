@@ -1,8 +1,17 @@
 import { Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
-import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import type { CustomerReceivables } from "../../domain/payments/receipt-receivables";
-import { usePagination } from "../../shared/hooks/usePagination";
+import { useDeferredValue, useState } from "react";
+import type {
+	InvoiceCustomer,
+	InvoiceRow,
+	Page,
+} from "../../domain/reports/view-types";
+import type { ReceivableDocument } from "../../domain/payments/receipt-receivables";
+import {
+	pageControls,
+	resourceWithQuery,
+	useServerData,
+} from "../../shared/hooks/useServerData";
+import { Notice } from "../../shared/ui/Notice";
 import { formatDateOnly } from "../../shared/lib/date";
 import { Drawer } from "../../shared/ui/Dialog/Drawer";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
@@ -14,9 +23,11 @@ const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 export function SalesInvoiceDrawer({
 	customer,
 	asOfDate,
+	from,
 	onClose,
 }: {
-	customer: Pick<CustomerReceivables, "customerCode" | "name" | "documents">;
+	customer: InvoiceCustomer;
+	from?: string;
 	asOfDate?: string;
 	onClose: () => void;
 }) {
@@ -25,22 +36,29 @@ export function SalesInvoiceDrawer({
 		documentId: string;
 		kind: "lines" | "allocations";
 	}>();
-	const openedDocument = customer.documents.find(
-		(document) => document.id === detail?.documentId,
+	const [page, setPage] = useState(1);
+	const search = useDeferredValue(query);
+	const base = `receivables/${encodeURIComponent(customer.id)}/invoices`;
+	const response = useServerData<Page<InvoiceRow>>(
+		resourceWithQuery(base, { q: search, page, through: asOfDate, from }),
 	);
-	const documents = useMemo(() => {
-		const needle = normalizeVietnamese(query);
-		return customer.documents.filter((document) =>
-			normalizeVietnamese(
-				[
-					document.invoiceNumber,
-					document.invoiceSeries,
-					...document.documentNumbers,
-				].join(" "),
-			).includes(needle),
-		);
-	}, [customer.documents, query]);
-	const pagination = usePagination(documents);
+	const detailResponse = useServerData<ReceivableDocument>(
+		detail
+			? resourceWithQuery(`${base}/${encodeURIComponent(detail.documentId)}`, {
+					through: asOfDate,
+					from,
+				})
+			: undefined,
+	);
+	const openedDocument = detailResponse.data;
+	const total = response.data?.total ?? 0;
+	const pagination = {
+		...pageControls(response.data?.page ?? page, 20, total),
+		currentPage: response.data?.page ?? page,
+		setCurrentPage: setPage,
+		resetPage: () => setPage(1),
+		pageItems: response.data?.items ?? [],
+	};
 
 	return (
 		<>
@@ -64,6 +82,14 @@ export function SalesInvoiceDrawer({
 					</button>
 				</header>
 				<div className="customer-detail-body">
+					{(response.loading || detailResponse.loading) && (
+						<p role="status">Đang tải chứng từ…</p>
+					)}
+					{(response.error || detailResponse.error) && (
+						<Notice tone="danger" announce>
+							{response.error || detailResponse.error}
+						</Notice>
+					)}
 					<section className="panel data-panel">
 						<div className="data-toolbar">
 							<label className="table-search">
@@ -208,15 +234,15 @@ export function SalesInvoiceDrawer({
 									))}
 								</tbody>
 							</table>
-							{!documents.length && (
+							{!total && !response.loading && !response.error && (
 								<p className="empty-state">Không tìm thấy chứng từ phù hợp.</p>
 							)}
 						</section>
 						<footer className="receivable-footer">
 							<span>
 								{number.format(pagination.firstVisible)}–
-								{number.format(pagination.lastVisible)} /{" "}
-								{number.format(documents.length)} nhóm chứng từ
+								{number.format(pagination.lastVisible)} / {number.format(total)}{" "}
+								nhóm chứng từ
 							</span>
 							<PaginationControls
 								currentPage={pagination.currentPage}

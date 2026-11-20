@@ -2,12 +2,13 @@ import { ReceiptText } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import type { Customer } from "../../domain/customers/customer.model";
 import { normalizeVietnamese } from "../../domain/customers/customer.province";
+import type { ReceiptDraft } from "../../domain/payments/receipt-ledger";
 import {
-	nextReceiptNumber,
-	type Receipt,
-	type ReceiptDraft,
-} from "../../domain/payments/receipt-ledger";
+	resourceWithQuery,
+	useServerData,
+} from "../../shared/hooks/useServerData";
 import { todayLocal } from "../../shared/lib/date";
+import { randomId } from "../../shared/lib/randomId";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { Notice } from "../../shared/ui/Notice";
@@ -16,7 +17,6 @@ import { parseVnd, VndAmountInput } from "./VndAmountInput";
 
 interface Props {
 	customers: Customer[];
-	receipts: readonly Receipt[];
 	busy: boolean;
 	error: string;
 	onClose: () => void;
@@ -25,7 +25,6 @@ interface Props {
 
 export function ReceiptFormDialog({
 	customers,
-	receipts,
 	busy,
 	error,
 	onClose,
@@ -34,13 +33,16 @@ export function ReceiptFormDialog({
 	const customerField = useId();
 	const dateField = useId();
 	const amountField = useId();
+	// Bấm lưu hai lần hoặc gửi lại sau lỗi mạng dùng cùng mã nên không thành hai khoản thu.
+	const [requestId] = useState(randomId);
 	const [customer, setCustomer] = useState("");
 	const [number, setNumber] = useState<string>();
 	const [date, setDate] = useState(todayLocal);
-	const suggestedNumber = useMemo(
-		() => nextReceiptNumber(receipts, date),
-		[receipts, date],
-	);
+	const suggestedNumber =
+		useServerData<string>(
+			date ? resourceWithQuery("receipts/next-number", { date }) : undefined,
+		).data ?? "";
+
 	const [amount, setAmount] = useState("");
 	const [reference, setReference] = useState("");
 	const [validation, setValidation] = useState("");
@@ -76,6 +78,7 @@ export function ReceiptFormDialog({
 				if (busy) return;
 				setValidation("");
 				onSave(found, {
+					id: requestId,
 					number: number?.trim() || undefined,
 					date,
 					amount: parseVnd(amount),

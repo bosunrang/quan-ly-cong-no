@@ -1,116 +1,67 @@
 import { Notice } from "../../shared/ui/Notice";
 import { Database, Search, Upload, Users } from "lucide-react";
+import { type ChangeEvent, useDeferredValue, useRef, useState } from "react";
 import {
-	type ChangeEvent,
-	useDeferredValue,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
-import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import {
-	readCustomers,
-	importCustomerRecords,
-} from "../../domain/customers/customer.repository";
-import { customerImportFields } from "../../domain/customers/customer.service";
-import type { MisaSalesBook } from "../../domain/misa/misa.sales-book";
-import {
-	readAllocatedDocuments,
-	readMisaSalesBook,
-	writeMisaSalesBook,
+	confirmSalesImport,
+	type ImportChoices,
+	previewSalesImport,
+	previewSalesSupplement,
 } from "../../domain/misa/misa.sales-book.repository";
-import { usePagination } from "../../shared/hooks/usePagination";
+import type {
+	SalesImportReview,
+	SalesPage,
+	SalesSupplementReview,
+} from "../../domain/reports/view-types";
+import {
+	accountingChanged,
+	pageControls,
+	resourceWithQuery,
+	useServerData,
+} from "../../shared/hooks/useServerData";
 import { formatTimestamp } from "../../shared/lib/date";
-import { captureActivity } from "../../shared/storage/activityLog";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { MisaSalesImportDialog } from "./MisaSalesImportDialog";
 import { MisaSalesTable } from "./MisaSalesTable";
-import { planMisaCustomerSupplement } from "./misa.customer-supplement";
 import {
-	matchesSalesLine,
 	parseMisaSalesWorkbook,
 	type MisaSalesImportPreview,
 } from "./misa.sales-import";
-import {
-	planMisaSalesImport,
-	type SalesImportOptions,
-} from "./misa.sales-merge";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 12 });
-const documentOrder = new Intl.Collator("vi-VN", { numeric: true });
 export function MisaDataPage() {
 	const input = useRef<HTMLInputElement>(null);
 	const supplementInput = useRef<HTMLInputElement>(null);
-	const [book, setBook] = useState<MisaSalesBook | null>(null);
 	const [preview, setPreview] = useState<MisaSalesImportPreview>();
-	const [allocatedDocuments, setAllocatedDocuments] = useState<Set<string>>();
-	const [importChoices, setImportChoices] = useState<
-		Pick<SalesImportOptions, "applyChanges" | "removeMissing">
-	>({});
-	const [pending, setPending] = useState<"load" | "parse" | "save" | null>(
-		"load",
-	);
+	const [review, setReview] = useState<SalesImportReview>();
+	const [importChoices, setImportChoices] = useState<ImportChoices>({});
+	const [pending, setPending] = useState<"parse" | "review" | "save">();
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [supplement, setSupplement] = useState<{
 		source: MisaSalesImportPreview;
-		plan: ReturnType<typeof planMisaCustomerSupplement>;
+		plan: SalesSupplementReview;
 	}>();
 	const [query, setQuery] = useState("");
-	// Ô tìm kiếm cập nhật ngay; danh sách lọc lại sau đó để gõ phím không bị khựng.
-	const searchQuery = useDeferredValue(query);
-	const sortedRows = useMemo(
-		() =>
-			[...(book?.rows ?? [])].sort(
-				(left, right) =>
-					right.date.localeCompare(left.date) ||
-					documentOrder.compare(right.documentNumber, left.documentNumber) ||
-					left.rowNumber - right.rowNumber,
-			),
-		[book],
+	const [page, setPage] = useState(1);
+	const search = useDeferredValue(query);
+	const response = useServerData<SalesPage>(
+		resourceWithQuery("sales-book", { q: search, page }),
 	);
-	const filteredRows = useMemo(() => {
-		const needle = normalizeVietnamese(searchQuery);
-		return needle
-			? sortedRows.filter((row) => matchesSalesLine(row, needle))
-			: sortedRows;
-	}, [sortedRows, searchQuery]);
-	const pagination = usePagination(filteredRows, 25);
-	const busy = pending !== null;
-	const importPlan = useMemo(
-		() =>
-			preview
-				? planMisaSalesImport(book, preview, {
-						...importChoices,
-						allocatedDocuments,
-					})
-				: null,
-		[book, preview, importChoices, allocatedDocuments],
-	);
-
-	useEffect(() => {
-		let active = true;
-		readMisaSalesBook()
-			.then((result) => {
-				if (active) setBook(result);
-			})
-			.catch((reason: unknown) => {
-				if (active)
-					setError(
-						reason instanceof Error
-							? reason.message
-							: "Không thể đọc dữ liệu đã lưu.",
-					);
-			})
-			.finally(() => {
-				if (active) setPending(null);
-			});
-		return () => {
-			active = false;
-		};
-	}, []);
+	const data = response.data ?? response.previous;
+	const book = data?.book;
+	const total = response.data?.total ?? 0;
+	const busy = pending !== undefined;
+	const pagination = {
+		...pageControls(response.data?.page ?? page, 25, total),
+		currentPage: response.data?.page ?? page,
+		setCurrentPage: setPage,
+		resetPage: () => setPage(1),
+		pageItems: response.data?.rows ?? [],
+	};
+	const importPlan = review && { ...review, issues: new Map(review.issues) };
+	const message = (reason: unknown) =>
+		reason instanceof Error ? reason.message : "Không thể xử lý dữ liệu MISA.";
 
 	async function handleFile(
 		event: ChangeEvent<HTMLInputElement>,
@@ -118,157 +69,97 @@ export function MisaDataPage() {
 	) {
 		const file = event.target.files?.[0];
 		event.target.value = "";
-		if (!file) return;
+		if (!file || busy) return;
 		setError("");
 		setSuccess("");
 		setPending("parse");
 		try {
-			const [source, saved, ledger] = await Promise.all([
-				parseMisaSalesWorkbook(file),
-				readMisaSalesBook(),
-				addCustomers ? undefined : readAllocatedDocuments(),
-			]);
-			setBook(saved);
-			if (ledger) setAllocatedDocuments(ledger);
-			setImportChoices({});
-			if (addCustomers && saved) {
-				setSupplement({
-					source,
-					plan: planMisaCustomerSupplement(
-						saved,
-						source,
-						await readCustomers(),
-					),
-				});
-			} else if (!addCustomers) {
+			const source = await parseMisaSalesWorkbook(file);
+			if (addCustomers)
+				setSupplement({ source, plan: await previewSalesSupplement(source) });
+			else {
+				const result = await previewSalesImport(source, {});
+				setImportChoices({});
+				setReview(result);
 				setPreview(source);
-			} else {
-				throw new Error("Chưa có sổ bán hàng MISA để bổ sung khách hàng.");
 			}
 		} catch (reason) {
-			setError(
-				reason instanceof Error ? reason.message : "Không thể đọc file MISA.",
-			);
+			setError(message(reason));
 		} finally {
-			setPending(null);
+			setPending(undefined);
+		}
+	}
+
+	async function changeChoices(choices: ImportChoices) {
+		if (!preview || busy) return;
+		setPending("review");
+		setError("");
+		try {
+			setReview(await previewSalesImport(preview, choices));
+			setImportChoices(choices);
+		} catch (reason) {
+			setError(message(reason));
+		} finally {
+			setPending(undefined);
 		}
 	}
 
 	async function confirmSupplement() {
-		if (!supplement || !book || busy) return;
-		const log = captureActivity();
-		setError("");
+		if (!supplement || busy) return;
 		setPending("save");
+		setError("");
 		try {
-			const saved = await readMisaSalesBook();
-			if (!saved || saved.importedAt !== book.importedAt) {
-				throw new Error(
-					"Sổ bán hàng đã thay đổi. Hãy chọn lại file MISA để đối chiếu.",
-				);
-			}
-			const customers = await readCustomers();
-			const plan = planMisaCustomerSupplement(
-				saved,
+			await confirmSalesImport(
 				supplement.source,
-				customers,
+				"supplement",
+				supplement.plan.token,
 			);
-			// Saving the catalog first makes a retry safe if the sales-book write fails.
-			if (plan.additions.length) {
-				await importCustomerRecords(
-					plan.additions.map(customerImportFields),
-					"misa-supplements",
-				);
-				void log(
-					"data",
-					"Bổ sung khách hàng từ MISA",
-					`${plan.additions.length} khách hàng · ${supplement.source.book.fileName}`,
-				);
-			}
-			const updated = plan.linkedRows
-				? await writeMisaSalesBook(plan.book, saved.importedAt)
-				: saved;
-			if (plan.linkedRows)
-				void log(
-					"data",
-					"Ghép mã khách hàng MISA",
-					`${plan.linkedRows} dòng · ${saved.fileName}`,
-				);
-			setBook(updated);
-			setSupplement(undefined);
 			setSuccess(
-				`Đã thêm ${number.format(plan.additions.length)} khách hàng, dùng ${number.format(plan.matched)} hồ sơ đã có và đối chiếu ${number.format(plan.matchedRows)} dòng bán hàng theo mã MISA.`,
+				"Đã bổ sung " +
+					number.format(supplement.plan.additions.length) +
+					" khách hàng và đối chiếu " +
+					number.format(supplement.plan.matchedRows) +
+					" dòng theo mã MISA.",
 			);
+			setSupplement(undefined);
+			accountingChanged();
 		} catch (reason) {
-			setError(
-				reason instanceof Error
-					? reason.message
-					: "Không thể bổ sung khách hàng MISA.",
+			setError(message(reason));
+			const next = await previewSalesSupplement(supplement.source).catch(
+				() => undefined,
 			);
+			if (next) setSupplement({ ...supplement, plan: next });
 		} finally {
-			setPending(null);
+			setPending(undefined);
 		}
 	}
 
 	async function confirmImport() {
-		if (!preview || !importPlan?.hasChanges || busy) return;
-		const log = captureActivity();
-		setError("");
+		if (!preview || !review?.hasChanges || busy) return;
 		setPending("save");
+		setError("");
 		try {
-			let plan = importPlan;
-			if (plan.removedCount) {
-				// Kiểm tra lại phân bổ ngay trước khi thay hoặc gỡ chứng từ đã lưu.
-				const latest = await readAllocatedDocuments();
-				plan = planMisaSalesImport(book, preview, {
-					...importChoices,
-					allocatedDocuments: latest,
-				});
-				if (
-					plan.removedCount !== importPlan.removedCount ||
-					plan.addedCount !== importPlan.addedCount
-				) {
-					setAllocatedDocuments(latest);
-					throw new Error(
-						"Phân bổ khoản thu vừa thay đổi. Hãy xem lại bản xem trước trước khi nhập.",
-					);
-				}
-			}
-			const updated = await writeMisaSalesBook(
-				plan.book,
-				book?.importedAt ?? null,
+			await confirmSalesImport(preview, "import", review.token, importChoices);
+			setSuccess(
+				"Đã nhập sổ bán hàng: " +
+					number.format(review.addedCount) +
+					" dòng thêm, " +
+					number.format(review.missing.removedVouchers) +
+					" chứng từ gỡ khỏi sổ.",
 			);
-			const summary = [
-				`${plan.addedCount} dòng thêm`,
-				plan.updatedVouchers
-					? `${plan.updatedVouchers} chứng từ cập nhật theo file`
-					: "",
-				plan.missing.removedVouchers
-					? `${plan.missing.removedVouchers} chứng từ gỡ khỏi sổ`
-					: "",
-			]
-				.filter(Boolean)
-				.join(" · ");
-			void log(
-				"data",
-				"Nhập sổ bán hàng MISA",
-				`${updated.fileName} · ${summary}`,
-			);
-			setBook(updated);
 			setPreview(undefined);
-			setSuccess(`Đã nhập sổ bán hàng: ${summary}.`);
+			setReview(undefined);
 			setQuery("");
-			pagination.resetPage();
+			setPage(1);
+			accountingChanged();
 		} catch (reason) {
-			await readMisaSalesBook()
-				.then(setBook)
-				.catch(() => {});
-			setError(
-				reason instanceof Error
-					? reason.message
-					: "Không thể lưu dữ liệu MISA.",
+			setError(message(reason));
+			const next = await previewSalesImport(preview, importChoices).catch(
+				() => undefined,
 			);
+			if (next) setReview(next);
 		} finally {
-			setPending(null);
+			setPending(undefined);
 		}
 	}
 
@@ -282,7 +173,7 @@ export function MisaDataPage() {
 					<h2>Sổ chi tiết bán hàng</h2>
 					{book ? (
 						<p>
-							{number.format(book.rows.length)} dòng · Nhập gần nhất{" "}
+							{number.format(data?.rowCount ?? 0)} dòng · Nhập gần nhất{" "}
 							<strong>{book.fileName}</strong> ·{" "}
 							{formatTimestamp(book.importedAt)}
 						</p>
@@ -336,6 +227,16 @@ export function MisaDataPage() {
 					{error}
 				</Notice>
 			)}
+			{response.loading && (
+				<p className="panel empty-state" role="status">
+					Đang tải sổ bán hàng…
+				</p>
+			)}
+			{response.error && (
+				<Notice tone="danger" announce>
+					{response.error}
+				</Notice>
+			)}
 			{book ? (
 				<section className="panel data-panel misa-detail-panel">
 					<div className="panel-header">
@@ -356,14 +257,14 @@ export function MisaDataPage() {
 						</label>
 					</div>
 					<MisaSalesTable rows={pagination.pageItems} />
-					{!filteredRows.length && (
+					{!total && !response.loading && (
 						<div className="empty-state">Không tìm thấy dòng phù hợp.</div>
 					)}
 					<footer className="misa-table-footer">
 						<span>
 							{number.format(pagination.firstVisible)}–
-							{number.format(pagination.lastVisible)} /{" "}
-							{number.format(filteredRows.length)} dòng
+							{number.format(pagination.lastVisible)} / {number.format(total)}{" "}
+							dòng
 						</span>
 						<PaginationControls
 							currentPage={pagination.currentPage}
@@ -376,6 +277,8 @@ export function MisaDataPage() {
 				</section>
 			) : (
 				!busy &&
+				!response.loading &&
+				!response.error &&
 				!error && (
 					<div className="panel empty-state">
 						Chưa có dữ liệu bán hàng MISA.
@@ -386,10 +289,10 @@ export function MisaDataPage() {
 				<MisaSalesImportDialog
 					preview={preview}
 					plan={importPlan}
-					existingCount={book?.rows.length ?? 0}
+					existingCount={data?.rowCount ?? 0}
 					choices={importChoices}
-					onChoicesChange={setImportChoices}
-					isSaving={pending === "save"}
+					onChoicesChange={(choices) => void changeChoices(choices)}
+					isSaving={busy}
 					error={error}
 					onConfirm={() => void confirmImport()}
 					onClose={() => {

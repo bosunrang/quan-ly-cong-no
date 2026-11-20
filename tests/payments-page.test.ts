@@ -8,23 +8,12 @@ import {
 	type Receipt,
 	recordReceipt,
 } from "../src/domain/payments/receipt-ledger";
-import {
-	readReceiptLedger,
-	subscribeReceiptLedger,
-} from "../src/domain/payments/receipt-ledger.repository";
+import { api } from "../src/shared/api/client";
+import { accountingChanged } from "../src/shared/hooks/useServerData";
 import { PaymentsPage } from "../src/features/payments/PaymentsPage";
 import { ReceiptAllocationDialog } from "../src/features/payments/ReceiptAllocationDialog";
 
-vi.mock("../src/domain/customers/customer.repository", () => ({
-	readCustomers: async () => [],
-}));
-vi.mock("../src/domain/misa/misa.sales-book.repository", () => ({
-	readMisaSalesBook: async () => null,
-}));
-vi.mock("../src/domain/payments/receipt-ledger.repository", () => ({
-	readReceiptLedger: vi.fn(),
-	subscribeReceiptLedger: vi.fn(() => () => {}),
-}));
+vi.mock("../src/shared/api/client", () => ({ api: vi.fn() }));
 
 it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", async () => {
 	const receipt: Receipt = {
@@ -38,23 +27,40 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 		amount: 1000,
 		reference: "",
 	};
-	vi.mocked(readReceiptLedger).mockResolvedValue({
-		revision: "1",
-		receipts: [
-			receipt,
-			{
-				...receipt,
-				id: "two",
-				number: "PT002",
-				reversal: {
-					date: "2024-06-02",
-					createdAt: "2024-06-02T00:00:00.000Z",
-					reason: "Nhập trùng",
-				},
+
+	let receipts: Receipt[] = [
+		receipt,
+		{
+			...receipt,
+			id: "two",
+			number: "PT002",
+			reversal: {
+				date: "2024-06-02",
+				createdAt: "2024-06-02T00:00:00.000Z",
+				reason: "Nhập trùng",
 			},
-		],
-		allocations: [],
+		},
+	];
+	vi.mocked(api).mockImplementation(async (_method, resource) => {
+		if (resource === "customers") return [] as never;
+		if (resource === "sales-book/status") return null as never;
+		const status = new URLSearchParams(resource.split("?")[1]).get("status");
+		const items = receipts
+			.filter((one) => (status === "reversed" ? one.reversal : !one.reversal))
+			.map((one) => ({
+				receipt: one,
+				remaining: one.reversal ? 0 : one.amount,
+				state: one.reversal ? "reversed" : "open",
+			}));
+		return {
+			items,
+			total: items.length,
+			count: receipts.length,
+			page: 1,
+			limit: 20,
+		} as never;
 	});
+
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	const container = document.createElement("div");
 	document.body.append(container);
@@ -88,14 +94,8 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 		await selectStatus("active");
 		expect(receiptNumbers()).toEqual(["PT001"]);
 
-		const refresh = vi.mocked(subscribeReceiptLedger).mock.lastCall?.[0];
-		if (!refresh) throw new Error("Thiếu đăng ký cập nhật sổ đối soát.");
-		vi.mocked(readReceiptLedger).mockResolvedValue({
-			revision: "2",
-			receipts: [receipt, { ...receipt, id: "three", number: "PT003" }],
-			allocations: [],
-		});
-		await act(async () => refresh());
+		receipts = [receipt, { ...receipt, id: "three", number: "PT003" }];
+		await act(async () => accountingChanged());
 		expect(receiptNumbers()).toEqual(["PT001", "PT003"]);
 	} finally {
 		await act(async () => root.unmount());
@@ -144,6 +144,22 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 		receipt,
 		[customer],
 	);
+	const rows = [...invoiceSources].reverse().map(({ invoice }) => ({
+		invoice,
+		remaining: invoice.amount,
+		changed: false,
+		suggested: invoice.documentNumber === "BH-100",
+	}));
+	vi.mocked(api).mockImplementation(async (_method, resource) => {
+		if (resource.includes("/matches"))
+			return {
+				matches: [rows.slice(1)],
+				unavailable: false,
+				incomplete: false,
+			} as never;
+		return { items: rows, total: rows.length, page: 1, limit: 20 } as never;
+	});
+
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	const container = document.createElement("div");
 	document.body.append(container);
@@ -154,8 +170,7 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 			root.render(
 				createElement(ReceiptAllocationDialog, {
 					receipt,
-					invoiceSources,
-					ledger,
+					remaining: receipt.amount,
 					busy: false,
 					error: "",
 					onClose: vi.fn(),

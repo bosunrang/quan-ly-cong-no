@@ -195,7 +195,9 @@ describe("architecture guardrails", () => {
 
 	it("chỉ gọi HTTP từ client bất đồng bộ dùng chung", () => {
 		for (const [path, source] of Object.entries(sourceModules)) {
-			expect(source, path).not.toMatch(/\b(?:XMLHttpRequest|requestLanSync)\b/);
+			expect(source, path).not.toMatch(
+				/\b(?:XMLHttpRequest|requestLanSync|datasetCache|readMisaSalesBook|readReceiptLedger)\b/,
+			);
 			if (!path.endsWith("/shared/api/client.ts"))
 				expect(source, path).not.toMatch(/\bfetch\s*\(/);
 		}

@@ -1,19 +1,22 @@
 import { GitMerge, Search, Undo2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import {
-	activeInvoiceAllocations,
-	invoiceAvailableOn,
-	invoiceBalance,
-	type Receipt,
-	type ReceiptAllocation,
-	type ReceiptInvoice,
-	type ReceiptInvoiceSource,
-	type ReceiptLedger,
-	receiptAllocated,
-	receiptAvailableOn,
+import { useDeferredValue, useRef, useState } from "react";
+import type {
+	Receipt,
+	ReceiptAllocation,
+	ReceiptInvoice,
 } from "../../domain/payments/receipt-ledger";
-import { findReceiptMatches } from "../../domain/payments/receipt-matches";
+import type { ReceivableDocument } from "../../domain/payments/receipt-receivables";
+import type {
+	AllocationCandidate,
+	CandidateMatches,
+	Page,
+} from "../../domain/reports/view-types";
+import {
+	pageControls,
+	resourceWithQuery,
+	useServerData,
+} from "../../shared/hooks/useServerData";
+import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { formatDateOnly, todayLocal } from "../../shared/lib/date";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
@@ -45,16 +48,14 @@ interface DialogState {
 
 export function ReceiptAllocationDialog({
 	receipt,
-	invoiceSources,
-	ledger,
+	remaining,
 	busy,
 	error,
 	onClose,
 	onSave,
 }: DialogState & {
 	receipt: Receipt;
-	invoiceSources: ReceiptInvoiceSource[];
-	ledger: ReceiptLedger;
+	remaining: number;
 	onSave: (
 		date: string,
 		lines: { invoice: ReceiptInvoice; amount: number }[],
@@ -68,69 +69,41 @@ export function ReceiptAllocationDialog({
 	const [groupIndex, setGroupIndex] = useState(0);
 	const [openedInvoiceId, setOpenedInvoiceId] = useState("");
 	const invoiceScroll = useRef<HTMLElement>(null);
-	const remaining = receipt.amount - receiptAllocated(ledger, receipt.id);
+	const [page, setPage] = useState(1);
+	const [chosen, setChosen] = useState<Record<string, AllocationCandidate>>({});
 	const today = todayLocal();
 	const validDate = date >= receipt.date && date <= today;
-	const list = useMemo(() => {
-		const index = activeInvoiceAllocations(ledger);
-		const reference = receipt.reference.trim().toUpperCase();
-		const matching = reference
-			? invoiceSources.filter(({ invoice }) =>
-					[invoice.invoiceNumber, invoice.documentNumber].some(
-						(value) => value.toUpperCase() === reference,
-					),
-				)
-			: [];
-		return invoiceSources
-			.map(({ invoice, document }) => ({
-				invoice,
-				document,
-				...invoiceBalance(ledger, invoice, index),
-				suggested:
-					matching.length === 1 && matching[0].invoice.id === invoice.id,
-			}))
-			.sort(
-				(left, right) =>
-					Number(right.suggested) - Number(left.suggested) ||
-					left.invoice.date.localeCompare(right.invoice.date),
-			);
-	}, [invoiceSources, ledger, receipt.reference]);
-	const openedInvoice = list.find(
-		({ invoice }) => invoice.id === openedInvoiceId,
+	const search = useDeferredValue(query);
+	const base = `receipts/${encodeURIComponent(receipt.id)}/candidates`;
+	const listing = useServerData<Page<AllocationCandidate>>(
+		resourceWithQuery(base, { q: search, page }),
 	);
-	const visible = useMemo(() => {
-		const needle = normalizeVietnamese(query);
-		return list
-			.filter(
-				({ invoice, remaining, changed }) =>
-					(remaining > 0 || changed) &&
-					normalizeVietnamese(
-						`${invoice.invoiceNumber} ${invoice.invoiceSeries} ${invoice.documentNumber}`,
-					).includes(needle),
-			)
-			.sort(compareNewestInvoice);
-	}, [list, query]);
-	const matches = useMemo(() => {
-		if (!showMatches || !validDate || remaining <= 0) return undefined;
-		if (date < today && receiptAvailableOn(ledger, receipt, date) < remaining)
-			return { unavailable: true, matches: [], incomplete: false };
-		const candidates = list.filter(
-			(row) =>
-				!row.changed &&
-				row.remaining > 0 &&
-				row.remaining <= remaining &&
-				row.invoice.date <= date &&
-				(date === today ||
-					invoiceAvailableOn(ledger, row.invoice, date) >= row.remaining),
-		);
-		return { unavailable: false, ...findReceiptMatches(candidates, remaining) };
-	}, [showMatches, validDate, remaining, date, today, ledger, receipt, list]);
+	const visible = listing.data?.items ?? [];
+	const totalRows = listing.data?.total ?? 0;
+	const pagination = pageControls(listing.data?.page ?? page, 20, totalRows);
+	const matchResult = useServerData<CandidateMatches>(
+		showMatches && validDate && remaining > 0
+			? resourceWithQuery(`${base}/matches`, { date })
+			: undefined,
+	);
+	const matches = matchResult.data;
+	const detail = useServerData<
+		Omit<ReceivableDocument, "balance"> & {
+			balance: null | { received: number; remaining: number };
+		}
+	>(
+		openedInvoiceId
+			? `${base}/${encodeURIComponent(openedInvoiceId)}`
+			: undefined,
+	);
+	const openedInvoice = detail.data;
+
 	const matchIndex = Math.min(
 		groupIndex,
 		Math.max(0, (matches?.matches.length ?? 0) - 1),
 	);
 	const activeGroup = matches?.matches[matchIndex];
-	const selected = list
+	const selected = Object.values(chosen)
 		.filter(({ invoice }) => amounts[invoice.id]?.trim())
 		.map(({ invoice, changed, remaining }) => ({
 			invoice,
@@ -237,12 +210,12 @@ export function ReceiptAllocationDialog({
 					<strong>{receipt.customerName}</strong> · Còn phân bổ{" "}
 					{money.format(remaining)} đ
 				</p>
-				{error && (
+				{(error || listing.error || matchResult.error || detail.error) && (
 					<Notice tone="danger" announce>
-						{error}
+						{error || listing.error || matchResult.error || detail.error}
 					</Notice>
 				)}
-				{!invoiceSources.length && (
+				{!listing.loading && !totalRows && !query && (
 					<Notice tone="info">
 						Chưa có chứng từ phù hợp theo mã khách hàng trong sổ bán hàng MISA.
 					</Notice>
@@ -276,6 +249,7 @@ export function ReceiptAllocationDialog({
 								value={query}
 								onChange={(event) => {
 									setQuery(event.target.value);
+									setPage(1);
 									if (invoiceScroll.current)
 										invoiceScroll.current.scrollTop = 0;
 								}}
@@ -288,9 +262,7 @@ export function ReceiptAllocationDialog({
 						aria-expanded={showMatches}
 						aria-controls={showMatches ? "receipt-matches" : undefined}
 						onClick={() => setShowMatches(!showMatches)}
-						disabled={
-							busy || !validDate || remaining <= 0 || !invoiceSources.length
-						}
+						disabled={busy || !validDate || remaining <= 0}
 					>
 						{showMatches ? "Ẩn nhóm khớp số tiền" : "Tìm nhóm khớp số tiền"}
 					</button>
@@ -302,7 +274,9 @@ export function ReceiptAllocationDialog({
 						aria-label="Nhóm chứng từ khớp số tiền"
 						aria-live="polite"
 					>
-						{!matches ? (
+						{matchResult.loading ? (
+							<p role="status">Đang tìm nhóm chứng từ…</p>
+						) : !matches ? (
 							<Notice tone="info">
 								Chọn ngày phân bổ hợp lệ để tìm nhóm khớp.
 							</Notice>
@@ -350,7 +324,13 @@ export function ReceiptAllocationDialog({
 													]),
 												),
 											);
+											setChosen(
+												Object.fromEntries(
+													activeGroup.map((item) => [item.invoice.id, item]),
+												),
+											);
 											setQuery("");
+											setPage(1);
 											setVerified(false);
 											if (invoiceScroll.current)
 												invoiceScroll.current.scrollTop = 0;
@@ -429,49 +409,60 @@ export function ReceiptAllocationDialog({
 							</tr>
 						</thead>
 						<tbody>
-							{visible.map(({ invoice, remaining, changed, suggested }) => (
-								<tr key={invoice.id}>
-									<td>
-										{renderLinesButton(invoice, "document")}
-										{suggested && (
-											<small className="cell-meta">Khớp tham chiếu</small>
-										)}
-									</td>
-									<td>
-										{invoice.invoiceNumber
-											? renderLinesButton(invoice, "invoice")
-											: "—"}
-									</td>
-									<td>{formatDateOnly(invoice.date)}</td>
-									<td>{money.format(invoice.amount)}</td>
-									<td>
-										{changed ? "Nguồn đã thay đổi" : money.format(remaining)}
-									</td>
-									<td>
-										<VndAmountInput
-											aria-label={`Số tiền phân bổ ${invoice.documentNumber}`}
-											className="payment-amount"
-											placeholder="0"
-											disabled={busy || changed}
-											aria-invalid={
-												Boolean(amounts[invoice.id]?.trim()) &&
-												(!Number.isSafeInteger(parseVnd(amounts[invoice.id])) ||
-													parseVnd(amounts[invoice.id]) <= 0 ||
-													parseVnd(amounts[invoice.id]) > remaining ||
-													invoice.date > date)
-											}
-											value={amounts[invoice.id] ?? ""}
-											onValueChange={(value) =>
-												setAmounts({
-													...amounts,
-													[invoice.id]: value,
-												})
-											}
-										/>
-									</td>
-								</tr>
-							))}
-							{!visible.length && (
+							{visible.map((item) => {
+								const { invoice, remaining, changed, suggested } = item;
+								return (
+									<tr key={invoice.id}>
+										<td>
+											{renderLinesButton(invoice, "document")}
+											{suggested && (
+												<small className="cell-meta">Khớp tham chiếu</small>
+											)}
+										</td>
+										<td>
+											{invoice.invoiceNumber
+												? renderLinesButton(invoice, "invoice")
+												: "—"}
+										</td>
+										<td>{formatDateOnly(invoice.date)}</td>
+										<td>{money.format(invoice.amount)}</td>
+										<td>
+											{changed ? "Nguồn đã thay đổi" : money.format(remaining)}
+										</td>
+										<td>
+											<VndAmountInput
+												aria-label={`Số tiền phân bổ ${invoice.documentNumber}`}
+												className="payment-amount"
+												placeholder="0"
+												disabled={busy || changed}
+												aria-invalid={
+													Boolean(amounts[invoice.id]?.trim()) &&
+													(!Number.isSafeInteger(
+														parseVnd(amounts[invoice.id]),
+													) ||
+														parseVnd(amounts[invoice.id]) <= 0 ||
+														parseVnd(amounts[invoice.id]) > remaining ||
+														invoice.date > date)
+												}
+												value={amounts[invoice.id] ?? ""}
+												onValueChange={(value) => {
+													setAmounts((current) => ({
+														...current,
+														[invoice.id]: value,
+													}));
+													setChosen((current) => ({
+														...current,
+														[invoice.id]: item,
+													}));
+													setVerified(false);
+												}}
+											/>
+										</td>
+									</tr>
+								);
+							})}
+
+							{!visible.length && !listing.loading && (
 								<tr>
 									<td colSpan={6}>Không có chứng từ còn mở theo bộ lọc.</td>
 								</tr>
@@ -479,6 +470,16 @@ export function ReceiptAllocationDialog({
 						</tbody>
 					</table>
 				</section>
+				{(listing.loading || detail.loading) && (
+					<p role="status">Đang tải chứng từ…</p>
+				)}
+				<PaginationControls
+					currentPage={listing.data?.page ?? page}
+					pageCount={pagination.pageCount}
+					onPageChange={setPage}
+					previousLabel="Trang chứng từ trước"
+					nextLabel="Trang chứng từ sau"
+				/>
 				{selected.length > 0 &&
 					!canSave &&
 					(invalid ||
@@ -499,11 +500,7 @@ export function ReceiptAllocationDialog({
 			{allocationDialog}
 			{openedInvoice && (
 				<SalesInvoiceLinesDialog
-					document={{
-						...openedInvoice.document,
-						balance: openedInvoice.changed ? null : openedInvoice,
-						allocationMismatch: openedInvoice.changed,
-					}}
+					document={openedInvoice}
 					customerName={receipt.customerName}
 					backLabel="Quay lại phân bổ"
 					onClose={() => setOpenedInvoiceId("")}

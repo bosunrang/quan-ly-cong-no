@@ -1,7 +1,15 @@
-import { readCustomers } from "../src/domain/customers/customer.repository";
-import { readSalesEmployees } from "../src/domain/employees/employee.repository";
-import { readMisaSalesBook } from "../src/domain/misa/misa.sales-book.repository";
-import { readReceiptLedger } from "../src/domain/payments/receipt-ledger.repository";
+import { api } from "../src/shared/api/client";
+import { resourceWithQuery } from "../src/shared/hooks/useServerData";
+import type {
+	DashboardView,
+	ReceivablesView,
+	InvoiceRow,
+	Page,
+} from "../src/domain/reports/view-types";
+import {
+	type ReceivableStatement,
+	statementBalanceInWords,
+} from "../src/domain/reports/statement";
 import { httpServer } from "./fixtures/http-server";
 import {
 	authenticateAccount,
@@ -68,17 +76,102 @@ describe("Số tiền chuẩn", () => {
 			await changeBusinessData({ type: "restore", backup });
 			const restored = await exportBusinessBackup();
 			expect(restored.companyId).toBeNull();
-			const [customers, employees, salesBook, ledger] = await Promise.all([
-				readCustomers(),
-				readSalesEmployees(),
-				readMisaSalesBook(),
-				readReceiptLedger(),
-			]);
-			if (!salesBook)
-				throw new Error("Không đọc được sổ bán hàng sau khi khôi phục");
-			expect(
-				computeGoldenNumbers({ customers, employees, salesBook, ledger }),
-			).toEqual(expected);
+			const params = (
+				resource: string,
+				values: Record<string, string | number>,
+			) => resourceWithQuery(resource, values);
+			for (const expectedDay of expected.dashboard) {
+				const { from, through, receivables, unallocatedReceipts, ...totals } =
+					expectedDay;
+				const period = { from, through, limit: 100 };
+				const dashboard = await api<DashboardView>(
+					"GET",
+					params("dashboard", period),
+				);
+				expect(dashboard).toMatchObject(totals);
+				expect(dashboard.receivablesCount).toBe(receivables.length);
+				for (const [i, row] of dashboard.rows.items.entries()) {
+					expect(row).not.toHaveProperty("documents");
+					expect(row).toMatchObject({
+						customerCode: receivables[i].customerCode,
+						remaining: receivables[i].remaining,
+					});
+					const invoices = await api<Page<InvoiceRow>>(
+						"GET",
+						params(
+							`receivables/${encodeURIComponent(row.id)}/invoices`,
+							period,
+						),
+					);
+					expect(
+						invoices.items.map(({ id, balance }) => ({
+							id,
+							remaining: balance?.remaining ?? null,
+						})),
+					).toEqual(receivables[i].documents);
+				}
+				const unapplied = await api<DashboardView>(
+					"GET",
+					params("dashboard", { ...period, view: "unallocated" }),
+				);
+				expect(unapplied.rows.items).toMatchObject(unallocatedReceipts);
+			}
+			const receivables = await api<ReceivablesView>(
+				"GET",
+				"receivables?limit=100",
+			);
+			expect(receivables.unmatchedAllocationCount).toBe(
+				expected.receivables.unmatchedCount,
+			);
+			expect(receivables.rows.items).toHaveLength(
+				expected.receivables.customers.length,
+			);
+			for (const [i, row] of receivables.rows.items.entries()) {
+				const { documents, ...expectedRow } = expected.receivables.customers[i];
+				expect(row).toMatchObject(expectedRow);
+				expect(row).not.toHaveProperty("documents");
+				const response = await api<Page<InvoiceRow>>(
+					"GET",
+					`receivables/${encodeURIComponent(row.id)}/invoices?limit=100`,
+				);
+				expect(
+					response.items.map((document) => ({
+						id: document.id,
+						documentNumbers: document.documentNumbers,
+						invoiceNumber: document.invoiceNumber,
+						paymentTotal: document.paymentTotal,
+						received: document.balance?.received ?? null,
+						remaining: document.balance?.remaining ?? null,
+						allocations:
+							document.balance?.allocations.map(
+								({ receiptNumber, allocationDate, amount }) => ({
+									receiptNumber,
+									allocationDate,
+									amount,
+								}),
+							) ?? null,
+						allocationMismatch: document.allocationMismatch,
+					})),
+				).toEqual(documents);
+				expect(response.items.every((document) => !("lines" in document))).toBe(
+					true,
+				);
+			}
+			for (const { customerCode, words, ...statement } of expected.statements) {
+				const id = (backup.data as GoldenData).customers.find(
+					(item) => item.misaCode === customerCode,
+				)?.id;
+				if (!id) throw new Error("Thiếu khách hàng trong dữ liệu chuẩn.");
+				const result = await api<ReceivableStatement>(
+					"GET",
+					params(`reports/statements/${encodeURIComponent(id)}`, {
+						from: statement.from,
+						through: statement.through,
+					}),
+				);
+				expect(result).toMatchObject(statement);
+				expect(statementBalanceInWords(result)).toBe(words);
+			}
 			expect(computeGoldenNumbers(restored.data as GoldenData)).toEqual(
 				expected,
 			);
@@ -86,7 +179,7 @@ describe("Số tiền chuẩn", () => {
 		} finally {
 			await host.close();
 		}
-	});
+	}, 15_000);
 
 	it("các mốc chính khớp số tính tay", () => {
 		const close = (through: string) =>

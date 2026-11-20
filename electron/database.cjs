@@ -5,7 +5,8 @@ const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { deleteBusinessGroups, makeBusinessBackup, restoreBusinessData } = require('../src/domain/settings/business-data.rules.mjs');
 
-const SCHEMA_VERSION = 12;
+const books = require('./books.cjs');
+const SCHEMA_VERSION = 13;
 const DATASET_KEYS = {
   customers: 'cong-no.customers.v2',
   employees: 'cong-no.sales-employees.v2',
@@ -14,9 +15,23 @@ const DATASET_KEYS = {
 
 function snapshotBeforeUpgrade(database, databasePath, currentVersion) {
   if (!databasePath || databasePath === ':memory:' || currentVersion < 1 || currentVersion >= SCHEMA_VERSION) return;
+  const directory = path.dirname(databasePath);
+  const prefix = `${path.basename(databasePath)}.truoc-nang-cap-v${currentVersion}-`;
+  // Nâng cấp lỗi rồi mở lại nhiều lần thì dùng lại bản sao cũ nếu tệp dữ liệu chưa đổi từ đó,
+  // để không lấp đầy ổ đĩa bằng các bản sao giống hệt nhau.
+  const changedAt = Math.max(...['', '-wal'].map((suffix) => {
+    try { return fs.statSync(databasePath + suffix).mtimeMs; } catch { return 0; }
+  }));
+  const previous = fs.readdirSync(directory)
+    .filter((name) => name.startsWith(prefix) && name.endsWith('.sqlite'))
+    .map((name) => path.join(directory, name))
+    .find((file) => fs.statSync(file).mtimeMs >= changedAt);
+  if (previous) return previous;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const target = `${databasePath}.truoc-nang-cap-v${currentVersion}-${stamp}.sqlite`;
   // Bản sao nhất quán (gồm cả WAL) để có thể quay lại nếu nâng cấp gặp sự cố.
-  database.prepare('VACUUM INTO ?').run(`${databasePath}.truoc-nang-cap-v${currentVersion}-${stamp}.sqlite`);
+  database.prepare('VACUUM INTO ?').run(target);
+  return target;
 }
 
 function migrateSchema(database, databasePath, { snapshot = true } = {}) {
@@ -24,7 +39,17 @@ function migrateSchema(database, databasePath, { snapshot = true } = {}) {
   const row = database.prepare('PRAGMA user_version').get();
   const currentVersion = Number(row?.user_version ?? 0);
   if (currentVersion > SCHEMA_VERSION) throw new Error(`Cơ sở dữ liệu phiên bản ${currentVersion} mới hơn ứng dụng.`);
-  if (snapshot) snapshotBeforeUpgrade(database, databasePath, currentVersion);
+  const snapshotPath = snapshot ? snapshotBeforeUpgrade(database, databasePath, currentVersion) : undefined;
+  try {
+    upgradeSchema(database, currentVersion);
+  } catch (error) {
+    // Mỗi bước nâng cấp chạy trong giao dịch riêng: bước lỗi đã được hoàn tác.
+    if (snapshotPath) error.message += ` Bước nâng cấp lỗi đã được hoàn tác. Bản sao trước khi nâng cấp: ${snapshotPath}`;
+    throw error;
+  }
+}
+
+function upgradeSchema(database, currentVersion) {
   if (currentVersion < 1) {
     withTransaction(database, () => {
       database.exec(`
@@ -309,6 +334,12 @@ function migrateSchema(database, databasePath, { snapshot = true } = {}) {
       database.exec('PRAGMA user_version = 12;');
     });
   }
+  if (currentVersion < 13) {
+    withTransaction(database, () => {
+      books.migrateBooks(database);
+      database.exec('PRAGMA user_version = 13;');
+    });
+  }
 }
 
 function withTransaction(database, action) {
@@ -420,20 +451,19 @@ function nextUpdatedAt(previous) {
 }
 
 // Each route makes its checks and writes in one SQLite transaction.
-function directoryTransaction(database, work) {
+function directoryTransaction(database, work, transaction = true) {
   function touchCustomer(id) {
     const row = database.prepare('SELECT updated_at FROM customers WHERE id = ?').get(id);
     database.prepare('UPDATE customers SET updated_at = ? WHERE id = ?').run(nextUpdatedAt(row.updated_at), id);
   }
-  return withTransaction(database, () => work({
+  const apply = () => work({
     customer: (id) => readCustomer(database, id),
     employee(id) {
       const row = database.prepare('SELECT * FROM sales_employees WHERE id = ?').get(id);
       if (row) return employeeFromRow(row);
     },
     customerHasReceipts(id) {
-      return (readGeneric(database, 'cong-no.receipt-ledger.v1')?.data?.receipts ?? [])
-        .some((receipt) => receipt.customerId === id);
+      return Boolean(database.prepare('SELECT 1 FROM receipts WHERE customer_id = ? LIMIT 1').get(id));
     },
     insertCustomer(item, order) {
       database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
@@ -496,7 +526,8 @@ function directoryTransaction(database, work) {
         .run(item.id, customerId, item.employeeId, item.employeeName, item.province, item.effectiveFrom, customerId);
       touchCustomer(customerId);
     },
-  }));
+  });
+  return transaction ? withTransaction(database, apply) : apply();
 }
 
 const sellerText = (value) => (typeof value === 'string' ? value.slice(0, 500) : '');
@@ -558,7 +589,13 @@ function writeGeneric(database, key, version, data) {
     .run(key, version, JSON.stringify(data), nextDatasetStamp(database, key));
 }
 
+function bookStamp(database, key) {
+  lastDatasetStamp = Math.max(Date.now(), (Date.parse(books.stamp(database, key)?.slice(2) ?? '') || 0) + 1, lastDatasetStamp + 1);
+  return new Date(lastDatasetStamp).toISOString();
+}
+
 function datasetStamp(database, key) {
+  if (key === books.SALE || key === books.LEDGER) return books.stamp(database, key);
   const row = database.prepare('SELECT version, updated_at FROM app_datasets WHERE dataset_key = ?').get(key);
   return row ? `${row.version}:${row.updated_at}` : null;
 }
@@ -578,6 +615,8 @@ function clearAllData(database, branding) {
       DELETE FROM app_datasets WHERE dataset_key <> 'cong-no.accounts.v1';
       DELETE FROM dataset_versions;
     `);
+    books.clearSales(database);
+    books.clearLedger(database);
     if (branding) {
       insertSettings(database, {
         companyName: '', companyAddress: '', displayName: branding.displayName,
@@ -589,11 +628,6 @@ function clearAllData(database, branding) {
   });
 }
 
-const businessKeys = {
-  salesBook: 'cong-no.misa-sales-book.v1',
-  ledger: 'cong-no.receipt-ledger.v1',
-};
-
 function readBusinessData(database) {
   function directory(key, read, fallback) {
     const version = readVersion(database, key);
@@ -602,8 +636,8 @@ function readBusinessData(database) {
   return {
     customers: directory(DATASET_KEYS.customers, readCustomers, []),
     employees: directory(DATASET_KEYS.employees, readEmployees, []),
-    salesBook: readGeneric(database, businessKeys.salesBook)?.data ?? null,
-    ledger: readGeneric(database, businessKeys.ledger)?.data ?? null,
+    salesBook: books.readSales(database) ?? null,
+    ledger: books.readLedger(database) ?? null,
     settings: directory(DATASET_KEYS.settings, readSettings, null),
   };
 }
@@ -625,10 +659,13 @@ function changeBusinessData(database, change, companyId, expected, onChange) {
     }
     if (next.customers !== current.customers) writeCustomers(database, 2, next.customers);
     if (next.employees !== current.employees) writeEmployees(database, 2, next.employees);
-    for (const [key, dataset] of Object.entries(businessKeys)) {
-      if (next[key] === current[key]) continue;
-      if (next[key] === null) database.prepare('DELETE FROM app_datasets WHERE dataset_key = ?').run(dataset);
-      else writeGeneric(database, dataset, 1, next[key]);
+    if (next.salesBook !== current.salesBook) {
+      if (next.salesBook === null) books.clearSales(database);
+      else books.writeSales(database, next.salesBook, bookStamp(database, books.SALE));
+    }
+    if (next.ledger !== current.ledger) {
+      if (next.ledger === null) books.clearLedger(database);
+      else books.writeLedger(database, next.ledger, bookStamp(database, books.LEDGER));
     }
     if (next.settings !== current.settings) {
       if (next.settings) writeSettings(database, 2, next.settings);
@@ -680,6 +717,11 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
   return {
     datasetStamp(key) { return datasetStamp(database, key); },
     readDataset(key) {
+      if (key === books.SALE || key === books.LEDGER) {
+        const data = key === books.SALE ? books.readSales(database) : books.readLedger(database);
+        if (data) return { version: 1, data };
+        return undefined;
+      }
       const versionRow = readVersion(database, key);
       if (key === DATASET_KEYS.customers && versionRow) return readCustomers(database, versionRow.version);
       if (key === DATASET_KEYS.employees && versionRow) return readEmployees(database, versionRow.version);
@@ -691,7 +733,11 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
       if (key === DATASET_KEYS.customers) withTransaction(database, () => writeCustomers(database, version, data));
       else if (key === DATASET_KEYS.employees) withTransaction(database, () => writeEmployees(database, version, data));
       else if (key === DATASET_KEYS.settings) withTransaction(database, () => writeSettings(database, version, data));
-      else writeGeneric(database, key, version, data);
+      else if (key === books.SALE || key === books.LEDGER) {
+        if (version !== 1) throw new Error('Phiên bản sổ không hợp lệ.');
+        const write = key === books.SALE ? books.writeSales : books.writeLedger;
+        withTransaction(database, () => write(database, data, bookStamp(database, key)));
+      } else writeGeneric(database, key, version, data);
       return true;
     },
     exportBusinessBackup(companyId = null) {
@@ -713,14 +759,12 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
     },
     writeReceiptLedger(revision, data, salesBookImportedAt, { checkNewCustomers = false } = {}) {
       return withTransaction(database, () => {
-        const key = 'cong-no.receipt-ledger.v1';
-        const current = readGeneric(database, key);
-        if (current && current.version !== 1) throw new Error('Phiên bản sổ đối soát không hợp lệ.');
-        if ((current?.data?.revision ?? '') !== revision) return false;
+        const current = books.readLedger(database);
+        if ((current?.revision ?? '') !== revision) return false;
         if (salesBookImportedAt !== undefined &&
-            readGeneric(database, 'cong-no.misa-sales-book.v1')?.data?.importedAt !== salesBookImportedAt) return false;
+            books.salesMetadata(database)?.importedAt !== salesBookImportedAt) return false;
         if (checkNewCustomers) {
-          const previous = new Set((current?.data?.receipts ?? []).map(({ id }) => id));
+          const previous = new Set((current?.receipts ?? []).map(({ id }) => id));
           const lookup = database.prepare('SELECT misa_code FROM customers WHERE id = ?');
           for (const receipt of data.receipts) {
             if (previous.has(receipt.id)) continue;
@@ -729,18 +773,46 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
               throw Object.assign(new Error('Khách hàng hoặc mã MISA vừa thay đổi. Hãy tải lại danh mục.'), { status: 409 });
           }
         }
-        writeGeneric(database, key, 1, data);
+        books.writeLedger(database, data, bookStamp(database, books.LEDGER));
         return true;
       });
     },
     writeMisaSalesBook(expectedImportedAt, data) {
       return withTransaction(database, () => {
-        const key = 'cong-no.misa-sales-book.v1';
-        const current = readGeneric(database, key);
-        if (current && current.version !== 1) throw new Error('Phiên bản sổ bán hàng không hợp lệ.');
-        if ((current?.data?.importedAt ?? null) !== expectedImportedAt) return false;
-        writeGeneric(database, key, 1, data);
+        if ((books.salesMetadata(database)?.importedAt ?? null) !== expectedImportedAt) return false;
+        books.writeSales(database, data, bookStamp(database, books.SALE));
         return true;
+      });
+    },
+    salesMetadata() { return books.salesMetadata(database); },
+    salesPage(query, page, limit) { return books.salesPage(database, query, page, limit); },
+    allocatedDocuments() { return books.allocatedDocuments(database); },
+    /**
+     * Ghi một thao tác vào sổ thu trong một giao dịch. `cached` ({ stamp, value }) là bản sổ đã đọc:
+     * nếu dấu trong SQLite vẫn khớp thì dùng lại, khỏi đọc toàn bộ sổ trong lúc giữ khóa ghi.
+     * Sau khi ghi, `cached.onWrite(stamp, after)` nhận bản mới để không phải giải mã lại.
+     */
+    changeLedger(work, cached) {
+      return withTransaction(database, () => {
+        const current = books.stamp(database, books.LEDGER);
+        const before = cached && cached.stamp === current && cached.value
+          ? cached.value
+          : books.readLedger(database) ?? { revision: '', receipts: [], allocations: [] };
+        const { after, audit } = work(before);
+        const revision = randomUUID();
+        const stamp = bookStamp(database, books.LEDGER);
+        books.applyLedgerChange(database, before, after, revision, stamp);
+        if (audit) database.prepare('INSERT INTO activity_log VALUES (?, ?, ?)').run(audit.id, audit.time, JSON.stringify(audit));
+        cached?.onWrite?.(`1:${stamp}`, { ...after, revision });
+        return revision;
+      });
+    },
+    changeSales(work) {
+      return withTransaction(database, () => {
+        const { book, audit } = work(books.readSales(database) ?? null, (apply) => directoryTransaction(database, apply, false));
+        if (book) books.writeSales(database, book, bookStamp(database, books.SALE));
+        if (audit) database.prepare('INSERT INTO activity_log VALUES (?, ?, ?)').run(audit.id, audit.time, JSON.stringify(audit));
+        return books.salesMetadata(database) ?? null;
       });
     },
     clearAllData(branding) { return clearAllData(database, branding); },

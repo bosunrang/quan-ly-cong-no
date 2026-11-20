@@ -12,7 +12,6 @@ const { automaticBackups } = require('../server/automatic-backup.cjs');
 const { lanOptions } = require('../server/lan-options.cjs');
 const { loginItem } = require('../electron/lan-startup.cjs');
 
-const salesKey = 'cong-no.misa-sales-book.v1';
 const temporary = (company) => `temporary-${company.id}`;
 const password = (company) => `new-${company.id}`;
 
@@ -112,8 +111,8 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     assert.equal((await call('GET', 'session', undefined, changed.cookie)).value.profile.mustChangePassword, false);
     assert.equal((await call('GET', 'datasets/accounts', undefined, changed.cookie)).status, 404);
     assert.deepEqual((await call('GET', 'customers', undefined, changed.cookie)).value, []);
-    assert.equal((await call('GET', 'sales-book', undefined, changed.cookie)).value, null);
-    assert.equal((await call('GET', 'receipt-ledger', undefined, changed.cookie)).value, null);
+    assert.equal((await call('GET', 'sales-book', undefined, changed.cookie)).value.book, null);
+    assert.equal((await call('GET', 'receipts', undefined, changed.cookie)).value.count, 0);
     const backups = await call('GET', 'automatic-backups', undefined, changed.cookie);
     assert.equal(backups.status, 200);
     assert.equal(backups.value.retention, 14);
@@ -128,19 +127,20 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   }
   assert.equal((await call('GET', 'session', undefined, actor, { origin: 'http://different.example' })).status, 403);
 
-  const data = { fileName: 'test-misa.xlsx', rows: [], importedAt: '2026-01-02T12:00:00.000Z' };
-  assert.equal((await call('GET', 'sales-book/stamp', undefined)).status, 401);
-  assert.equal((await call('GET', 'datasets/accounts/stamp', undefined, actor)).status, 404);
-  assert.equal((await call('GET', 'sales-book/stamp', undefined, actor)).value, null);
-  assert.equal((await call('PUT', 'sales-book', { expected: null, data }, actor)).value, true);
-  // Máy trạm dùng dấu này để biết sổ đã đổi mà không phải tải lại cả sổ.
-  assert.match((await call('GET', 'sales-book/stamp', undefined, actor)).value, /^1:/);
-  assert.equal((await call('PUT', 'sales-book', { expected: null, data }, actor)).status, 409);
-  const ledger = { revision: 'first', receipts: [], allocations: [] };
-  assert.equal((await call('PUT', 'receipt-ledger', { revision: '', data: ledger, salesBookImportedAt: data.importedAt }, actor)).value, true);
-  assert.equal((await call('PUT', 'receipt-ledger', { revision: '', data: ledger }, actor)).status, 409);
-  assert.equal((await call('GET', 'sales-book', undefined, actor)).value.data.fileName, data.fileName);
-  assert.equal((await call('GET', 'receipt-ledger', undefined, actor)).value.data.revision, ledger.revision);
+  const line = { rowNumber: 1, date: '2026-01-02', documentNumber: 'BH01', invoiceNumber: '01', customerName: 'Khách hàng mẫu',
+    productName: 'Hàng', unit: 'Hộp', quantity: 1, unitPrice: 200, salesAmount: 200, paymentTotal: 200,
+    source: { customerCode: 'TEST', invoiceSeries: '', invoiceDate: '' } };
+  const data = { fileName: 'test-misa.xlsx', rows: [line], importedAt: '2026-01-02T12:00:00.000Z' };
+  const source = { mode: 'import', book: data };
+  assert.equal((await call('POST', 'sales-imports', source, actor)).status, 409);
+  const preview = await call('POST', 'sales-imports/preview', source, actor);
+  assert.equal(preview.value.addedCount, 1);
+  assert.ok(!('book' in preview.value));
+  assert.equal((await call('POST', 'sales-imports', { ...source, token: preview.value.token }, actor)).status, 200);
+  assert.equal((await call('POST', 'sales-imports', { ...source, token: preview.value.token }, actor)).status, 409);
+  assert.equal((await call('GET', 'sales-book?limit=1&q=BH01', undefined, actor)).value.book.fileName, data.fileName);
+  assert.equal((await call('GET', 'sales-book?q=missing', undefined, actor)).value.total, 0);
+  assert.equal((await call('GET', 'sales-book?limit=101', undefined, actor)).status, 400);
 
   const customer = {
     id: 'c1', misaCode: 'TEST', name: 'Khách hàng mẫu', group: 'unknown',
@@ -168,8 +168,8 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   assert.equal(viewer.status, 200);
   const viewerSession = await call('POST', 'session', { username: 'view', password: 'temporary-view' });
   const viewerChanged = await call('PATCH', 'session/password', { password: 'viewer-password' }, viewerSession.cookie);
-  assert.equal((await call('GET', 'sales-book', undefined, viewerChanged.cookie)).status, 200);
-  assert.equal((await call('PUT', 'sales-book', { expected: data.importedAt, data }, viewerChanged.cookie)).status, 403);
+  assert.equal((await call('GET', 'dashboard?from=2026-01-01&through=2026-12-31', undefined, viewerChanged.cookie)).status, 200);
+  assert.equal((await call('POST', 'sales-imports', source, viewerChanged.cookie)).status, 403);
   assert.equal((await call('GET', 'activities', undefined, viewerChanged.cookie)).status, 403);
   assert.equal((await call('GET', 'automatic-backups', undefined, viewerChanged.cookie)).status, 403);
   const guest = viewerChanged.cookie;
@@ -177,19 +177,26 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     ['GET', 'session'], ['DELETE', 'session'], ['PATCH', 'session/password', {}],
     ['POST', 'accounts', {}], ['PATCH', 'accounts/missing', {}], ['PATCH', 'accounts/missing/status', {}],
     ['GET', 'settings'], ['PUT', 'settings', {}], ['GET', 'customers'], ['GET', 'employees'],
-    ['POST', 'customers', {}], ['POST', 'customers/imports', {}], ['POST', 'customers/misa-supplements', {}],
+    ['POST', 'customers', {}], ['POST', 'customers/imports', {}],
     ['PATCH', 'customers/missing', {}], ['DELETE', 'customers/missing', {}],
     ['POST', 'employees', {}], ['PATCH', 'employees/missing', {}], ['DELETE', 'employees/missing', {}],
     ['POST', 'assignments', {}], ['PATCH', 'assignments/missing', {}],
-    ['GET', 'sales-book'], ['GET', 'sales-book/stamp'], ['GET', 'sales-book/allocated-documents'],
-    ['PUT', 'sales-book', {}], ['GET', 'receipt-ledger'], ['GET', 'receipt-ledger/stamp'],
-    ['PUT', 'receipt-ledger', {}], ['GET', 'activities'], ['POST', 'activities', {}],
+    ['GET', 'sales-book'], ['GET', 'sales-book/status'],
+    ['POST', 'sales-imports/preview', {}], ['POST', 'sales-imports/missing', {}], ['POST', 'sales-imports', {}], ['GET', 'dashboard'],
+    ['GET', 'receivables'], ['GET', 'receivables/c/invoices'], ['GET', 'receivables/c/invoices/d'],
+    ['GET', 'reports/statements/c'], ['GET', 'receipts'], ['GET', 'receipts/next-number'], ['GET', 'receipts/r'],
+    ['GET', 'receipts/r/candidates'], ['GET', 'receipts/r/candidates/matches'], ['GET', 'receipts/r/candidates/i'],
+    ['POST', 'receipts', {}], ['POST', 'receipts/r/allocations', {}], ['POST', 'receipts/r/reversal', {}],
+    ['POST', 'allocations/a/reversal', {}], ['GET', 'activities'], ['POST', 'activities', {}],
     ['GET', 'business-backup'], ['POST', 'business-backup/restore', {}], ['DELETE', 'business-data', {}],
     ['GET', 'automatic-backups'], ['POST', 'automatic-backups/missing/restore'], ['GET', 'status'],
   ];
   const noDashboard = new Set(['accounts', 'accounts/missing', 'accounts/missing/status',
-    'customers/imports', 'customers/misa-supplements', 'customers/missing', 'employees/missing',
-    'assignments', 'assignments/missing', 'sales-book/allocated-documents', 'business-backup',
+    'customers/imports', 'customers/missing', 'employees/missing',
+    'assignments', 'assignments/missing', 'sales-book', 'sales-book/status', 'sales-imports', 'sales-imports/preview', 'sales-imports/missing',
+    'receivables', 'receivables/c/invoices', 'receivables/c/invoices/d', 'reports/statements/c',
+    'receipts', 'receipts/next-number', 'receipts/r', 'receipts/r/candidates', 'receipts/r/candidates/matches',
+    'receipts/r/candidates/i', 'receipts/r/allocations', 'receipts/r/reversal', 'allocations/a/reversal', 'business-backup',
     'business-backup/restore', 'business-data', 'automatic-backups', 'automatic-backups/missing/restore']);
   for (const [method, resource, body] of protectedRoutes) {
     assert.equal((await call(method, resource, body)).status, 401, method + ' ' + resource);
@@ -215,37 +222,80 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   const editorSession = await call('POST', 'session', { username: 'editor', password: 'temporary-editor' });
   const editorChanged = await call('PATCH', 'session/password', { password: 'editor-password' }, editorSession.cookie);
   assert.equal(editorChanged.status, 200);
-  assert.equal((await call('GET', 'sales-book/allocated-documents', undefined, editorChanged.cookie)).status, 403);
+  assert.equal((await call('GET', 'sales-book/status', undefined, editorChanged.cookie)).status, 403);
   assert.equal((await call('POST', 'customers', { ...customer, misaCode: 'NO' }, editorChanged.cookie)).status, 403);
   const misa = (await call('POST', 'accounts', {
     draft: { name: 'Nhập MISA', username: 'misa-only', password: 'temporary-misa', role: 'editor', pages: ['misa'] },
   }, actor)).value.account;
   const misaLogin = await call('POST', 'session', { username: misa.username, password: 'temporary-misa' });
   const misaCookie = (await call('PATCH', 'session/password', { password: 'misa-password' }, misaLogin.cookie)).cookie;
-  assert.equal((await call('GET', 'sales-book/allocated-documents', undefined, misaCookie)).status, 200);
-  assert.equal((await call('GET', 'receipt-ledger', undefined, misaCookie)).status, 403);
+  assert.equal((await call('GET', 'sales-book/status', undefined, misaCookie)).status, 200);
+  assert.equal((await call('GET', 'receipts', undefined, misaCookie)).status, 403);
   assert.equal((await call('POST', 'customers', customer, misaCookie)).status, 403);
   assert.equal((await call('POST', 'customers/imports', { customers: [customer] }, misaCookie)).status, 403);
-  const supplement = await call('POST', 'customers/misa-supplements', {
-    customers: [{ ...customer, misaCode: 'MISA-IMPORT', assignments: [{ employeeId: 'unauthorized' }] }],
-  }, misaCookie);
-  assert.equal(supplement.status, 200);
-  assert.deepEqual(supplement.value[0].assignments, []);
-  assert.equal((await call('DELETE', 'customers/' + supplement.value[0].id, { expected: supplement.value[0].updatedAt }, misaCookie)).status, 403);
-  assert.equal((await call('DELETE', 'customers/' + supplement.value[0].id, { expected: supplement.value[0].updatedAt }, actor)).status, 200);
+  const supplement = { mode: 'supplement', book: { ...data, rows: [line, {
+    ...line, rowNumber: 2, documentNumber: 'BH02', invoiceNumber: '02',
+    customerName: 'Khách hàng chưa có mã', source: { ...line.source, customerCode: 'MISA-IMPORT' },
+  }] } };
+  const newLine = { mode: 'import', book: { ...data, rows: [line, {
+    ...supplement.book.rows[1], source: undefined,
+  }] } };
+  const previewNew = await call('POST', 'sales-imports/preview', newLine, misaCookie);
+  assert.equal((await call('POST', 'sales-imports', { ...newLine, token: previewNew.value.token }, misaCookie)).status, 200);
+  const previewSupplement = await call('POST', 'sales-imports/preview', supplement, misaCookie);
+  assert.equal(previewSupplement.status, 200);
+  assert.equal(previewSupplement.value.additions.length, 1);
+  assert.equal((await call('POST', 'sales-imports', { ...supplement, token: previewSupplement.value.token }, misaCookie)).status, 200);
+  const addedCustomer = (await call('GET', 'customers', undefined, actor)).value.find(({ misaCode }) => misaCode === 'MISA-IMPORT');
+  assert.deepEqual(addedCustomer.assignments, []);
+  assert.equal((await call('DELETE', 'customers/' + addedCustomer.id, { expected: addedCustomer.updatedAt }, misaCookie)).status, 403);
+  assert.equal((await call('DELETE', 'customers/' + addedCustomer.id, { expected: addedCustomer.updatedAt }, actor)).status, 200);
   const batch = await call('POST', 'customers/imports', {
     customers: [{ ...customer, misaCode: 'BATCH' }, customer],
   }, actor);
   assert.equal(batch.status, 409);
   assert.ok(!(await call('GET', 'customers', undefined, actor)).value.some(({ misaCode }) => misaCode === 'BATCH'));
-  const staleReceipt = {
-    id: 'r-stale', number: 'PT-1', customerId: supplement.value[0].id,
-    customerName: supplement.value[0].name, customerCode: supplement.value[0].misaCode,
-    date: '2026-01-01', createdAt: data.importedAt, amount: 100, reference: '',
-  };
-  assert.equal((await call('PUT', 'receipt-ledger', {
-    revision: ledger.revision, data: { ...ledger, revision: 'stale-customer', receipts: [staleReceipt] },
-  }, actor)).status, 409);
+  assert.equal((await call('POST', 'receipts', {
+    id: 'req-deleted-customer', customerId: addedCustomer.id, customerCode: addedCustomer.misaCode,
+    date: '2026-01-02', amount: 100, reference: '',
+  }, actor)).status, 404);
+  const receiptInput = { id: 'req-receipt-0001', customerId: createdCustomer.id, customerCode: createdCustomer.misaCode,
+    date: '2026-01-02', amount: 100, reference: '' };
+  assert.equal((await call('POST', 'receipts', { ...receiptInput, id: undefined }, actor)).status, 400);
+  const receipt = (await call('POST', 'receipts', receiptInput, actor));
+  assert.equal(receipt.status, 200);
+  // Gửi lại cùng mã (bấm hai lần, lỗi mạng) không ghi thêm; dùng mã cho khoản khác thì bị từ chối.
+  assert.equal((await call('POST', 'receipts', receiptInput, actor)).status, 200);
+  assert.equal((await call('GET', 'receipts', undefined, actor)).value.count, 1);
+  assert.equal((await call('POST', 'receipts', { ...receiptInput, amount: 101 }, actor)).status, 409);
+  const receiptId = (await call('GET', 'receipts', undefined, actor)).value.items[0].receipt.id;
+  const receiptInfo = (await call('GET', 'receipts/' + receiptId, undefined, actor)).value;
+  const candidates = (await call('GET', 'receipts/' + receiptId + '/candidates', undefined, actor)).value.items;
+  assert.equal(candidates[0].remaining, 200);
+  const lineInput = { date: '2026-01-02', revision: receiptInfo.revision, bookStamp: receiptInfo.bookStamp,
+    lines: [{ invoice: candidates[0].invoice, amount: 50 }] };
+  assert.equal((await call('POST', 'receipts/' + receiptId + '/allocations', { ...lineInput, revision: 'stale' }, actor)).status, 409);
+  const allocated = await call('POST', 'receipts/' + receiptId + '/allocations', lineInput, actor);
+  assert.equal(allocated.status, 200);
+  const replacement = { mode: 'import', applyChanges: true, book: { ...data, rows: [{ ...line, paymentTotal: 900 }] } };
+  const locked = await call('POST', 'sales-imports/preview', replacement, misaCookie);
+  assert.equal(locked.value.lockedVouchers, 1);
+  assert.equal(locked.value.hasChanges, false);
+  const missing = await call('POST', 'sales-imports/missing?limit=1&q=BH02', { token: locked.value.token }, misaCookie);
+  assert.equal(missing.status, 200);
+  assert.equal(missing.value.items[0].documentNumber, 'BH02');
+  assert.equal((await call('POST', 'sales-imports/missing', { token: 'khong-co' }, misaCookie)).status, 409);
+  const reversal = { date: '2026-01-02', reason: 'Đảo phiếu thử' };
+  assert.equal((await call('POST', 'receipts/' + receiptId + '/reversal', reversal, actor)).status, 400);
+  // Hủy theo phiên bản sổ đã cũ (trước khi phân bổ) bị từ chối.
+  assert.equal((await call('POST', 'receipts/' + receiptId + '/reversal', { ...reversal, revision: receiptInfo.revision }, actor)).status, 409);
+  const fresh = (await call('GET', 'receipts/' + receiptId, undefined, actor)).value.revision;
+  assert.equal((await call('POST', 'receipts/' + receiptId + '/reversal', { ...reversal, revision: fresh }, actor)).status, 200);
+  const reversed = (await call('GET', 'receipts/' + receiptId, undefined, actor)).value;
+  assert.ok(reversed.receipt.reversal && reversed.allocations[0].reversal);
+  const audit = (await call('GET', 'activities', undefined, actor)).value;
+  for (const action of ['Ghi khoản thu', 'Lưu phân bổ', 'Hủy khoản thu']) assert.ok(audit.some((row) => row.action === action));
+  const ledger = (await call('GET', 'business-backup', undefined, actor)).value.data.ledger;
   const settings = await call('GET', 'settings', undefined, actor);
   assert.equal((await call('PUT', 'settings', {
     expected: settings.value.revision, data: { ...settings.value.data, companyAddress: 'Địa chỉ thử' },
@@ -299,8 +349,8 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   for (const company of [tk, wb, naviva]) {
     const sibling = clients.get(company.id);
     const cookie = cookies.get(company.id);
-    assert.equal((await sibling('GET', 'sales-book', undefined, cookie)).value, null);
-    assert.equal((await sibling('GET', 'receipt-ledger', undefined, cookie)).value, null);
+    assert.equal((await sibling('GET', 'sales-book', undefined, cookie)).value.book, null);
+    assert.equal((await sibling('GET', 'receipts', undefined, cookie)).value.count, 0);
     assert.deepEqual((await sibling('GET', 'customers', undefined, cookie)).value, []);
     assert.ok(!(await sibling('GET', 'activities', undefined, cookie)).value.some(({ action }) => action === 'Thao tác mẫu'));
   }
@@ -315,21 +365,22 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   assert.equal(exported.status, 200);
   assert.equal(exported.value.companyId, nhv.id);
   assert.equal(exported.value.data.salesBook.fileName, data.fileName);
+  assert.deepEqual(exported.value.data.ledger, ledger);
   assert.equal(Object.hasOwn(exported.value.data, 'accounts'), false);
   assert.equal(Object.hasOwn(exported.value.data, 'activities'), false);
   assert.equal((await call('POST', 'business-backup/restore', {
     backup: { ...exported.value, companyId: tk.id },
   }, actor)).status, 400);
-  assert.equal((await call('DELETE', 'business-data', { groups: ['salesBook'] }, actor)).status, 200);
-  assert.equal((await call('GET', 'sales-book', undefined, actor)).value, null);
-  assert.equal((await call('GET', 'receipt-ledger', undefined, actor)).value.data.revision, ledger.revision);
+  assert.equal((await call('DELETE', 'business-data', { groups: ['salesBook', 'ledger'] }, actor)).status, 200);
+  assert.equal((await call('GET', 'sales-book', undefined, actor)).value.book, null);
+  assert.equal((await call('GET', 'receipts', undefined, actor)).value.count, 0);
   assert.equal((await call('POST', 'business-backup/restore', { backup: exported.value }, actor)).status, 200);
-  assert.equal((await call('GET', 'sales-book', undefined, actor)).value.data.fileName, data.fileName);
+  assert.equal((await call('GET', 'sales-book', undefined, actor)).value.book.fileName, data.fileName);
   const automatic = (await call('GET', 'automatic-backups', undefined, actor)).value.backups[0];
   assert.ok(automatic, 'Expected the daily LAN backup to be available.');
   assert.equal((await call('POST', 'automatic-backups/' + encodeURIComponent('../' + automatic.fileName) + '/restore', undefined, actor)).status, 404);
   assert.equal((await call('POST', 'automatic-backups/' + automatic.fileName + '/restore', undefined, actor)).status, 200);
-  assert.equal((await call('GET', 'sales-book', undefined, actor)).value, null);
+  assert.equal((await call('GET', 'sales-book', undefined, actor)).value.book, null);
   assert.equal((await call('GET', 'session', undefined, actor)).status, 200);
   const savedSafety = await readdir(join(dataDirectories.get(nhv.id), 'backups', nhv.id));
   assert.equal(savedSafety.filter((file) => file.includes('truoc-khi-thay-doi')).length, 3);
@@ -368,8 +419,8 @@ test('daily SQLite snapshots keep fourteen copies per company and can be read in
       const db = new DatabaseSync(join(root, 'backups', profile.id, record.fileName), { readOnly: true });
       try {
         assert.equal(db.prepare('PRAGMA quick_check').get().quick_check, 'ok');
-        const row = db.prepare('SELECT payload_json FROM app_datasets WHERE dataset_key = ?').get(salesKey);
-        assert.equal(JSON.parse(row.payload_json).fileName, source);
+        const row = db.prepare('SELECT file_name FROM sales_book').get();
+        assert.equal(row.file_name, source);
       } finally {
         db.close();
       }

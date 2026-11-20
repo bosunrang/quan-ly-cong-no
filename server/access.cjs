@@ -76,12 +76,14 @@ async function verify(password, proof) {
   return known.length === observed.length && timingSafeEqual(known, observed);
 }
 
-function audit(db, account, category, action, detail = '') {
-  return db.appendActivity({
+function activityEntry(account, category, action, detail = '') {
+  return {
     id: randomUUID(), time: new Date().toISOString(), actorId: account.id,
     actorName: account.name, category, action, detail: detail.slice(0, 500),
-  });
+  };
 }
+
+function audit(db, ...args) { return db.appendActivity(activityEntry(...args)); }
 
 async function initializeAdministrator(db, password, username = 'admin') {
   const fields = accountFields({ name: 'Quản trị viên', username, role: 'admin' });
@@ -113,6 +115,11 @@ function createAccess(db, company, tls) {
       const minutes = Math.ceil((entry.lockedUntil - now) / MINUTE);
       fail(429, `Tài khoản tạm khóa do nhập sai nhiều lần. Thử lại sau ${minutes} phút.`);
     }
+  }
+  // Đăng nhập thành công được trả lại lượt đã tính trước cho địa chỉ đó.
+  function refundLoginAttempt(address) {
+    const byAddress = addressFailures.get(address);
+    if (byAddress && byAddress.count > 0) addressFailures.set(address, { ...byAddress, count: byAddress.count - 1 });
   }
   function recordLoginFailure(address, username, now) {
     const byAddress = addressFailures.get(address) ?? { count: 0, until: now + ADDRESS_WINDOW };
@@ -170,15 +177,18 @@ function createAccess(db, company, tls) {
         const password = payload.password;
         const username = typeof payload.username === 'string' ? payload.username.trim().toLowerCase() : '';
         checkLoginAllowed(address, username, now);
+        // Tính lượt trước khi băm mật khẩu (mất vài trăm mili giây): các yêu cầu gửi song song
+        // cũng bị đếm ngay nên không vượt được giới hạn theo máy hay theo tài khoản.
+        recordLoginFailure(address, username, now);
         const candidate = accountsOf(db).find((account) => account.username === username && account.active);
         if (typeof password !== 'string' || password.length > 128 ||
             !await verify(password, candidate?.proof ?? dummyProof) || !candidate) {
-          recordLoginFailure(address, username, Date.now());
           fail(401, 'Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản đã bị khóa.');
         }
         const latest = accountsOf(db).find((account) =>
           account.id === candidate.id && account.active && account.sessionVersion === candidate.sessionVersion);
         if (!latest) fail(401, 'Tài khoản vừa thay đổi. Hãy đăng nhập lại.');
+        refundLoginAttempt(address);
         accountFailures.delete(username);
         createSession(req, res, latest);
         audit(db, latest, 'session', 'Đăng nhập');
@@ -249,4 +259,4 @@ function createAccess(db, company, tls) {
   };
 }
 
-module.exports = { createAccess, initializeAdministrator, canOpen, audit, fail };
+module.exports = { createAccess, initializeAdministrator, canOpen, audit, activityEntry, fail };

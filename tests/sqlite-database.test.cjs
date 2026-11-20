@@ -25,6 +25,9 @@ test('SQLite giữ tài khoản và nhật ký khi xóa dữ liệu nghiệp v�
   }
 });
 
+const sampleSale = { rowNumber: 2, date: '2026-01-01', documentNumber: 'BH001', invoiceNumber: '1',
+  customerName: 'A', productName: 'B', unit: 'Hộp', quantity: 1, unitPrice: 100, salesAmount: 100, paymentTotal: 110 };
+
 function withDatabase(action) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cong-no-sqlite-test-'));
   const databasePath = path.join(directory, 'test.sqlite');
@@ -99,8 +102,9 @@ test('từ chối xóa riêng dữ liệu đang được sổ đối soát sử 
   const key = 'cong-no.receipt-ledger.v1';
   database.writeDataset(key, 1, {
     revision: 'original',
-    receipts: [{ id: 'receipt' }],
-    allocations: [{ receiptId: 'receipt' }],
+    receipts: [{ id: 'receipt', number: 'PT-1', customerId: 'c1', customerName: 'A', customerCode: 'A',
+      date: '2026-01-01', amount: 100, reference: '', createdAt: time }],
+    allocations: [{ id: 'a1', receiptId: 'receipt', date: '2026-01-01', createdAt: time, lines: [] }],
   });
   database.writeDataset('cong-no.misa-sales-book.v1', 1, { fileName: 'misa.xlsx', importedAt: time, rows: [] });
   assert.throws(() => database.changeBusinessData({ type: 'delete', groups: ['salesBook'] }), /đối soát/);
@@ -146,8 +150,8 @@ test('SQLite chỉ ghi đối soát khi phiên bản sổ thu và sổ bán hàn
 
 test('SQLite từ chối lưu sổ bán hàng dựa trên bản xem trước cũ', () => withDatabase((database, databasePath) => {
   const key = 'cong-no.misa-sales-book.v1';
-  const first = { fileName: 'first.xlsx', importedAt: 'first', rows: [{ rowNumber: 2 }] };
-  const second = { fileName: 'second.xlsx', importedAt: 'second', rows: [...first.rows, { rowNumber: 3 }] };
+  const first = { fileName: 'first.xlsx', importedAt: 'first', rows: [sampleSale] };
+  const second = { fileName: 'second.xlsx', importedAt: 'second', rows: [...first.rows, { ...sampleSale, rowNumber: 3 }] };
   const peer = openDatabase(databasePath);
   try {
     assert.equal(database.writeMisaSalesBook(null, first), true);
@@ -237,7 +241,7 @@ test('nâng từ schema 6 của app cũ: đổi khóa sang cong-no, giữ khách
   const employee = { id: 'EMP-1', code: 'NV-1', name: 'Nhân viên', phone: '', email: '', status: 'active', createdAt: timestamp };
   const assignment = { id: 'ASN-1', employeeId: employee.id, employeeName: employee.name, province: 'Hà Nội', source: 'direct', effectiveFrom: '2026-01-01', effectiveTo: null };
   const customer = { id: 'CUS-1', misaCode: 'KH-001', name: 'Khách hàng', group: 'state', taxCode: '0101', province: assignment.province, address: 'Địa chỉ', status: 'active', assignments: [assignment], createdAt: timestamp, updatedAt: timestamp };
-  const salesBook = { rows: [{ documentNumber: 'BH001' }] };
+  const salesBook = { fileName: 'legacy.xlsx', importedAt: timestamp, rows: [sampleSale] };
   const misaSummary = { units: [{ customerCode: customer.misaCode }] };
   database.writeDataset(DATASET_KEYS.customers, 2, [customer]);
   database.writeDataset(DATASET_KEYS.employees, 2, [employee]);
@@ -309,4 +313,97 @@ test('đọc bản sao lưu SQLite cũ (khóa mkt-cost) mà không sửa tệp s
   const untouched = new DatabaseSync(snapshot, { readOnly: true });
   assert.equal(untouched.prepare('PRAGMA user_version').get().user_version, 11);
   untouched.close();
+}));
+
+function schemaV12(sqlite) {
+  sqlite.exec(`
+    DROP TABLE reversals;
+    DROP TABLE allocation_lines;
+    DROP TABLE allocations;
+    DROP TABLE receipts;
+    DROP TABLE receipt_ledger;
+    DROP TABLE sales_lines;
+    DROP TABLE sales_book;
+    PRAGMA user_version = 12;
+  `);
+}
+
+test('v13 moves both legacy books, verifies amounts and keeps the v12 backup intact', () => withDatabase((database, location) => {
+  const fixtures = JSON.parse(fs.readFileSync(require('node:path').join(__dirname, 'fixtures/golden-backup.json'), 'utf8'));
+  const { salesBook, ledger } = fixtures.data;
+  const raw = new DatabaseSync(location);
+  try {
+    schemaV12(raw);
+    const insert = raw.prepare('INSERT INTO app_datasets VALUES (?, 1, ?, ?)');
+    insert.run('cong-no.misa-sales-book.v1', JSON.stringify(salesBook), fixtures.createdAt);
+    insert.run('cong-no.receipt-ledger.v1', JSON.stringify(ledger), fixtures.createdAt);
+  } finally { raw.close(); }
+  const upgraded = openDatabase(location);
+  try {
+    assert.equal(upgraded.status().schemaVersion, 13);
+    assert.deepEqual(upgraded.exportBusinessBackup().data.salesBook, salesBook);
+    assert.deepEqual(upgraded.exportBusinessBackup().data.ledger, ledger);
+    const sql = new DatabaseSync(location, { readOnly: true });
+    try {
+      assert.equal(sql.prepare('SELECT COUNT(*) n FROM app_datasets').get().n, 0);
+      assert.equal(sql.prepare('SELECT SUM(payment_total) n FROM sales_lines').get().n,
+        salesBook.rows.reduce((sum, row) => sum + (row.paymentTotal ?? 0), 0));
+      assert.equal(sql.prepare('SELECT SUM(amount) n FROM receipts').get().n,
+        ledger.receipts.reduce((sum, row) => sum + row.amount, 0));
+      assert.equal(sql.prepare('SELECT SUM(amount) n FROM allocation_lines').get().n,
+        ledger.allocations.flatMap((item) => item.lines).reduce((sum, row) => sum + row.amount, 0));
+    } finally { sql.close(); }
+    const snapshotName = fs.readdirSync(require('node:path').dirname(location)).find((name) => name.includes('truoc-nang-cap-v12'));
+    assert.ok(snapshotName);
+    const snapshotPath = require('node:path').join(require('node:path').dirname(location), snapshotName);
+    const bytes = fs.readFileSync(snapshotPath);
+    const old = openDatabase(snapshotPath, { readOnly: true });
+    try { assert.deepEqual(old.exportBusinessBackup().data.ledger, ledger); } finally { old.close(); }
+    assert.deepEqual(fs.readFileSync(snapshotPath), bytes);
+  } finally { upgraded.close(); }
+}));
+
+test('v13 nâng cấp sổ có trường lạ của bản cũ và cất lại nguyên văn bản JSON', () => withDatabase((database, location) => {
+  const raw = new DatabaseSync(location);
+  const sales = { fileName: 'source.xlsx', importedAt: '2026-01-01T00:00:00.000Z',
+    rows: [{ ...sampleSale, unknownLegacyAmount: 123 }] };
+  schemaV12(raw);
+  raw.prepare('INSERT INTO app_datasets VALUES (?, 1, ?, ?)').run('cong-no.misa-sales-book.v1', JSON.stringify(sales), sales.importedAt);
+  raw.close();
+  const upgraded = openDatabase(location);
+  try {
+    const { unknownLegacyAmount: _extra, ...line } = sales.rows[0];
+    assert.deepEqual(upgraded.readDataset('cong-no.misa-sales-book.v1').data.rows, [line]);
+  } finally { upgraded.close(); }
+  const check = new DatabaseSync(location, { readOnly: true });
+  try {
+    assert.equal(check.prepare('PRAGMA user_version').get().user_version, 13);
+    assert.deepEqual(JSON.parse(check.prepare('SELECT payload_json FROM legacy_books').get().payload_json), sales);
+  } finally { check.close(); }
+}));
+
+test('v13 hủy nâng cấp khi số tiền bị lệch và không tạo thêm bản sao khi mở lại', () => withDatabase((database, location) => {
+  const raw = new DatabaseSync(location);
+  const sales = { fileName: 'source.xlsx', importedAt: '2026-01-01T00:00:00.000Z', rows: [sampleSale] };
+  schemaV12(raw);
+  raw.prepare('INSERT INTO app_datasets VALUES (?, 1, ?, ?)').run('cong-no.misa-sales-book.v1', JSON.stringify(sales), sales.importedAt);
+  // Giả lập bảng mới ghi sai số tiền để kiểm tra bước so số tiền.
+  raw.exec(`CREATE TABLE sales_lines (
+      position INTEGER PRIMARY KEY, row_number INTEGER NOT NULL, date TEXT NOT NULL,
+      document_number TEXT NOT NULL, invoice_number TEXT NOT NULL, customer_name TEXT NOT NULL,
+      customer_code TEXT, product_name TEXT NOT NULL, unit TEXT NOT NULL, quantity REAL,
+      unit_price REAL, sales_amount REAL, payment_total REAL, origin_json TEXT, source_json TEXT);
+    CREATE TRIGGER wrong_money AFTER INSERT ON sales_lines BEGIN
+      UPDATE sales_lines SET payment_total = payment_total + 1 WHERE position = NEW.position; END;`);
+  raw.close();
+  assert.throws(() => openDatabase(location), /bị lệch.*Bản sao trước khi nâng cấp/s);
+  assert.throws(() => openDatabase(location), /bị lệch/);
+  const snapshots = fs.readdirSync(path.dirname(location)).filter((name) => name.includes('.truoc-nang-cap-v12-'));
+  assert.equal(snapshots.length, 1);
+  const unchanged = new DatabaseSync(location, { readOnly: true });
+  try {
+    assert.equal(unchanged.prepare('PRAGMA user_version').get().user_version, 12);
+    assert.deepEqual(JSON.parse(unchanged.prepare('SELECT payload_json FROM app_datasets').get().payload_json), sales);
+    assert.equal(unchanged.prepare('SELECT COUNT(*) AS n FROM sales_lines').get().n, 0);
+  } finally { unchanged.close(); }
 }));

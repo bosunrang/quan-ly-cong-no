@@ -82,26 +82,49 @@ Kiểm thử HTTP bao phủ ranh giới đăng nhập của từng route, quyề
 xung đột khi ghi. Bộ số tiền chuẩn đọc lại danh mục và hai sổ qua các route mới sau khi khôi phục SQLite.
 Cả 5 test số tiền chuẩn đều đạt với cùng tệp số chuẩn.
 
-## Giai đoạn 3. Bảng riêng cho sổ (lớn)
+## Giai đoạn 3. Bảng riêng cho sổ (lớn) — đã xong 19/11/2026
 
-- Migration v13: bảng `sales_lines` (đánh chỉ mục theo mã khách, ngày, chứng từ), `receipts`,
+- [x] Migration v13: bảng `sales_lines` (đánh chỉ mục theo mã khách, ngày, chứng từ), `receipts`,
   `allocations`, `allocation_lines`, `reversals`. Khi nâng cấp kiểm tra tổng tiền khớp với khối JSON
   cũ, lệch thì hủy.
-- Nhập MISA: máy trạm đọc Excel bằng worker như hiện tại; máy chủ có bước xem trước và bước xác nhận,
+- [x] Nhập MISA: máy trạm đọc Excel bằng worker như hiện tại; máy chủ có bước xem trước và bước xác nhận,
   ghi trong một giao dịch.
-- Ghi khoản thu, phân bổ, đảo phiếu theo từng thao tác, ghi nhật ký trong cùng giao dịch.
-- Định dạng tệp sao lưu JSON giữ nguyên để bản sao lưu cũ vẫn khôi phục được.
+- [x] Ghi khoản thu, phân bổ, đảo phiếu theo từng thao tác, ghi nhật ký trong cùng giao dịch.
+- [x] Định dạng tệp sao lưu JSON giữ nguyên để bản sao lưu cũ vẫn khôi phục được.
 
-**Xong khi:** `app_datasets` không còn chứa sổ bán hàng và sổ khoản thu; số tiền chuẩn khớp.
+Migration kiểm tra lại từng bản ghi và số tiền trước khi xóa hai khối JSON. Nếu sai lệch, SQLite
+hủy giao dịch và giữ phiên bản cũ. Đã kiểm thử nâng v12, hủy khi sai lệch, đọc bản sao SQLite v12
+và khôi phục tệp JSON cũ. Hai sổ được lưu hoàn toàn trong các bảng riêng.
 
-## Giai đoạn 4. Máy chủ tính, máy trạm hiển thị (lớn)
+## Giai đoạn 4. Máy chủ tính, máy trạm hiển thị (lớn) — đã xong 19/11/2026
 
-- Đóng gói `src/domain` cho máy chủ (build SSR bằng Vite ra `server/generated/domain.cjs`) để dùng
+- [x] Đóng gói `src/domain` cho máy chủ (build SSR bằng Vite ra `server/generated/domain.cjs`) để dùng
   chung công thức và chung test.
-- Route có lọc và phân trang ở máy chủ: công nợ phải thu, hóa đơn từng khách, Dashboard, biên bản
+- [x] Route có lọc và phân trang ở máy chủ: công nợ phải thu, hóa đơn từng khách, Dashboard, biên bản
   đối chiếu, danh sách khoản thu, ứng viên phân bổ.
-- Bỏ `datasetCache` và việc tải nguyên sổ về máy trạm. Thêm script đo hiệu năng như
+- [x] Bỏ `datasetCache` và việc tải nguyên sổ về máy trạm. Thêm script đo hiệu năng như
   `tests/performance` của app cước phí.
+
+Đã kiểm thử đủ 6 ngày chốt của Dashboard, số dư và phân bổ theo hóa đơn, cùng 18 biên bản đối chiếu
+qua API. Báo cáo tải theo khách hàng và kỳ đã chọn để in hoặc xuất Excel. Dòng hàng của từng hóa đơn
+chỉ tải khi mở chi tiết. Lệnh benchmark là pnpm test:performance. Mẫu 50.000 dòng trả trang Dashboard
+khoảng 1,8 KB và 10 khách hàng công nợ khoảng 3,4 KB.
+
+## Sửa sau rà soát giai đoạn 2–4 (20/11/2026)
+
+- Giới hạn đăng nhập sai tính lượt trước khi băm mật khẩu: gửi song song cũng bị chặn.
+- Khoản thu mang mã do máy trạm tạo: gửi lại không ghi thêm. Hủy khoản thu và hoàn tác phân bổ phải
+  kèm phiên bản sổ đang xem. Ghi sổ thu chỉ được thêm dòng hoặc thêm đảo phiếu.
+- Nâng cấp v13 chấp nhận sổ có trường lạ hoặc ký tự lỗi nếu số tiền khớp, cất nguyên văn bản JSON cũ
+  vào bảng `legacy_books`; sổ `null` được cất lại thay vì làm hỏng việc mở kho. Mở lại sau lỗi không
+  tạo thêm bản sao khi tệp chưa đổi; thông báo lỗi ghi rõ đường dẫn bản sao.
+- Mọi lệnh chạy build `server/generated/domain.cjs` trước; thiếu bản build thì báo rõ cách sửa. Khi dev,
+  sửa `src/domain` thì máy chủ tự build và nạp lại.
+- Máy chủ giữ sẵn sổ đã gom theo khách hàng (theo phiên bản sổ và danh mục), nhóm theo ngày chốt và
+  12 kỳ Dashboard gần nhất. Biên bản chỉ lấy dòng của đúng khách. Ghi sổ thu dùng lại bản sổ đã đọc.
+  Với sổ 50.000 dòng: đổi kỳ Dashboard 5–16 ms, tìm hóa đơn phân bổ khoảng 20 ms, biên bản khoảng 25 ms,
+  Dashboard sau khi ghi khoản thu khoảng 230 ms; lần đầu sau khi mở máy chủ hoặc nhập sổ khoảng 0,9 giây.
+- Lọc "dòng không còn trong tệp" khi nhập MISA dùng kết quả xem trước máy chủ đang giữ, không gửi lại tệp.
 
 ## Giai đoạn 5. Hoàn thiện (tùy chọn)
 

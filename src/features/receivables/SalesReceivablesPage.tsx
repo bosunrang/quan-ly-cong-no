@@ -1,18 +1,14 @@
 import { ArrowRight, Database, FilterX, Search } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import { readDirectory } from "../../domain/customers/directory.repository";
-import { useAsyncData } from "../../shared/hooks/useAsyncData";
-import type { MisaSalesBook } from "../../domain/misa/misa.sales-book";
-import { readMisaSalesBook } from "../../domain/misa/misa.sales-book.repository";
-import { buildSalesReceivables } from "../../domain/misa/misa.sales-receivables";
-import type { ReceiptLedger } from "../../domain/payments/receipt-ledger";
+import { useDeferredValue, useState } from "react";
+import type {
+	InvoiceCustomer,
+	ReceivablesView,
+} from "../../domain/reports/view-types";
 import {
-	readReceiptLedger,
-	subscribeReceiptLedger,
-} from "../../domain/payments/receipt-ledger.repository";
-import { projectReceiptReceivables } from "../../domain/payments/receipt-receivables";
-import { usePagination } from "../../shared/hooks/usePagination";
+	pageControls,
+	resourceWithQuery,
+	useServerData,
+} from "../../shared/hooks/useServerData";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { SalesInvoiceDrawer } from "./SalesInvoiceDrawer";
@@ -27,144 +23,44 @@ export function SalesReceivablesPage({
 	onOpenMisa?: () => void;
 	onOpenCustomers?: () => void;
 }) {
-	const [book, setBook] = useState<MisaSalesBook | null>();
-	const [error, setError] = useState("");
-	const [ledger, setLedger] = useState<ReceiptLedger>();
-	const [ledgerError, setLedgerError] = useState("");
-	const directory = useAsyncData(readDirectory);
 	const [query, setQuery] = useState("");
-	// Ô tìm kiếm cập nhật ngay; danh sách lọc lại sau đó để gõ phím không bị khựng.
 	const searchQuery = useDeferredValue(query);
 	const [employee, setEmployee] = useState("");
 	const [province, setProvince] = useState("");
-	const [openedId, setOpenedId] = useState("");
-
-	useEffect(() => {
-		let active = true;
-		readMisaSalesBook()
-			.then((result) => {
-				if (active) setBook(result);
-			})
-			.catch((reason: unknown) => {
-				if (active)
-					setError(
-						reason instanceof Error
-							? reason.message
-							: "Không thể đọc sổ bán hàng đã lưu.",
-					);
-			});
-		return () => {
-			active = false;
-		};
-	}, []);
-
-	useEffect(() => {
-		let request = 0;
-		const refresh = () => {
-			const current = ++request;
-			void readReceiptLedger()
-				.then((result) => {
-					if (request !== current) return;
-					setLedger(result);
-					setLedgerError("");
-				})
-				.catch((reason: unknown) => {
-					if (request !== current) return;
-					setLedger(undefined);
-					setLedgerError(
-						reason instanceof Error
-							? reason.message
-							: "Không thể đọc sổ đối soát.",
-					);
-				});
-		};
-		const unsubscribe = subscribeReceiptLedger(refresh);
-		window.addEventListener("focus", refresh);
-		refresh();
-		return () => {
-			request += 1;
-			unsubscribe();
-			window.removeEventListener("focus", refresh);
-		};
-	}, []);
-
-	const salesGroups = useMemo(
-		() =>
-			book && directory.data
-				? buildSalesReceivables(
-						book.rows,
-						directory.data.customers,
-						directory.data.employees,
-					)
-				: [],
-		[book, directory.data],
+	const [opened, setOpened] = useState<InvoiceCustomer>();
+	const [page, setPage] = useState(1);
+	const response = useServerData<ReceivablesView>(
+		resourceWithQuery("receivables", {
+			q: searchQuery,
+			employee,
+			province,
+			page,
+		}),
 	);
-	const { customers: groups, unmatchedCount: unmatchedAllocationCount } =
-		useMemo(
-			() =>
-				projectReceiptReceivables(salesGroups, book?.fileName ?? "", ledger),
-			[salesGroups, book?.fileName, ledger],
+	const data = response.data ?? response.previous;
+	if (response.error)
+		return (
+			<Notice tone="danger" title="Không thể đọc công nợ" announce>
+				{response.error}
+			</Notice>
 		);
-	const filterOptions = useMemo(() => {
-		const names = new Map<string, string>();
-		const provinces = new Set<string>();
-		let unmatchedCount = 0;
-		for (const group of salesGroups) {
-			if (group.employeeId) names.set(group.employeeId, group.employeeName);
-			if (group.province) provinces.add(group.province);
-			if (!group.catalogMatch) unmatchedCount += 1;
-		}
-		return {
-			employees: [...names].sort((left, right) =>
-				left[1].localeCompare(right[1], "vi"),
-			),
-			provinces: [...provinces].sort((left, right) =>
-				left.localeCompare(right, "vi"),
-			),
-			unmatchedCount,
-		};
-	}, [salesGroups]);
-	const visible = useMemo(() => {
-		const needle = normalizeVietnamese(searchQuery);
-		return groups.filter(
-			(group) =>
-				(!employee || (group.employeeId || missing) === employee) &&
-				(!province || (group.province || missing) === province) &&
-				normalizeVietnamese(`${group.name} ${group.customerCode}`).includes(
-					needle,
-				),
+	if (!data)
+		return (
+			<p className="panel empty-state" role="status">
+				Đang tải công nợ…
+			</p>
 		);
-	}, [groups, searchQuery, employee, province]);
-	const pagination = usePagination(visible);
-	const opened = openedId
-		? groups.find((group) => group.id === openedId)
-		: undefined;
+	const { filterOptions, unmatchedAllocationCount, missingTotalCount } = data;
+	const total = response.data?.rows.total ?? 0;
+	const pagination = {
+		...pageControls(response.data?.rows.page ?? page, data.rows.limit, total),
+		currentPage: response.data?.rows.page ?? page,
+		setCurrentPage: setPage,
+		resetPage: () => setPage(1),
+		pageItems: response.data?.rows.items ?? [],
+	};
 
-	if (directory.error)
-		return (
-			<Notice tone="danger" announce>
-				{directory.error}
-			</Notice>
-		);
-	if (directory.loading)
-		return (
-			<p className="panel empty-state" role="status">
-				Đang tải danh mục…
-			</p>
-		);
-	if (error)
-		return (
-			<Notice tone="danger" title="Không thể mở sổ bán hàng MISA" announce>
-				{error}
-			</Notice>
-		);
-	if (book === undefined)
-		return (
-			<p className="panel empty-state" role="status">
-				Đang đọc sổ bán hàng MISA…
-			</p>
-		);
-	if (!book?.rows.length) {
+	if (!data.hasBook) {
 		return (
 			<section className="panel empty-state receivable-empty">
 				<strong>Chưa có sổ bán hàng MISA</strong>
@@ -177,22 +73,9 @@ export function SalesReceivablesPage({
 		);
 	}
 
-	const missingTotalCount = visible.reduce(
-		(count, group) => count + group.missingTotalCount,
-		0,
-	);
-
 	return (
-		<div className="page-stack">
-			{ledgerError && (
-				<Notice
-					tone="danger"
-					title="Không thể cập nhật số đã thu và còn phải thu"
-					announce
-				>
-					{ledgerError}
-				</Notice>
-			)}
+		<div className="page-stack" aria-busy={response.loading}>
+			{response.loading && <p role="status">Đang tải kết quả…</p>}
 			{unmatchedAllocationCount > 0 && (
 				<Notice tone="warning">
 					{number.format(unmatchedAllocationCount)} chứng từ có phân bổ đang
@@ -231,7 +114,7 @@ export function SalesReceivablesPage({
 				<div className="data-source-copy">
 					<h2 id="receivables-heading">Hóa đơn theo khách hàng</h2>
 					<p>
-						<strong>{book.fileName}</strong>
+						<strong>{data.fileName}</strong>
 					</p>
 					<p>
 						Số đã thu lấy từ phân bổ đang hiệu lực. Số còn phải thu tính trên
@@ -344,7 +227,7 @@ export function SalesReceivablesPage({
 											type="button"
 											className="text-button receivable-customer-link table-customer-name"
 											aria-haspopup="dialog"
-											onClick={() => setOpenedId(group.id)}
+											onClick={() => setOpened(group)}
 										>
 											{group.name}
 										</button>
@@ -362,10 +245,10 @@ export function SalesReceivablesPage({
 									<td>{group.province || "—"}</td>
 									<td className="receivable-number">
 										{number.format(group.invoiceCount)}
-										{group.documents.length > group.invoiceCount && (
+										{group.documentCount > group.invoiceCount && (
 											<span className="cell-meta">
 												{number.format(
-													group.documents.length - group.invoiceCount,
+													group.documentCount - group.invoiceCount,
 												)}{" "}
 												chứng từ thiếu số HĐ
 											</span>
@@ -398,15 +281,15 @@ export function SalesReceivablesPage({
 							))}
 						</tbody>
 					</table>
-					{!visible.length && (
+					{!total && (
 						<p className="empty-state">Không tìm thấy khách hàng phù hợp.</p>
 					)}
 				</section>
 				<footer className="receivable-footer">
 					<span>
 						{number.format(pagination.firstVisible)}–
-						{number.format(pagination.lastVisible)} /{" "}
-						{number.format(visible.length)} khách hàng
+						{number.format(pagination.lastVisible)} / {number.format(total)}{" "}
+						khách hàng
 					</span>
 					<PaginationControls
 						currentPage={pagination.currentPage}
@@ -421,7 +304,7 @@ export function SalesReceivablesPage({
 				<SalesInvoiceDrawer
 					key={opened.id}
 					customer={opened}
-					onClose={() => setOpenedId("")}
+					onClose={() => setOpened(undefined)}
 				/>
 			)}
 		</div>

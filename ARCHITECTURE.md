@@ -34,14 +34,14 @@ src/
     hooks/             Hook dùng chung (phân trang, thông báo, lỗi lưu trữ)
     lib/               Ngày tháng, đọc Excel (Web Worker), tiện ích nhỏ
     api/client.ts      HTTP client bất đồng bộ dùng chung
-    storage/           Lỗi lưu trữ và bộ đệm sổ
+    storage/           Lỗi lưu trữ và nhật ký giao diện
     ui/                Component dùng chung: Dialog, DateInput, StatusPill, Notice...
   styles/
     index.css          Điểm nhập CSS duy nhất, quy định thứ tự cascade
     foundation/        Font, token, reset/base và typography
     layout/            App shell và responsive toàn ứng dụng
     shared/            Style của component dùng chung
-electron/              Vỏ desktop, SQLite (database.cjs), máy chủ loopback/LAN
+electron/              Vỏ desktop, SQLite (database.cjs, books.cjs), máy chủ loopback/LAN
 server/                Máy chủ dùng chung, định tuyến (http.cjs), API (index.cjs), sao lưu và khởi chạy dev
 tests/                 Vitest cho src; node --test cho SQLite và máy chủ LAN
 ```
@@ -101,15 +101,14 @@ Không có chế độ lưu nghiệp vụ trên trình duyệt. Thiếu endpoint
 không chuyển sang một bản dữ liệu khác. Bản sao lưu cục bộ tiếp tục dùng `companyId: null` để
 khôi phục được tệp JSON cũ.
 
-Sổ bán hàng và sổ khoản thu được giữ trong bộ đệm dùng chung (`datasetCache`); máy trạm chỉ tải lại
-khi dấu thay đổi của sổ khác bản đang giữ. Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md](docs/KE-HOACH-CHUYEN-KIEN-TRUC.md).
+Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md](docs/KE-HOACH-CHUYEN-KIEN-TRUC.md).
 
 ## Lưu trữ và an toàn dữ liệu
 
 - Dữ liệu ghi theo envelope `{ version, data }`; máy chủ và SQLite là nguồn duy nhất, không dùng bản sao trên trình duyệt thay thế.
 - Lỗi đọc dữ liệu báo lên toàn ứng dụng và không ghi đè gì. UI chỉ báo thành công sau khi repository xác nhận đã ghi.
 - Sao lưu tự động 14 bản theo ngày, và bản JSON trước mỗi thao tác xóa/khôi phục.
-- Schema hiện tại: 12. Bước v12 bỏ các bảng của app chiết khấu cũ và đổi khóa `mkt-cost.*` sang `cong-no.*`.
+- Schema hiện tại là 13. Bước v13 tách dòng bán hàng, khoản thu, phân bổ và đảo phiếu thành các bảng riêng. SQLite kiểm tra dữ liệu sau khi chuyển và hủy bước nâng cấp nếu có sai lệch.
   Bản sao lưu SQLite cũ được nâng cấp trên bản chép tạm khi đọc, tệp sao lưu gốc giữ nguyên.
 
 ## API và lưu danh mục
@@ -119,9 +118,17 @@ qua danh sách cho phép. Mỗi route khai báo thẻ quyền và giới hạn d
 đọc nội dung yêu cầu. Giao diện tải dữ liệu bất đồng bộ qua client dùng chung và dùng cookie HttpOnly.
 
 Khách hàng, nhân viên và phân công ghi theo bản ghi. Thao tác hàng loạt chỉ gửi các bản ghi được chọn
-và được xử lý trong một giao dịch. Máy chủ kiểm tra xung đột trên từng hồ sơ liên quan. Hai sổ lớn vẫn
-dùng JSON trong app_datasets và bộ đệm datasetCache. Tách bảng và chuyển tính toán lên máy chủ thuộc
-giai đoạn 3 và 4.
+và được xử lý trong một giao dịch. Máy chủ kiểm tra xung đột trên từng hồ sơ liên quan.
+
+Máy chủ lập bản xem trước MISA từ các dòng Excel đã đọc bằng worker. Khi xác nhận, máy chủ tính lại
+kế hoạch và so mã xem trước trong cùng giao dịch ghi. Nhập bổ sung khách hàng, ghép mã vào sổ và ghi
+nhật ký được lưu cùng nhau. Ghi khoản thu, phân bổ và hoàn tác dùng các route riêng, ghi sổ và nhật ký
+trong cùng giao dịch.
+
+Vite đóng gói nghiệp vụ TypeScript thành server/generated/domain.cjs. Máy chủ tính Dashboard, công nợ,
+biên bản theo kỳ, danh sách khoản thu và ứng viên phân bổ. Các danh sách trả theo trang. Chi tiết dòng
+hàng chỉ tải khi mở chứng từ. Các route báo cáo trả dữ liệu của một khách hàng theo kỳ được chọn.
+Định dạng tệp sao lưu JSON phiên bản 1 tiếp tục dùng cho xuất và khôi phục.
 
 `pnpm check` kiểm tra kiến trúc, nghiệp vụ, SQLite và LAN; `pnpm test:desktop` (sau `pnpm build`)
 chạy Electron với kho tạm để kiểm tra HTTP, dữ liệu SQLite cũ, đăng nhập, đổi mật khẩu và khôi phục cookie.

@@ -56,7 +56,7 @@ Bản cài lưu dữ liệu LAN tại `%APPDATA%\QuanLyCongNo\lan`. Nếu máy �
 
 ### Chạy bằng lệnh hoặc thử từ mã nguồn
 
-Trên máy chủ Windows dùng Node.js 22.13 trở lên và pnpm. Build lại sau khi cập nhật mã nguồn.
+Trên máy chủ Windows dùng Node.js 22.13 trở lên và pnpm. Build lại sau khi cập nhật mã nguồn. Bản build gồm giao diện và module nghiệp vụ dùng trên máy chủ.
 
 ```powershell
 pnpm install
@@ -120,9 +120,11 @@ pnpm check
 pnpm test:coverage
 pnpm build
 pnpm test:desktop
+pnpm test:golden
+pnpm test:performance
 ```
 
-`pnpm check` chạy lint, typecheck và toàn bộ test. Báo cáo coverage HTML được tạo tại `coverage/index.html`.
+`pnpm check` chạy lint, typecheck và các test tự động. `pnpm test:golden` đối chiếu số tiền mẫu qua API. `pnpm test:performance` đo thời gian và dung lượng phản hồi trên kho tạm 50.000 dòng. Báo cáo coverage HTML được tạo tại `coverage/index.html`.
 
 ## Quy ước kiến trúc
 

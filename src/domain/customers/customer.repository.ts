@@ -20,9 +20,6 @@ export function removeCustomer(customer: Customer) {
 		{ expected: customer.updatedAt },
 	);
 }
-export function importCustomerRecords(
-	customers: CustomerDraft[],
-	source: "imports" | "misa-supplements",
-) {
-	return api<Customer[]>("POST", `customers/${source}`, { customers });
+export function importCustomerRecords(customers: CustomerDraft[]) {
+	return api<Customer[]>("POST", "customers/imports", { customers });
 }

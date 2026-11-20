@@ -98,6 +98,8 @@ export function receiptLedgerAt(
 
 export type ReceiptDraft = Pick<Receipt, "date" | "amount" | "reference"> & {
 	number?: string;
+	/** Mã do máy trạm tạo một lần cho mỗi lần nhập; gửi lại cùng mã không ghi thêm khoản thu. */
+	id?: string;
 };
 
 const identity = (value: string) => value.trim().normalize("NFC").toUpperCase();
@@ -145,7 +147,7 @@ export function recordReceipt(
 		throw new Error("Số chứng từ thu này đã được ghi trong năm hạch toán.");
 
 	const receipt: Receipt = {
-		id: randomId(),
+		id: draft.id ?? randomId(),
 		number,
 		date,
 		customerId: customer.id,
@@ -173,15 +175,32 @@ export function getReceiptInvoiceSources(
 	receipt: Receipt,
 	customers: readonly Customer[],
 ): ReceiptInvoiceSource[] {
+	if (!identity(receipt.customerCode)) return [];
+	return receiptInvoiceSourcesFromGroups(
+		buildSalesReceivables(book.rows, customers, []),
+		book.fileName,
+		receipt,
+	);
+}
+
+/**
+ * Như getReceiptInvoiceSources nhưng dùng nhóm khách đã dựng sẵn từ sổ, để máy chủ không phải
+ * dựng lại toàn bộ sổ mỗi lần tìm hóa đơn cho một khoản thu.
+ */
+export function receiptInvoiceSourcesFromGroups(
+	groups: readonly SalesCustomerGroup[],
+	sourceFile: string,
+	receipt: Receipt,
+): ReceiptInvoiceSource[] {
 	const code = identity(receipt.customerCode);
 	if (!code) return [];
-	const group = buildSalesReceivables(book.rows, customers, []).find(
+	const group = groups.find(
 		(item) =>
 			item.customerId === receipt.customerId &&
 			identity(item.customerCode) === code,
 	);
 	if (!group) return [];
-	const invoices = getGroupReceiptInvoices(group, book.fileName);
+	const invoices = getGroupReceiptInvoices(group, sourceFile);
 	return group.documents.flatMap((document) => {
 		const invoice = invoices.get(document.id);
 		return invoice ? [{ invoice, document }] : [];

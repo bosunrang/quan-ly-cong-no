@@ -1,37 +1,25 @@
 import { GitMerge, Plus, ReceiptText, Search, Undo2, X } from "lucide-react";
-import {
-	useCallback,
-	useDeferredValue,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
-import { normalizeVietnamese } from "../../domain/customers/customer.province";
+import { useDeferredValue, useRef, useState } from "react";
 import { readCustomers } from "../../domain/customers/customer.repository";
-import type { MisaSalesBook } from "../../domain/misa/misa.sales-book";
-import { readMisaSalesBook } from "../../domain/misa/misa.sales-book.repository";
 import {
-	allocateReceipt,
-	getReceiptInvoiceSources,
-	getReceiptInvoices,
-	type ReceiptLedger,
-	recordReceipt,
-	reverseAllocation,
-	reverseReceipt,
-	sameInvoice,
-	totalsByReceipt,
-} from "../../domain/payments/receipt-ledger";
-import {
-	readReceiptLedger,
-	saveReceiptLedger,
-	subscribeReceiptLedger,
+	saveAllocation,
+	saveReceipt,
+	saveReversal,
 } from "../../domain/payments/receipt-ledger.repository";
+import type {
+	ReceiptDetail,
+	ReceiptList,
+	SalesMetadata,
+} from "../../domain/reports/view-types";
 import { useAsyncData } from "../../shared/hooks/useAsyncData";
-import { usePagination } from "../../shared/hooks/usePagination";
+import {
+	accountingChanged,
+	pageControls,
+	resourceWithQuery,
+	useServerData,
+} from "../../shared/hooks/useServerData";
 import { useTransientNotice } from "../../shared/hooks/useTransientNotice";
 import { formatDateOnly, formatTimestamp } from "../../shared/lib/date";
-import { captureActivity } from "../../shared/storage/activityLog";
 import { Drawer } from "../../shared/ui/Dialog/Drawer";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
@@ -62,10 +50,6 @@ const errorText = (reason: unknown) =>
 export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 	const directory = useAsyncData(readCustomers);
 	const customers = directory.data ?? emptyCustomers;
-	const [ledger, setLedger] = useState<ReceiptLedger>();
-	const [book, setBook] = useState<MisaSalesBook | null>();
-	const [loadError, setLoadError] = useState("");
-	const [bookError, setBookError] = useState("");
 	const [query, setQuery] = useState("");
 	// Ô tìm kiếm cập nhật ngay; danh sách lọc lại sau đó để gõ phím không bị khựng.
 	const searchQuery = useDeferredValue(query);
@@ -76,101 +60,27 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 	const { notice, showNotice, dismissNotice } = useTransientNotice(4000);
 	const [busy, setBusy] = useState(false);
 	const saving = useRef(false);
-	const ledgerRequest = useRef(0);
-
-	const refreshLedger = useCallback(() => {
-		if (saving.current) return;
-		const request = ++ledgerRequest.current;
-		readReceiptLedger()
-			.then((result) => {
-				if (request !== ledgerRequest.current) return;
-				setLedger(result);
-				setLoadError("");
-			})
-			.catch((reason) => {
-				if (request === ledgerRequest.current) setLoadError(errorText(reason));
-			});
-	}, []);
-
-	useEffect(() => {
-		const unsubscribe = subscribeReceiptLedger(refreshLedger);
-		window.addEventListener("focus", refreshLedger);
-		refreshLedger();
-		return () => {
-			++ledgerRequest.current;
-			unsubscribe();
-			window.removeEventListener("focus", refreshLedger);
-		};
-	}, [refreshLedger]);
-
-	useEffect(() => {
-		let active = true;
-		readMisaSalesBook()
-			.then((result) => {
-				if (active) setBook(result);
-			})
-			.catch((reason) => {
-				if (active) setBookError(errorText(reason));
-			});
-		return () => {
-			active = false;
-		};
-	}, []);
-
-	const allocated = useMemo(
-		() => (ledger ? totalsByReceipt(ledger) : new Map<string, number>()),
-		[ledger],
+	const [page, setPage] = useState(1);
+	const list = useServerData<ReceiptList>(
+		resourceWithQuery("receipts", { page, q: searchQuery, status }),
 	);
-	const rows = useMemo(() => {
-		if (!ledger) return [];
-		const needle = normalizeVietnamese(searchQuery);
-		return [...ledger.receipts]
-			.sort(
-				(left, right) =>
-					right.date.localeCompare(left.date) ||
-					right.createdAt.localeCompare(left.createdAt),
-			)
-			.map((receipt) => {
-				const remaining = receipt.reversal
-					? 0
-					: receipt.amount - (allocated.get(receipt.id) ?? 0);
-				const state: keyof typeof statuses = receipt.reversal
-					? "reversed"
-					: remaining === 0
-						? "closed"
-						: remaining === receipt.amount
-							? "open"
-							: "partial";
-				return { receipt, remaining, state };
-			})
-			.filter(
-				({ receipt, remaining, state }) =>
-					(status === "active"
-						? state !== "reversed"
-						: status === "open"
-							? remaining > 0
-							: status === state) &&
-					normalizeVietnamese(
-						`${receipt.number} ${receipt.customerName} ${receipt.customerCode} ${receipt.reference}`,
-					).includes(needle),
-			);
-	}, [ledger, allocated, searchQuery, status]);
-	const pagination = usePagination(rows);
-	const selected = ledger?.receipts.find(
-		(receipt) => receipt.id === selectedId,
+	const selectedData = useServerData<ReceiptDetail>(
+		selectedId ? `receipts/${encodeURIComponent(selectedId)}` : undefined,
 	);
-	const invoiceSources = useMemo(
-		() =>
-			selected && book
-				? getReceiptInvoiceSources(book, selected, customers)
-				: [],
-		[book, selected, customers],
-	);
-	const history =
-		ledger?.allocations
-			.filter((item) => item.receiptId === selectedId)
-			.slice()
-			.reverse() ?? [];
+	const sales = useServerData<SalesMetadata | null>("sales-book/status");
+	const book = sales.data;
+	const bookError = sales.error;
+	const selected = selectedData.data?.receipt;
+	const history = selectedData.data?.allocations ?? [];
+	const total = list.data?.total ?? 0;
+	const pagination = {
+		...pageControls(list.data?.page ?? page, 20, total),
+		currentPage: list.data?.page ?? page,
+		setCurrentPage: setPage,
+		resetPage: () => setPage(1),
+		pageItems: list.data?.items ?? [],
+	};
+
 	const reversing =
 		action?.kind === "reverse"
 			? history.find((item) => item.id === action.id)
@@ -184,55 +94,21 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 		setAction(next);
 	}
 
-	async function commit(
-		update: (
-			current: ReceiptLedger,
-			latestBook: MisaSalesBook | null,
-		) => ReceiptLedger | Promise<ReceiptLedger>,
-		message: string,
-		{ requireBook = false, detail = "" } = {},
-	) {
+	async function commit(write: () => Promise<string>, message: string) {
 		if (saving.current) return;
-		const log = captureActivity();
 		saving.current = true;
-		++ledgerRequest.current;
 		setBusy(true);
 		setError("");
 		try {
-			const current = await readReceiptLedger();
-			setLedger(current);
-			const latestBook = requireBook ? await readMisaSalesBook() : null;
-			if (
-				requireBook &&
-				(!latestBook || latestBook.importedAt !== book?.importedAt)
-			) {
-				setBook(latestBook);
-				throw new Error(
-					"Sổ bán hàng MISA đã thay đổi. Hãy mở lại cửa sổ phân bổ để kiểm tra chứng từ.",
-				);
-			}
-			const saved = await saveReceiptLedger(
-				await update(current, latestBook),
-				latestBook?.importedAt,
-			);
-			const receipt =
-				action?.kind === "create" ? saved.receipts.at(-1) : selected;
-			void log(
-				"payments",
-				message.replace(/\.$/, ""),
-				[receipt?.number, receipt?.customerName, detail]
-					.filter(Boolean)
-					.join(" · "),
-			);
-			setLedger(saved);
+			await write();
 			setAction(null);
 			showNotice(message);
+			accountingChanged();
 		} catch (reason) {
 			setError(errorText(reason));
 		} finally {
 			saving.current = false;
 			setBusy(false);
-			refreshLedger();
 		}
 	}
 
@@ -248,20 +124,8 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 				Đang tải khách hàng…
 			</p>
 		);
-	if (!ledger && loadError)
-		return (
-			<Notice tone="danger" title="Không thể mở sổ đối soát" announce>
-				{loadError}
-			</Notice>
-		);
-	if (!ledger)
-		return (
-			<p role="status" className="panel empty-state">
-				Đang đọc sổ đối soát…
-			</p>
-		);
+	const allocatedAmount = selectedData.data?.allocated ?? 0;
 
-	const allocatedAmount = allocated.get(selectedId) ?? 0;
 	const remaining =
 		selected && !selected.reversal ? selected.amount - allocatedAmount : 0;
 	const closeAction = () => setAction(null);
@@ -309,7 +173,11 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 					)}
 				</Notice>
 			)}
-			<section className="panel payment-panel" aria-label="Danh sách khoản thu">
+			<section
+				className="panel payment-panel"
+				aria-label="Danh sách khoản thu"
+				aria-busy={list.loading}
+			>
 				<div className="payment-toolbar">
 					<label className="table-search">
 						<Search className="icon-size-16" />
@@ -406,10 +274,10 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 									</td>
 								</tr>
 							))}
-							{!rows.length && (
+							{!total && (
 								<tr>
 									<td colSpan={6}>
-										{ledger.receipts.length
+										{(list.data?.count ?? 0)
 											? "Không có khoản thu theo bộ lọc."
 											: "Chưa ghi khoản thu nào."}
 									</td>
@@ -420,8 +288,8 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 				</section>
 				<footer className="payment-table-footer">
 					<span>
-						{pagination.firstVisible}–{pagination.lastVisible} / {rows.length}{" "}
-						khoản thu
+						{pagination.firstVisible}–{pagination.lastVisible} / {total} khoản
+						thu
 					</span>
 					<PaginationControls
 						currentPage={pagination.currentPage}
@@ -432,6 +300,14 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 					/>
 				</footer>
 			</section>
+			{(list.error || selectedData.error) && (
+				<Notice tone="danger" announce>
+					{list.error || selectedData.error}
+				</Notice>
+			)}
+			{(list.loading || selectedData.loading) && (
+				<p role="status">Đang tải khoản thu…</p>
+			)}
 			{selected && (
 				<Drawer
 					ariaLabelledBy="receipt-detail-title"
@@ -485,7 +361,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 								{selected.reversal.reason}
 							</Notice>
 						)}
-						{!invoiceSources.length && remaining > 0 && (
+						{!selectedData.data?.hasInvoices && remaining > 0 && (
 							<Notice tone="info">
 								Chưa có chứng từ MISA phù hợp cho khoản thu này.
 							</Notice>
@@ -560,7 +436,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 						<button
 							type="button"
 							className="button primary"
-							disabled={remaining <= 0 || !invoiceSources.length}
+							disabled={remaining <= 0 || !selectedData.data?.hasInvoices}
 							onClick={() => openAction({ kind: "allocate" })}
 						>
 							<GitMerge className="icon-size-16" /> Phân bổ khoản thu
@@ -571,67 +447,39 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 			{action?.kind === "create" && (
 				<ReceiptFormDialog
 					customers={customers}
-					receipts={ledger.receipts}
 					busy={busy}
 					error={error}
 					onClose={closeAction}
 					onSave={(customer, fields) =>
-						void commit(async (current) => {
-							const latest = (await readCustomers()).find(
-								(item) => item.id === customer.id,
-							);
-							if (!latest || latest.misaCode !== customer.misaCode)
-								throw new Error(
-									"Khách hàng đã thay đổi. Mở lại màn Đối soát để cập nhật danh mục.",
-								);
-							return recordReceipt(current, latest, fields);
-						}, "Đã ghi khoản thu.")
+						void commit(
+							() => saveReceipt(customer, fields),
+							"Đã ghi khoản thu.",
+						)
 					}
 				/>
 			)}
-			{action?.kind === "allocate" && selected && (
+			{action?.kind === "allocate" && selected && selectedData.data && (
 				<ReceiptAllocationDialog
-					key={book?.importedAt}
 					receipt={selected}
-					invoiceSources={invoiceSources}
-					ledger={ledger}
+					remaining={remaining}
 					busy={busy}
 					error={error}
 					onClose={closeAction}
-					onSave={(date, lines) =>
-						void commit(
-							async (current, latestBook) => {
-								const receipt = current.receipts.find(
-									(item) => item.id === selected.id,
-								);
-								const candidates =
-									latestBook && receipt
-										? getReceiptInvoices(
-												latestBook,
-												receipt,
-												await readCustomers(),
-											)
-										: [];
-								if (
-									lines.some(
-										({ invoice }) =>
-											!candidates.some((candidate) =>
-												sameInvoice(invoice, candidate),
-											),
-									)
-								)
-									throw new Error(
-										"Chứng từ hoặc mã khách hàng đã thay đổi. Kiểm tra lại danh mục và sổ MISA.",
-									);
-								return allocateReceipt(current, selected.id, date, lines);
-							},
-							"Đã lưu phân bổ.",
-							{
-								requireBook: true,
-								detail: `${lines.length} chứng từ · ${formatDateOnly(date)}`,
-							},
-						)
-					}
+					onSave={(date, lines) => {
+						const detail = selectedData.data;
+						if (detail)
+							void commit(
+								() =>
+									saveAllocation(
+										selected.id,
+										date,
+										lines,
+										detail.revision,
+										detail.bookStamp,
+									),
+								"Đã lưu phân bổ.",
+							);
+					}}
 				/>
 			)}
 			{undoTarget && (
@@ -640,16 +488,22 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 					busy={busy}
 					error={error}
 					onClose={closeAction}
-					onSave={(date, reason) =>
-						void commit(
-							(current) =>
-								reversing
-									? reverseAllocation(current, reversing.id, date, reason)
-									: reverseReceipt(current, undoTarget.id, date, reason),
-							reversing ? "Đã hoàn tác phân bổ." : "Đã hủy khoản thu.",
-							{ detail: `${formatDateOnly(date)} · ${reason.trim()}` },
-						)
-					}
+					onSave={(date, reason) => {
+						// Hủy theo đúng phiên bản sổ đang xem: nếu người khác vừa phân bổ thêm thì máy chủ từ chối.
+						const revision = selectedData.data?.revision;
+						if (revision)
+							void commit(
+								() =>
+									saveReversal(
+										reversing ? "allocations" : "receipts",
+										undoTarget.id,
+										date,
+										reason,
+										revision,
+									),
+								reversing ? "Đã hoàn tác phân bổ." : "Đã hủy khoản thu.",
+							);
+					}}
 				/>
 			)}
 		</div>

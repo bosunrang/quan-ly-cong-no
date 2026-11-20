@@ -113,11 +113,6 @@ function registerDirectoryRoutes(router, db, readers) {
       fail(400, 'Danh sách nhập khách hàng không hợp lệ.');
     return addCustomers(body.customers, true);
   }, options(['customers'], BATCH));
-  router.post(customers + '/misa-supplements', ({ body }) => {
-    if (!Array.isArray(body.customers) || !body.customers.length)
-      fail(400, 'Danh sách bổ sung khách hàng không hợp lệ.');
-    return addCustomers(body.customers, false);
-  }, options(['misa'], BATCH));
   router.patch(customers + '/:id', ({ body, params }) => change(db, (tx) => {
     const current = customerAt(tx, params.id, body.expected);
     const item = customerData(body.customer, current);

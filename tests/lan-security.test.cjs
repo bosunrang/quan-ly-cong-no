@@ -66,6 +66,42 @@ test('giới hạn đăng nhập sai theo máy, đăng nhập đúng không xóa
   }
 });
 
+test('gửi song song nhiều lần đăng nhập sai vẫn bị giới hạn theo máy và theo tài khoản', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    const password = 'mat-khau-dung-123';
+    await initializeAdministrator(db, password);
+    const access = createAccess(db, company, false);
+    // 30 yêu cầu sai cùng lúc từ một máy: chỉ 15 lượt đầu được kiểm tra mật khẩu.
+    const fixed = { headers: {}, socket: { remoteAddress: '10.8.8.8' } };
+    const burst = await Promise.all(Array.from({ length: 30 }, (_, index) =>
+      statusOf(access.handle('login', { username: `khong-co-${index}`, password: 'sai-mat-khau-1' }, fixed, response()))));
+    assert.equal(burst.filter((status) => status === 401).length, 15);
+    assert.equal(burst.filter((status) => status === 429).length, 15);
+    // 20 yêu cầu sai cùng lúc vào admin từ nhiều máy: tài khoản bị khóa, mật khẩu đúng cũng bị chặn.
+    const account = await Promise.all(Array.from({ length: 20 }, (_, index) =>
+      statusOf(access.handle('login', { username: 'admin', password: `sai-${index}-mat-khau` }, request(), response()))));
+    assert.ok(account.filter((status) => status === 401).length <= 6, account.join(','));
+    assert.equal(await statusOf(access.handle('login', { username: 'admin', password }, request(), response())), 429);
+  } finally {
+    db.close();
+  }
+});
+
+test('đăng nhập đúng trả lại lượt đã tính cho máy', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    const password = 'mat-khau-dung-123';
+    await initializeAdministrator(db, password);
+    const access = createAccess(db, company, false);
+    const fixed = { headers: {}, socket: { remoteAddress: '10.7.7.7' } };
+    for (let attempt = 0; attempt < 20; attempt++)
+      assert.equal(await statusOf(access.handle('login', { username: 'admin', password }, fixed, response())), 200);
+  } finally {
+    db.close();
+  }
+});
+
 const customer = {
   id: 'c1', misaCode: 'KH001', name: 'Khách A', group: 'unknown', taxCode: '', province: 'Hà Nội',
   address: '', status: 'active', assignments: [],

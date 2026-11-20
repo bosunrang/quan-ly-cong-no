@@ -1,56 +1,68 @@
-import type { DatabaseEnvelope } from "../../shared/storage/storage.types";
-import {
-	forgetCachedDataset,
-	readCachedDataset,
-} from "../../shared/storage/datasetCache";
 import { api } from "../../shared/api/client";
-import type { MisaSalesBook } from "./misa.sales-book";
+import type {
+	Page,
+	SalesImportReview,
+	SalesMetadata,
+	SalesSupplementReview,
+} from "../reports/view-types";
+import type { MisaSalesLine } from "./misa.sales-book";
+import type { MisaSalesImportPreview } from "./sales-import.model";
+import type { SalesImportOptions } from "./sales-merge";
 
-export const MISA_SALES_BOOK_KEY = "cong-no.misa-sales-book.v1";
-export async function readMisaSalesBook(): Promise<MisaSalesBook | null> {
-	return readCachedDataset("sales-book", decodeSalesBook);
-}
+export type ImportChoices = Pick<
+	SalesImportOptions,
+	"applyChanges" | "removeMissing"
+>;
 
-function decodeSalesBook(envelope: DatabaseEnvelope | null) {
-	if (!envelope) return null;
-	const { version, data } = envelope;
-	if (
-		version !== 1 ||
-		!data ||
-		typeof data !== "object" ||
-		!("rows" in data) ||
-		!Array.isArray(data.rows)
-	) {
-		throw new Error("Dữ liệu sổ bán hàng đã lưu không đúng cấu trúc.");
-	}
-	return data as MisaSalesBook;
-}
-
-export async function writeMisaSalesBook(
-	book: MisaSalesBook,
-	expectedImportedAt: string | null,
-): Promise<MisaSalesBook> {
-	const next = {
-		...book,
-		importedAt: new Date(
-			Math.max(Date.now(), (Date.parse(expectedImportedAt ?? "") || 0) + 1),
-		).toISOString(),
+function payload(
+	source: MisaSalesImportPreview,
+	mode: "import" | "supplement",
+	choices?: ImportChoices,
+) {
+	return {
+		mode,
+		book: source.book,
+		duplicateOf: [...source.duplicateOf],
+		customerAddresses: [...(source.customerAddresses ?? [])],
+		...choices,
 	};
-	const changed = () =>
-		new Error(
-			"Sổ bán hàng vừa thay đổi. Kiểm tra lại dữ liệu trước khi xác nhận.",
-		);
-	forgetCachedDataset("sales-book");
-	if (
-		!(await api<boolean>("PUT", "sales-book", {
-			expected: expectedImportedAt,
-			data: next,
-		}))
-	)
-		throw changed();
-	return next;
 }
 
-export async function readAllocatedDocuments() {
-	return new Set(await api<string[]>("GET", "sales-book/allocated-documents"));
+export function previewSalesImport(
+	source: MisaSalesImportPreview,
+	choices: ImportChoices,
+) {
+	return api<SalesImportReview>(
+		"POST",
+		"sales-imports/preview",
+		payload(source, "import", choices),
+	);
+}
+export function previewSalesSupplement(source: MisaSalesImportPreview) {
+	return api<SalesSupplementReview>(
+		"POST",
+		"sales-imports/preview",
+		payload(source, "supplement"),
+	);
+}
+export function confirmSalesImport(
+	source: MisaSalesImportPreview,
+	mode: "import" | "supplement",
+	token: string,
+	choices?: ImportChoices,
+) {
+	return api<{ book: SalesMetadata | null }>("POST", "sales-imports", {
+		...payload(source, mode, choices),
+		token,
+	});
+}
+
+/** Một trang "dòng không còn trong tệp" của bản xem trước mà máy chủ đang giữ theo mã. */
+export function readMissingSales(token: string, page: number, query: string) {
+	const params = new URLSearchParams({ page: String(page), q: query });
+	return api<Page<MisaSalesLine>>(
+		"POST",
+		`sales-imports/missing?${params.toString()}`,
+		{ token },
+	);
 }

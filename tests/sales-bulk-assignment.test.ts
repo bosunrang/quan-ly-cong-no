@@ -7,11 +7,8 @@ import App from "../src/app/App";
 import type { Customer } from "../src/domain/customers/customer.model";
 import { readCustomers } from "../src/domain/customers/customer.repository";
 import type { SalesEmployee } from "../src/domain/employees/employee.model";
-import { readMisaSalesBook } from "../src/domain/misa/misa.sales-book.repository";
-
-vi.mock("../src/domain/misa/misa.sales-book.repository", () => ({
-	readMisaSalesBook: vi.fn(),
-}));
+import { emptyReceiptLedger } from "../src/domain/payments/receipt-ledger";
+import { receivablesView } from "./fixtures/receivables-view";
 
 it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nhận", async () => {
 	const date = "2025-01-01T00:00:00.000Z";
@@ -60,6 +57,7 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 		value: vi.fn(),
 	});
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+	let currentCustomers = customers;
 	const { datasets, api } = directoryServer(customers, [employee, other]);
 	api.mockImplementation(async (_method, operation, payload) => {
 		if (operation === "session") {
@@ -87,13 +85,22 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 				args.effectiveFrom,
 			);
 			datasets.set("customers", saved);
+			currentCustomers = saved;
 			return saved.filter(
 				(record, index) => record !== customers[index],
 			) as never;
 		}
+		if (operation.startsWith("receivables"))
+			return receivablesView(
+				operation,
+				book,
+				currentCustomers,
+				emptyReceiptLedger,
+				[employee, other],
+			) as never;
 		return datasets.get(operation) as never;
 	});
-	vi.mocked(readMisaSalesBook).mockResolvedValue({
+	const book = {
 		fileName: "MISA.xlsx",
 		importedAt: date,
 		rows: customers.map(({ name, misaCode }, index) => ({
@@ -110,7 +117,7 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 			paymentTotal: 100,
 			source: { customerCode: misaCode, invoiceSeries: "", invoiceDate: "" },
 		})),
-	});
+	};
 	const container = document.createElement("div");
 	document.body.append(container);
 	const root = createRoot(container);
