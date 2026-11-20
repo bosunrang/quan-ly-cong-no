@@ -65,12 +65,18 @@ pnpm build
 
 Trên mỗi máy, chạy lệnh `lan:init-admin` một lần cho từng công ty do máy đó phục vụ. Lệnh in tên đăng nhập `admin` và một mật khẩu tạm thời. Người dùng đổi mật khẩu khi đăng nhập lần đầu. Chạy lệnh `lan` mỗi khi cần khởi động máy chủ.
 
-**Máy chung của Nam Hưng Việt và Naviva Group**
+Mỗi lệnh `lan` chạy đúng một công ty trên cổng riêng của công ty đó; luôn ghi rõ `--company`.
+
+**Máy chung của Nam Hưng Việt và Naviva Group** (hai tiến trình, mỗi tiến trình một cửa sổ dòng lệnh)
 
 ```powershell
 pnpm lan:init-admin --company=nam-hung-viet
 pnpm lan:init-admin --company=naviva-group
-pnpm lan
+pnpm lan --company=nam-hung-viet
+```
+
+```powershell
+pnpm lan --company=naviva-group
 ```
 
 **Máy riêng của Tường Khuê**

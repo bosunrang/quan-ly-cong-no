@@ -136,7 +136,7 @@ từ xa qua Cloudflare Tunnel, `ARCHITECTURE.md` với đầy đủ quy tắc nh
 | Câu hỏi | Quyết định |
 |---|---|
 | Desktop dùng một máy cũng bắt buộc đăng nhập? | Có, như app cước phí |
-| Một máy chủ nhiều công ty theo đường dẫn (hiện tại) hay mỗi công ty một cổng (app cước phí)? | Giữ như hiện tại |
+| Chạy các công ty thế nào? | Như app cước phí: mỗi công ty một máy chủ, một tệp dữ liệu, một tiến trình và một cổng (Nam Hưng Việt, Tường Khuê, Winbio 3300 trên máy của mình; Naviva 3301 trên máy chung với Nam Hưng Việt) |
 | Bỏ chế độ chỉ chạy trên trình duyệt? | Có |
 | Đăng nhập bằng cookie HttpOnly (hiện tại) hay token trong `sessionStorage` (app cước phí)? | Giữ cookie, an toàn hơn |
 

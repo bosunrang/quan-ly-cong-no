@@ -1,6 +1,6 @@
 const { randomBytes } = require('node:crypto');
 const { resolve } = require('node:path');
-const { getCompany, sharedHostCompanies } = require('./companies.cjs');
+const { companies, getCompany } = require('./companies.cjs');
 const { createLanServer, openCompanyDatabase, listenLanServer, stopLanServer } = require('./lan.cjs');
 const { initializeAdministrator } = require('./access.cjs');
 const { lanOptions } = require('./lan-options.cjs');
@@ -9,10 +9,13 @@ const defaultDirectory = resolve(__dirname, '..', 'data', 'lan');
 
 async function main() {
   const option = process.argv.find((arg) => arg.startsWith('--company='));
-  const company = option ? getCompany(option.slice('--company='.length)) : undefined;
+  // Mỗi tiến trình chỉ chạy một công ty trên cổng riêng của công ty đó (như app cước phí).
+  // Máy chung của Nam Hưng Việt và Naviva chạy hai tiến trình.
+  if (!option)
+    throw new Error('Chọn công ty bằng --company=<mã-công-ty>: ' + companies.map(({ id }) => id).join(', ') + '.');
+  const company = getCompany(option.slice('--company='.length));
   const settings = lanOptions(process.argv, defaultDirectory);
   if (process.argv.includes('--init-admin')) {
-    if (!company) throw new Error('Chỉ định công ty bằng --company=<mã-công-ty>.');
     const db = openCompanyDatabase(settings.directory, company);
     const password = randomBytes(12).toString('base64url');
     try { await initializeAdministrator(db, password); } finally { db.close(); }
@@ -21,7 +24,7 @@ async function main() {
   }
   const servers = [];
   try {
-    for (const profile of company ? [company] : sharedHostCompanies) {
+    for (const profile of [company]) {
       const { port } = profile;
       const server = createLanServer({ ...settings, company: profile });
       await listenLanServer(server, port, settings.host);
