@@ -133,7 +133,7 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
   đối chiếu toàn bộ tài khoản trước khi bỏ khối cũ. Bảng `sessions` lưu bản băm token, tài khoản,
   phiên bản phiên và thời hạn; phiên còn hiệu lực được giữ khi khởi động lại máy chủ.
   Thông tin tài khoản, quyền, mật khẩu đã băm và các trường bổ sung được giữ nguyên khi nâng cấp.
-- Bước v15 (bản 0.1.4) thêm cột số dư đầu kỳ nhập tay cho khách hàng. Bước v16 bỏ nghiệp vụ này:
+- Bước v15 (chỉ có ở bản phát triển sau 0.1.3, chưa phát hành) thêm cột số dư đầu kỳ nhập tay cho khách hàng. Bước v16 bỏ nghiệp vụ này:
   số dư đã nhập được cất nguyên văn vào bảng `legacy_opening_balances` rồi cột bị xóa. Công nợ chỉ
   tính từ sổ bán hàng MISA và khoản thu; phân bổ cũ vào số dư đầu kỳ (nếu có) hiện là phân bổ chưa khớp
   sổ MISA và được hoàn tác ở màn Đối soát khoản thu.
