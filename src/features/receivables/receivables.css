@@ -127,6 +127,37 @@
 	white-space: nowrap;
 }
 
+.receivable-invoice-summary {
+	flex: none;
+	padding: var(--space-12) var(--space-15);
+}
+
+.receivable-invoice-summary dl {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--layout-150)), 1fr));
+	gap: var(--space-12);
+	margin: 0;
+}
+
+.receivable-invoice-summary dt {
+	color: var(--muted);
+	font-size: var(--type-body-sm);
+}
+
+.receivable-invoice-summary dd {
+	margin: var(--space-4) 0 0;
+	font-size: var(--type-heading-sm);
+	font-variant-numeric: tabular-nums;
+	font-weight: 750;
+	overflow-wrap: anywhere;
+}
+
+.receivable-invoice-summary p {
+	margin: var(--space-8) 0 0;
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
 .receivable-invoice-table {
 	flex: 1;
 	min-height: 0;

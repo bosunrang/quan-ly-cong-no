@@ -11,8 +11,16 @@ import {
 	receiptLedgerAt,
 	totalsByReceipt,
 } from "../payments/receipt-ledger";
-import { projectReceiptReceivables } from "../payments/receipt-receivables";
+import {
+	type CustomerReceivables,
+	projectReceiptReceivables,
+} from "../payments/receipt-receivables";
 import { receiptTrend } from "./receipt-trend";
+
+export type CustomerInvoiceTotals = Pick<
+	CustomerReceivables,
+	"balance" | "unverifiedCount"
+>;
 
 export function buildDashboardSummary(
 	book: MisaSalesBook | null,
@@ -52,6 +60,12 @@ export function buildDashboardSummary(
 	const hasVerifiedDocuments = projected.customers.some(
 		(customer) => customer.balance !== null,
 	);
+	const customerTotals = new Map<string, CustomerInvoiceTotals>(
+		projected.customers.map(({ id, balance, unverifiedCount }) => [
+			id,
+			{ balance, unverifiedCount },
+		]),
+	);
 	const receivables = projected.customers
 		.map((customer) => ({
 			id: customer.id,
@@ -70,6 +84,7 @@ export function buildDashboardSummary(
 		);
 
 	return {
+		customerTotals,
 		receivables,
 		periodReceipts,
 		receiptTrend: receiptTrend(periodReceipts, from, through),

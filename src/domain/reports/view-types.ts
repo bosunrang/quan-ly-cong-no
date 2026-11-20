@@ -13,7 +13,10 @@ import type {
 	CustomerReceivables,
 	ReceivableDocument,
 } from "../payments/receipt-receivables";
-import type { buildDashboardSummary } from "./dashboard-summary";
+import type {
+	buildDashboardSummary,
+	CustomerInvoiceTotals,
+} from "./dashboard-summary";
 
 export interface Page<T> {
 	items: T[];
@@ -27,6 +30,7 @@ export type InvoiceCustomer = {
 	name: string;
 };
 export type InvoiceRow = Omit<ReceivableDocument, "lines">;
+export type InvoicePage = Page<InvoiceRow> & { totals?: CustomerInvoiceTotals };
 export type ReceivableRow = Omit<CustomerReceivables, "documents"> & {
 	documentCount: number;
 };
@@ -51,7 +55,7 @@ export type DashboardRow =
 	| Summary["periodReceipts"][number];
 export type DashboardView = Omit<
 	Summary,
-	"receivables" | "periodReceipts" | "unallocatedReceipts"
+	"customerTotals" | "receivables" | "periodReceipts" | "unallocatedReceipts"
 > & {
 	rows: Page<DashboardRow>;
 	topDebtors: DashboardCustomer[];

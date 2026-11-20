@@ -20,7 +20,9 @@ function register(router, db, state) {
   }, opts(['dashboard']));
   router.get('/api/dashboard', ({ query, scope }) => {
     const current = catalog();
-    const { receivables, periodReceipts, unallocatedReceipts, ...totals } = summary(query, scope, current);
+    const {
+      customerTotals: _customerTotals, receivables, periodReceipts, unallocatedReceipts, ...totals
+    } = summary(query, scope, current);
     const view = query.get('view');
     const q = search(query);
     const provinceOptions = [...new Set(scope.customers(current.directory).map(({ province }) => province.trim()))]
@@ -30,7 +32,7 @@ function register(router, db, state) {
     const page = pageOf(receipts ?? (q ? receivables.filter((item) => customerText(item).includes(q)) : receivables), query, 10);
     const rows = receipts ? page : { ...page, items: page.items.map(customerSummary) };
     return { ...totals, receivablesCount: receivables.length, periodCount: periodReceipts.length,
-      unallocatedCount: unallocatedReceipts.length, topDebtors: receivables.slice(0, 5).map(customerSummary), provinceOptions,
+      unallocatedCount: unallocatedReceipts.length, topDebtors: receivables.slice(0, 8).map(customerSummary), provinceOptions,
       rows };
   }, opts(['dashboard']));
 }

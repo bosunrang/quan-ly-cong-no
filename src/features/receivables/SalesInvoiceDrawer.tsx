@@ -2,8 +2,7 @@ import { Search, X } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import type {
 	InvoiceCustomer,
-	InvoiceRow,
-	Page,
+	InvoicePage,
 } from "../../domain/reports/view-types";
 import type { ReceivableDocument } from "../../domain/payments/receipt-receivables";
 import {
@@ -44,9 +43,21 @@ export function SalesInvoiceDrawer({
 	const search = useDeferredValue(query);
 	const base = `receivables/${encodeURIComponent(customer.id)}/invoices`;
 	const periodScope = { through: asOfDate, from, employee, province };
-	const response = useServerData<Page<InvoiceRow>>(
-		resourceWithQuery(base, { q: search, page, ...periodScope }),
+	const response = useServerData<InvoicePage>(
+		resourceWithQuery(base, { ...periodScope, q: search, page }),
 	);
+	const sameScope = response.previousResource?.startsWith(
+		`${resourceWithQuery(base, periodScope)}&`,
+	);
+	const totals =
+		response.data?.totals ??
+		(sameScope && !response.error ? response.previous?.totals : undefined);
+	const balance = totals?.balance;
+	const amounts = [
+		["Tổng giá trị", balance && balance.received + balance.remaining],
+		["Đã thu", balance?.received],
+		["Còn phải thu", balance?.remaining],
+	] as const;
 	const detailResponse = useServerData<ReceivableDocument>(
 		detail
 			? resourceWithQuery(
@@ -87,6 +98,27 @@ export function SalesInvoiceDrawer({
 					</button>
 				</header>
 				<div className="customer-detail-body">
+					{totals && (
+						<section
+							className="panel receivable-invoice-summary"
+							aria-label="Tổng hợp công nợ tại ngày chốt"
+						>
+							<dl>
+								{amounts.map(([label, value]) => (
+									<div key={label}>
+										<dt>{label}</dt>
+										<dd>{value == null ? "—" : number.format(value)}</dd>
+									</div>
+								))}
+							</dl>
+							{totals.unverifiedCount > 0 && (
+								<p>
+									{number.format(totals.unverifiedCount)} chứng từ chưa đủ điều
+									kiện tính công nợ.
+								</p>
+							)}
+						</section>
+					)}
 					{(response.loading || detailResponse.loading) && (
 						<p role="status">Đang tải chứng từ…</p>
 					)}

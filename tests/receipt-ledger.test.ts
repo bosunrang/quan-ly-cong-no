@@ -165,16 +165,21 @@ describe("Dashboard công nợ theo ngày chốt", () => {
 				[],
 				"2024-06-01",
 				through,
-			).receivables[0];
+			);
 
-		expect(at("2024-06-03").documents.map((doc) => doc.invoiceNumber)).toEqual(
-			expect.arrayContaining(["00010", "00011"]),
-		);
-		expect(at("2024-06-04")).toMatchObject({
+		expect(
+			at("2024-06-03").receivables[0].documents.map((doc) => doc.invoiceNumber),
+		).toEqual(expect.arrayContaining(["00010", "00011"]));
+		const afterPayment = at("2024-06-04");
+		expect(afterPayment.receivables[0]).toMatchObject({
 			remaining: 600,
 			documents: [
 				{ invoiceNumber: "00011", balance: { received: 0, remaining: 600 } },
 			],
+		});
+		expect(afterPayment.customerTotals.get(`catalog:${customer.id}`)).toEqual({
+			balance: { received: 800, remaining: 600 },
+			unverifiedCount: 1,
 		});
 	});
 

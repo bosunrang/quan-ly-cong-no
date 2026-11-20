@@ -140,6 +140,10 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   const noDebt = await read('one', 'receivables/catalog%3Ac-one/invoices?' + earlyPeriod);
   assert.equal(noDebt.status, 200);
   assert.deepEqual(noDebt.value.items, []);
+  assert.deepEqual(noDebt.value.totals, { balance: { received: 0, remaining: 0 }, unverifiedCount: 0 });
+  const filteredInvoices = (await read('one', 'receivables/catalog%3Ac-one/invoices?' + period + '&q=khong-co')).value;
+  assert.deepEqual(filteredInvoices.items, []);
+  assert.deepEqual(filteredInvoices.totals, { balance: { received: 50, remaining: 150 }, unverifiedCount: 0 });
   assert.deepEqual((await read('one', 'customers')).value.map(({ id }) => id), ['c-one']);
   const receivables = (await read('one', 'receivables')).value;
   assert.equal(receivables.rows.total, 1);
@@ -238,6 +242,21 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
     expected: empty, employee: { ...empty, status: 'inactive' },
   })).status, 200);
   assert.equal((await read('empty', 'session')).status, 401);
+
+  const finalReceipt = 'receipt-two-final';
+  assert.equal((await write('admin', 'POST', 'receipts', { id: finalReceipt, customerId: 'c-two',
+    customerCode: 'two', date: '2026-01-04', amount: 150, reference: '' })).status, 200);
+  const finalDetail = (await read('admin', 'receipts/' + finalReceipt)).value;
+  const finalInvoice = (await read('admin', 'receipts/' + finalReceipt + '/candidates')).value.items[0].invoice;
+  assert.equal((await write('admin', 'POST', 'receipts/' + finalReceipt + '/allocations', {
+    revision: finalDetail.revision, bookStamp: finalDetail.bookStamp, date: '2026-01-04',
+    lines: [{ invoice: finalInvoice, amount: 150 }],
+  })).status, 200);
+  const paid = await read('two', 'receivables/catalog%3Ac-two/invoices?from=2026-01-04&through=2026-01-04');
+  assert.equal(paid.status, 200);
+  assert.deepEqual(paid.value.items, []);
+  assert.deepEqual(paid.value.totals, { balance: { received: 200, remaining: 0 }, unverifiedCount: 0 });
+
   const deleted = (await read('admin', 'employees')).value.find(({ id }) => id === 'e-two');
   assert.equal((await write('admin', 'DELETE', 'employees/e-two', {
     expected: deleted, effectiveTo: '2026-01-04',

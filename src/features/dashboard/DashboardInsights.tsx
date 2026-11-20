@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowUpRight, ChartColumn, Wallet } from "lucide-react";
+import { ArrowUpRight, ChartColumn, Wallet } from "lucide-react";
 import { useState } from "react";
 import type {
 	DashboardView,
@@ -24,11 +24,9 @@ function dateRange(from: string, through: string) {
 
 export function DashboardInsights({
 	summary,
-	onOpenReceipts,
 	onOpenCustomer,
 }: {
 	summary: DashboardView;
-	onOpenReceipts: () => void;
 	onOpenCustomer: (customer: InvoiceCustomer) => void;
 }) {
 	const { topDebtors, receiptTrend, remaining } = summary;
@@ -38,7 +36,7 @@ export function DashboardInsights({
 			: 0;
 	return (
 		<div className="dashboard-insights">
-			<ReceiptTrend trend={receiptTrend} onOpenReceipts={onOpenReceipts} />
+			<ReceiptTrend trend={receiptTrend} />
 			<section
 				className="panel dashboard-insight"
 				aria-labelledby="dashboard-debtors-title"
@@ -71,7 +69,7 @@ export function DashboardInsights({
 									<span className="dashboard-debtor-name" title={customer.name}>
 										{customer.name}
 									</span>
-									<strong>{money.format(customer.remaining)} ₫</strong>
+									<strong>{money.format(customer.remaining)}</strong>
 									<ArrowUpRight className="icon-size-14" aria-hidden="true" />
 									<span className="dashboard-debtor-track" aria-hidden="true">
 										<span
@@ -94,18 +92,12 @@ export function DashboardInsights({
 	);
 }
 
-function ReceiptTrend({
-	trend,
-	onOpenReceipts,
-}: {
-	trend: DashboardView["receiptTrend"];
-	onOpenReceipts: () => void;
-}) {
+function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 	const { buckets, daysPerBucket } = trend;
 	const [selected, setSelected] = useState<string>();
+	const receiptBuckets = buckets.filter(({ count }) => count > 0);
 	const active =
-		buckets.find((bucket) => bucket.from === selected) ??
-		buckets.filter(({ count }) => count > 0).at(-1);
+		buckets.find((bucket) => bucket.from === selected) ?? receiptBuckets.at(-1);
 	const max = Math.max(0, ...buckets.map(({ amount }) => amount));
 	return (
 		<section
@@ -130,13 +122,15 @@ function ReceiptTrend({
 			{max > 0 && active ? (
 				<>
 					<div className="dashboard-trend-readout" aria-live="polite">
-						<strong>{money.format(active.amount)} ₫</strong>
+						<strong>{money.format(active.amount)}</strong>
 						<span>
 							{dateRange(active.from, active.through)} ·{" "}
 							{money.format(active.count)} khoản thu
 						</span>
 					</div>
-					<div className="dashboard-trend">
+					<div
+						className={`dashboard-trend${receiptBuckets.length >= 4 ? " dashboard-trend-tall" : ""}`}
+					>
 						<div className="dashboard-trend-axis" aria-hidden="true">
 							<span>{compact.format(max)}</span>
 							<span>{compact.format(max / 2)}</span>
@@ -147,7 +141,7 @@ function ReceiptTrend({
 								Khoản thu theo ngày hoặc nhóm ngày
 							</legend>
 							{buckets.map(({ from, through, amount, count }) => {
-								const label = `${dateRange(from, through)} · ${money.format(amount)} ₫ · ${money.format(count)} khoản thu`;
+								const label = `${dateRange(from, through)} · ${money.format(amount)} · ${money.format(count)} khoản thu`;
 								return (
 									<button
 										key={from}
@@ -170,14 +164,6 @@ function ReceiptTrend({
 						<span>{formatDateOnly(buckets[0].from)}</span>
 						<span>{formatDateOnly(buckets.at(-1)?.through)}</span>
 					</div>
-					<button
-						className="text-button dashboard-insight-link"
-						type="button"
-						onClick={onOpenReceipts}
-					>
-						Xem khoản thu trong kỳ{" "}
-						<ArrowRight className="icon-size-14" aria-hidden="true" />
-					</button>
 				</>
 			) : (
 				<p className="dashboard-insight-empty">

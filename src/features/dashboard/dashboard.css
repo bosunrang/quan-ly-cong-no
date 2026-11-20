@@ -53,13 +53,6 @@
 	border-color: var(--teal-border);
 }
 
-.dashboard-metric.is-selected {
-	border-color: var(--selection-border);
-	border-inline-start: var(--selection-indicator-width) solid var(--selection-indicator);
-	padding-inline-start: calc(var(--space-14) + var(--border-width) - var(--selection-indicator-width));
-	background: var(--surface-accent-faint);
-}
-
 .dashboard-metric-icon {
 	display: grid;
 	place-items: center;
@@ -92,11 +85,6 @@
 	color: var(--muted);
 	font-size: var(--type-caption);
 	font-weight: 450;
-}
-
-.dashboard-currency {
-	color: var(--muted);
-	font-size: var(--type-body-sm);
 }
 
 .dashboard-insights {
@@ -158,7 +146,12 @@
 	display: grid;
 	grid-template-columns: max-content minmax(0, 1fr);
 	gap: var(--space-10);
+	flex-grow: 1;
 	min-height: var(--layout-170);
+}
+
+.dashboard-trend-tall {
+	min-height: var(--layout-240);
 }
 
 .dashboard-trend-axis {
@@ -214,11 +207,6 @@
 	justify-content: space-between;
 	color: var(--muted);
 	font-size: var(--type-caption);
-}
-
-.dashboard-insight-link {
-	align-self: flex-start;
-	margin-top: auto;
 }
 
 .dashboard-debtors {
@@ -280,16 +268,48 @@
 }
 
 @media (max-width: 1080px) {
-	.dashboard-insights { grid-template-columns: minmax(0, 1fr); }
+	.dashboard-insights {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.dashboard-overview:not([hidden]) {
+	display: contents;
+}
+
+.dashboard-expanded {
+	height: 100%;
+	max-width: none;
+}
+
+.dashboard-expanded :is(.dashboard-filters, .panel-header, .dashboard-table-footer) {
+	flex: none;
+}
+
+.dashboard-expanded > .dashboard-details {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: var(--layout-310);
+}
+
+.dashboard-expanded .panel-header {
+	flex-wrap: wrap;
 }
 
 .dashboard-table {
 	max-height: 56vh;
 }
 
-.dashboard-customer-search {
-	flex: 0 1 var(--layout-310);
-	min-width: 0;
+.dashboard-expanded .dashboard-table {
+	flex: 1;
+	min-height: 0;
+	max-height: none;
+}
+
+.dashboard-customer-search,
+.dashboard-expanded .dashboard-open-payments {
+	margin-inline-start: auto;
 }
 
 .dashboard-table table {

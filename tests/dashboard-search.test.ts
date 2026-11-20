@@ -181,13 +181,19 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 		);
 		await act(async () => firstBucket?.click());
 		expect(
-			container.querySelector(".dashboard-trend-readout")?.textContent,
-		).toContain("80 ₫");
-		await act(async () => {
-			Array.from(container.querySelectorAll("button"))
-				.find((button) => button.textContent?.trim() === "Xem bảng chi tiết")
-				?.click();
-		});
+			container.querySelector(".dashboard-trend-readout strong")?.textContent,
+		).toBe("80");
+		const openDetails = container.querySelector<HTMLButtonElement>(
+			".dashboard-metric-primary",
+		);
+		await act(async () => openDetails?.click());
+		expect(container.querySelector(".dashboard-expanded")).not.toBeNull();
+		expect(
+			container.querySelector(".dashboard-overview[hidden]"),
+		).not.toBeNull();
+		expect(document.activeElement?.id).toBe("dashboard-details");
+		expect(employee.value).toBe("e-one");
+		expect(province.value).toBe("Hà Nội");
 		const coverage = container.querySelector(
 			"#dashboard-details #dashboard-detail-coverage",
 		)?.textContent;
@@ -240,6 +246,22 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 			container.querySelector(".dashboard-table-footer")?.textContent,
 		).toContain("1–1 / 1 khách hàng");
 		expect(document.activeElement).toBe(field);
+		await act(async () => {
+			Array.from(
+				container.querySelectorAll<HTMLButtonElement>(
+					"#dashboard-details button",
+				),
+			)
+				.find((button) => button.textContent?.trim() === "Về tổng quan")
+				?.click();
+		});
+		expect(container.querySelector(".dashboard-expanded")).toBeNull();
+		expect(container.querySelector(".dashboard-overview[hidden]")).toBeNull();
+		expect(container.querySelector("#dashboard-details")).toBeNull();
+		expect(document.activeElement).toBe(openDetails);
+		expect(
+			container.querySelector(".dashboard-trend-readout strong")?.textContent,
+		).toBe("80");
 	} finally {
 		await act(async () => root.unmount());
 		container.remove();

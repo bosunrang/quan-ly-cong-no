@@ -1,7 +1,6 @@
 import {
+	ArrowLeft,
 	ArrowRight,
-	ChevronDown,
-	ChevronUp,
 	CircleDollarSign,
 	ReceiptText,
 	Search,
@@ -76,9 +75,11 @@ export function Dashboard({
 		[directory.data],
 	);
 	const from = periodStart ?? (through ? `${through.slice(0, 7)}-01` : "");
-	const [view, setView] = useState<View>("receivables");
-	const [detailsOpen, setDetailsOpen] = useState(false);
+	const [detailsView, setDetailsView] = useState<View>();
+	const detailsOpen = detailsView !== undefined;
+	const view = detailsView ?? "receivables";
 	const detailsRef = useRef<HTMLElement>(null);
+	const overviewTrigger = useRef<HTMLButtonElement>(null);
 	const [customerQuery, setCustomerQuery] = useState("");
 	const [openedCustomer, setOpenedCustomer] = useState<InvoiceCustomer>();
 	const [{ q, page }, setFilters] = useState({ q: "", page: 1 });
@@ -124,14 +125,22 @@ export function Dashboard({
 	const rows = details?.rows.items ?? [];
 	const setPage = (page: number) =>
 		setFilters((current) => ({ ...current, page }));
-	function openDetails(next: View) {
-		setView(next);
+	function openDetails(next: View, trigger: HTMLButtonElement) {
+		overviewTrigger.current = trigger;
+		setDetailsView(next);
 		setPage(1);
-		setDetailsOpen(true);
-		if (detailsOpen) detailsRef.current?.scrollIntoView?.({ block: "nearest" });
 	}
 	useEffect(() => {
-		if (detailsOpen) detailsRef.current?.scrollIntoView?.({ block: "nearest" });
+		if (detailsOpen) {
+			const details = detailsRef.current;
+			const main = details?.closest("main");
+			if (main?.scrollTop) main.scrollTo({ top: 0 });
+			else if (window.scrollY) window.scrollTo({ top: 0 });
+			details?.focus({ preventScroll: true });
+		} else {
+			overviewTrigger.current?.focus();
+			overviewTrigger.current = null;
+		}
 	}, [detailsOpen]);
 
 	useEffect(() => {
@@ -176,9 +185,19 @@ export function Dashboard({
 					.filter(Boolean)
 					.join(" ")
 			: "";
+	const closeDetails = (
+		<button
+			className="button secondary"
+			type="button"
+			onClick={() => setDetailsView(undefined)}
+		>
+			<ArrowLeft className="icon-size-16" aria-hidden="true" />
+			Về tổng quan
+		</button>
+	);
 
 	return (
-		<div className="page-stack">
+		<div className={`page-stack${detailsOpen ? " dashboard-expanded" : ""}`}>
 			<section
 				className="panel dashboard-filters"
 				aria-label="Kỳ theo dõi Dashboard"
@@ -257,59 +276,48 @@ export function Dashboard({
 
 			{!invalidDates ? (
 				<>
-					<section className="dashboard-metrics" aria-label="Chỉ tiêu công nợ">
-						{views.map(({ id, title, icon: Icon }) => (
-							<button
-								className={`panel choice-card dashboard-metric${id === "receivables" ? " dashboard-metric-primary" : ""}${detailsOpen && view === id ? " is-selected" : ""}`}
-								type="button"
-								key={id}
-								aria-expanded={detailsOpen && view === id}
-								aria-controls={detailsOpen ? "dashboard-details" : undefined}
-								onClick={() => openDetails(id)}
-							>
-								<span className="dashboard-metric-icon">
-									<Icon className="icon-size-22" aria-hidden="true" />
-								</span>
-								<span className="dashboard-metric-copy">
-									<span>{title}</span>
-									<strong>
-										{amounts[id] == null ? "—" : number.format(amounts[id])}
-										{amounts[id] != null && (
-											<span className="dashboard-currency"> ₫</span>
-										)}
-									</strong>
-									<small>{counts?.[id]}</small>
-								</span>
-							</button>
-						))}
-					</section>
+					<div className="dashboard-overview" hidden={detailsOpen}>
+						<section
+							className="dashboard-metrics"
+							aria-label="Chỉ tiêu công nợ"
+						>
+							{views.map(({ id, title, icon: Icon }) => (
+								<button
+									className={`panel choice-card dashboard-metric${id === "receivables" ? " dashboard-metric-primary" : ""}`}
+									type="button"
+									key={id}
+									aria-expanded={detailsOpen && view === id}
+									aria-controls={detailsOpen ? "dashboard-details" : undefined}
+									onClick={(event) => openDetails(id, event.currentTarget)}
+								>
+									<span className="dashboard-metric-icon">
+										<Icon className="icon-size-22" aria-hidden="true" />
+									</span>
+									<span className="dashboard-metric-copy">
+										<span>{title}</span>
+										<strong>
+											{amounts[id] == null ? "—" : number.format(amounts[id])}
+										</strong>
+										<small>{counts?.[id]}</small>
+									</span>
+								</button>
+							))}
+						</section>
 
-					{summary?.receiptTrend && summary.topDebtors && (
-						<DashboardInsights
-							summary={summary}
-							onOpenCustomer={setOpenedCustomer}
-							onOpenReceipts={() => openDetails("period")}
-						/>
-					)}
-					{!detailsOpen && !error && (
-						<div>
-							<button
-								className="button secondary"
-								type="button"
-								aria-expanded={false}
-								onClick={() => openDetails(view)}
-							>
-								Xem bảng chi tiết{" "}
-								<ChevronDown className="icon-size-16" aria-hidden="true" />
-							</button>
-						</div>
-					)}
+						{summary?.receiptTrend && summary.topDebtors && (
+							<DashboardInsights
+								summary={summary}
+								onOpenCustomer={setOpenedCustomer}
+							/>
+						)}
+					</div>
 
 					{(detailsOpen || error) && (
 						<section
 							ref={detailsRef}
-							className="panel data-panel"
+							className="panel data-panel dashboard-details"
 							id="dashboard-details"
+							tabIndex={detailsOpen ? -1 : undefined}
 							aria-labelledby="dashboard-detail-title"
 							aria-describedby={
 								coverageNote ? "dashboard-detail-coverage" : undefined
@@ -324,12 +332,14 @@ export function Dashboard({
 												? "Khoản thu trong kỳ"
 												: "Khoản thu còn tiền chờ phân bổ"}
 									</h3>
-									<p>
-										{view === "period"
-											? `${formatDateOnly(from)} – ${formatDateOnly(through)}`
-											: `Tại ngày ${formatDateOnly(through)}`}{" "}
-										· VND
-									</p>
+									{!isReceivables && (
+										<p>
+											{view === "period"
+												? `${formatDateOnly(from)} – ${formatDateOnly(through)}`
+												: `Tại ngày ${formatDateOnly(through)}`}{" "}
+											· VND
+										</p>
+									)}
 									{coverageNote && (
 										<p id="dashboard-detail-coverage">{coverageNote}</p>
 									)}
@@ -348,7 +358,7 @@ export function Dashboard({
 								) : (
 									onOpenPayments && (
 										<button
-											className="button secondary"
+											className="button secondary dashboard-open-payments"
 											type="button"
 											onClick={onOpenPayments}
 										>
@@ -357,16 +367,7 @@ export function Dashboard({
 										</button>
 									)
 								)}
-								{detailsOpen && !error && (
-									<button
-										className="button secondary"
-										type="button"
-										onClick={() => setDetailsOpen(false)}
-									>
-										Thu gọn{" "}
-										<ChevronUp className="icon-size-16" aria-hidden="true" />
-									</button>
-								)}
+								{detailsOpen && closeDetails}
 							</div>
 							{error && !searchPending ? (
 								<div className="dashboard-load-error">
@@ -489,10 +490,13 @@ export function Dashboard({
 					)}
 				</>
 			) : (
-				<Notice tone="warning" announce>
-					Chọn ngày chốt và ngày bắt đầu kỳ thu hợp lệ. Ngày bắt đầu phải bằng
-					hoặc trước ngày chốt.
-				</Notice>
+				<>
+					{detailsOpen && <div>{closeDetails}</div>}
+					<Notice tone="warning" announce>
+						Chọn ngày chốt và ngày bắt đầu kỳ thu hợp lệ. Ngày bắt đầu phải bằng
+						hoặc trước ngày chốt.
+					</Notice>
+				</>
 			)}
 			{openedCustomer && (
 				<InvoiceDrawer
