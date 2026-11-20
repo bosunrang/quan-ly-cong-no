@@ -91,7 +91,9 @@ Khi đảo một khoản thu đã phân bổ, hoàn tác các phân bổ liên q
 
 Luồng này dùng VND và một đơn vị phát hành. Cần file mẫu khoản thu và số dư đầu kỳ để bổ sung nhập Excel và tính công nợ thuần.
 
-Màn **Công nợ phải thu** hiển thị **Đã thu** và **Còn phải thu** ở cấp khách hàng và hóa đơn. Đã thu là tổng phân bổ còn hiệu lực, còn phải thu là giá trị chứng từ đủ điều kiện trừ số đã thu. Khoản thu chưa phân bổ, số dư đầu kỳ và nghiệp vụ điều chỉnh được theo dõi riêng. Chứng từ thiếu căn cứ hoặc có dữ liệu MISA thay đổi so với lúc phân bổ hiện dấu gạch và được loại khỏi tổng số dư để đối chiếu.
+Màn **Công nợ phải thu** hiển thị **Đã thu** và **Còn phải thu** ở cấp khách hàng và hóa đơn. Đã thu là tổng phân bổ còn hiệu lực, còn phải thu là giá trị chứng từ đủ điều kiện trừ số đã thu.
+
+Chứng từ giảm trừ trong sổ bán hàng (hàng bán trả lại, giảm giá, điều chỉnh giảm doanh thu: tổng âm, TK Nợ 131/511/521 hoặc sổ cũ không có TK Nợ) được trừ thẳng vào còn phải thu của khách từ ngày hạch toán, không phân bổ vào từng hóa đơn, để khớp số dư 131 trên MISA. Biên bản đối chiếu ghi dòng "Hàng trả lại / giảm trừ" với số phát sinh âm. Chứng từ âm hoàn tiền (TK Nợ khác, ví dụ 111/112) không được trừ. Khách có tổng giảm trừ lớn hơn số còn nợ là dư có: không nằm trong danh sách còn nợ của Dashboard và biên bản ghi "Khách hàng dư có". Khoản thu chưa phân bổ, số dư đầu kỳ và nghiệp vụ điều chỉnh được theo dõi riêng. Chứng từ thiếu căn cứ hoặc có dữ liệu MISA thay đổi so với lúc phân bổ hiện dấu gạch và được loại khỏi tổng số dư để đối chiếu.
 
 Khi khoản thu thiếu tham chiếu, trong **Phân bổ khoản thu** dùng **Tìm nhóm khớp số tiền**. App tìm theo tổng số còn lại của các chứng từ đủ điều kiện của cùng khách hàng tại ngày phân bổ. Kết quả bị giới hạn khi có nhiều khả năng hoặc tổ hợp lớn. Kiểm tra ngày, số chứng từ và bảng kê của khách hàng. **Điền nhóm** chuẩn bị các dòng trong bảng để xem lại trước khi xác nhận phân bổ. Khi chưa xác định được nhóm chứng từ, giữ số tiền chưa rõ ở mục **Chưa phân bổ**.
 

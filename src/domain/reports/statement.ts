@@ -119,6 +119,7 @@ export function buildReceivableStatement(
 			),
 		].sort();
 		const note = [
+			document.reduction && "Hàng trả lại / giảm trừ",
 			!document.invoiceNumber && `CT ${document.documentNumbers.join(", ")}`,
 			previous && !increase && "Hóa đơn trước kỳ",
 			receiptsInPeriod.length > 0 &&

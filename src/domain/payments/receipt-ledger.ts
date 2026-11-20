@@ -246,8 +246,8 @@ export function getGroupReceiptInvoices(
 		const voucher = identity(documentNumber);
 		const date = documentPostingDate(document);
 		// Dòng âm (chiết khấu, giảm giá) trong cùng một chứng từ được cộng vào giá trị
-		// hóa đơn. Chứng từ có tổng không dương, như hàng bán trả lại tách riêng,
-		// vẫn cần nghiệp vụ điều chỉnh có tham chiếu nên chưa được tính.
+		// hóa đơn. Chứng từ có tổng âm (hàng bán trả lại tách riêng) không phải hóa đơn để
+		// phân bổ; projectReceiptReceivables trừ thẳng vào công nợ của khách (isSalesReduction).
 		if (
 			!voucher ||
 			voucherCounts.get(voucherKey(documentNumber, date)) !== 1 ||

@@ -55,15 +55,19 @@
 		{
 			"from": "2026-01-01",
 			"through": "2026-03-31",
-			"remaining": 48793500,
+			"remaining": 47008500,
 			"periodReceived": 15770000,
 			"unallocated": 5150000,
-			"unverifiedCount": 1,
+			"unverifiedCount": 0,
 			"receivables": [
 				{
 					"customerCode": "KH002",
-					"remaining": 23047500,
+					"remaining": 21262500,
 					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000011\",\"1C25TAA\",\"\"]",
+							"remaining": -1785000
+						},
 						{
 							"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
 							"remaining": 23047500
@@ -105,15 +109,19 @@
 		{
 			"from": "2026-01-01",
 			"through": "2026-06-30",
-			"remaining": 60868500,
+			"remaining": 59083500,
 			"periodReceived": 25770000,
 			"unallocated": 15150000,
-			"unverifiedCount": 3,
+			"unverifiedCount": 2,
 			"receivables": [
 				{
 					"customerCode": "KH002",
-					"remaining": 23047500,
+					"remaining": 21262500,
 					"documents": [
+						{
+							"id": "[\"invoice\",\"2026\",\"0000011\",\"1C25TAA\",\"\"]",
+							"remaining": -1785000
+						},
 						{
 							"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
 							"remaining": 23047500
@@ -169,18 +177,22 @@
 		{
 			"from": "2026-01-01",
 			"through": "2026-11-30",
-			"remaining": 74559500,
+			"remaining": 72774500,
 			"periodReceived": 66770000,
 			"unallocated": 15472000,
-			"unverifiedCount": 3,
+			"unverifiedCount": 2,
 			"receivables": [
 				{
 					"customerCode": "KH002",
-					"remaining": 29085000,
+					"remaining": 27300000,
 					"documents": [
 						{
 							"id": "[\"invoice\",\"2026\",\"0000021\",\"1C25TAA\",\"\"]",
 							"remaining": 6037500
+						},
+						{
+							"id": "[\"invoice\",\"2026\",\"0000011\",\"1C25TAA\",\"\"]",
+							"remaining": -1785000
 						},
 						{
 							"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
@@ -269,18 +281,22 @@
 		{
 			"from": "2026-01-01",
 			"through": "2026-12-31",
-			"remaining": 79568000,
+			"remaining": 77783000,
 			"periodReceived": 66770000,
 			"unallocated": 15472000,
-			"unverifiedCount": 3,
+			"unverifiedCount": 2,
 			"receivables": [
 				{
 					"customerCode": "KH002",
-					"remaining": 29085000,
+					"remaining": 27300000,
 					"documents": [
 						{
 							"id": "[\"invoice\",\"2026\",\"0000021\",\"1C25TAA\",\"\"]",
 							"remaining": 6037500
+						},
+						{
+							"id": "[\"invoice\",\"2026\",\"0000011\",\"1C25TAA\",\"\"]",
+							"remaining": -1785000
 						},
 						{
 							"id": "[\"invoice\",\"2026\",\"0000009\",\"1C25TAA\",\"\"]",
@@ -382,9 +398,9 @@
 				"paymentTotal": 45150000,
 				"balance": {
 					"received": 17850000,
-					"remaining": 29085000
+					"remaining": 27300000
 				},
-				"unverifiedCount": 1,
+				"unverifiedCount": 0,
 				"documents": [
 					{
 						"id": "[\"invoice\",\"2026\",\"0000021\",\"1C25TAA\",\"\"]",
@@ -405,9 +421,9 @@
 						],
 						"invoiceNumber": "0000011",
 						"paymentTotal": -1785000,
-						"received": null,
-						"remaining": null,
-						"allocations": null,
+						"received": 0,
+						"remaining": -1785000,
+						"allocations": [],
 						"allocationMismatch": false
 					},
 					{
@@ -821,14 +837,14 @@
 			"from": "2026-01-01",
 			"through": "2026-06-30",
 			"opening": 7850000,
-			"increase": 23047500,
+			"increase": 21262500,
 			"payment": 7850000,
-			"closing": 23047500,
+			"closing": 21262500,
 			"unallocated": 150000,
-			"net": 22897500,
-			"omitted": 1,
+			"net": 21112500,
+			"omitted": 0,
 			"hasUnmatchedAllocations": false,
-			"words": "Hai mươi hai triệu tám trăm chín mươi bảy nghìn năm trăm đồng chẵn.",
+			"words": "Hai mươi mốt triệu một trăm mười hai nghìn năm trăm đồng chẵn.",
 			"rows": [
 				{
 					"date": "2025-06-15",
@@ -843,6 +859,13 @@
 					"increase": 23047500,
 					"payment": 0,
 					"note": ""
+				},
+				{
+					"date": "2026-03-05",
+					"invoiceNumber": "0000011",
+					"increase": -1785000,
+					"payment": 0,
+					"note": "Hàng trả lại / giảm trừ"
 				}
 			]
 		},
@@ -851,14 +874,14 @@
 			"from": "2026-01-01",
 			"through": "2026-11-30",
 			"opening": 7850000,
-			"increase": 29085000,
+			"increase": 27300000,
 			"payment": 7850000,
-			"closing": 29085000,
+			"closing": 27300000,
 			"unallocated": 150000,
-			"net": 28935000,
-			"omitted": 1,
+			"net": 27150000,
+			"omitted": 0,
 			"hasUnmatchedAllocations": false,
-			"words": "Hai mươi tám triệu chín trăm ba mươi lăm nghìn đồng chẵn.",
+			"words": "Hai mươi bảy triệu một trăm năm mươi nghìn đồng chẵn.",
 			"rows": [
 				{
 					"date": "2025-06-15",
@@ -873,6 +896,13 @@
 					"increase": 23047500,
 					"payment": 0,
 					"note": ""
+				},
+				{
+					"date": "2026-03-05",
+					"invoiceNumber": "0000011",
+					"increase": -1785000,
+					"payment": 0,
+					"note": "Hàng trả lại / giảm trừ"
 				},
 				{
 					"date": "2026-11-25",

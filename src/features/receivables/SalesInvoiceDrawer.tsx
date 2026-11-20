@@ -238,7 +238,7 @@ export function SalesInvoiceDrawer({
 													: number.format(document.paymentTotal)}
 											</td>
 											<td className="receivable-number">
-												{document.balance ? (
+												{document.balance && !document.reduction ? (
 													<button
 														className="text-button receivable-invoice-link"
 														type="button"
@@ -263,6 +263,9 @@ export function SalesInvoiceDrawer({
 														? number.format(document.balance.remaining)
 														: "—"}
 												</strong>
+												{document.reduction && (
+													<span className="cell-meta">Giảm trừ</span>
+												)}
 												{document.allocationMismatch && (
 													<span className="cell-meta">Cần đối chiếu</span>
 												)}

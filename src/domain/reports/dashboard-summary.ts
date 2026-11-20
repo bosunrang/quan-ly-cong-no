@@ -101,8 +101,9 @@ export function buildDashboardSummary(
 			customerCode: customer.customerCode,
 			employeeName: customer.employeeName,
 			province: customer.province,
+			// Hóa đơn còn nợ và chứng từ giảm trừ đã trừ vào công nợ của khách.
 			documents: customer.documents.filter(
-				({ balance }) => (balance?.remaining ?? 0) > 0,
+				({ balance, reduction }) => reduction || (balance?.remaining ?? 0) > 0,
 			),
 			remaining: customer.balance?.remaining ?? 0,
 		}))

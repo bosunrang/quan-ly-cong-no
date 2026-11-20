@@ -192,9 +192,10 @@ describe("Số tiền chuẩn", () => {
 			periodReceived: 26_760_000,
 			unallocated: 0,
 		});
-		// 2026-11-30: tổng còn phải thu và tiền đã thu chưa phân bổ.
+		// 2026-11-30: tổng còn phải thu và tiền đã thu chưa phân bổ. KH002 trả lại hàng ngày 05/03
+		// (TL00001, −1.785.000) nên tổng còn phải thu là 74.559.500 − 1.785.000.
 		expect(close("2026-11-30")).toMatchObject({
-			remaining: 74_559_500,
+			remaining: 72_774_500,
 			periodReceived: 66_770_000,
 			unallocated: 15_472_000,
 		});

@@ -15,6 +15,7 @@ import {
 } from "../src/domain/payments/receipt-ledger";
 import { projectReceiptReceivables } from "../src/domain/payments/receipt-receivables";
 import { buildDashboardSummary } from "../src/features/dashboard/dashboard.summary";
+import { buildReceivableStatement } from "../src/domain/reports/statement";
 
 const customer: Customer = {
 	id: "customer-a",
@@ -459,5 +460,90 @@ describe("Sổ đối soát khoản thu", () => {
 				{ invoice: first, amount: 1 },
 			]),
 		).toThrow("Khoản thu đã hủy.");
+	});
+});
+
+describe("Hàng bán trả lại và giảm trừ", () => {
+	const returned = (paymentTotal: number, debitAccount = "5212") => ({
+		...line,
+		rowNumber: 9,
+		date: "2024-06-05",
+		documentNumber: "BTL01",
+		invoiceNumber: "",
+		quantity: 0,
+		unitPrice: 0,
+		salesAmount: 0,
+		paymentTotal,
+		source: {
+			...lineSource,
+			invoiceSeries: "",
+			invoiceDate: "2024-06-05",
+			postingDate: "2024-06-05",
+			debitAccount,
+		},
+	});
+	const project = (rows: MisaSalesLine[]) =>
+		projectReceiptReceivables(
+			buildSalesReceivables(rows, [customer], []),
+			book.fileName,
+			emptyReceiptLedger,
+		).customers[0];
+
+	it("trừ thẳng chứng từ trả lại vào công nợ của khách", () => {
+		const projected = project([...book.rows, returned(-300)]);
+		expect(projected.balance).toEqual({ received: 0, remaining: 1100 });
+		expect(projected.unverifiedCount).toBe(0);
+		expect(
+			projected.documents.find(({ documentNumbers }) =>
+				documentNumbers.includes("BTL01"),
+			),
+		).toMatchObject({
+			reduction: true,
+			balance: { received: 0, remaining: -300, allocations: [] },
+		});
+		// Giảm trừ không phải hóa đơn để phân bổ khoản thu.
+		expect(
+			invoices([...book.rows, returned(-300)]).map(
+				({ documentNumber }) => documentNumber,
+			),
+		).toEqual(["BH01", "BH02"]);
+	});
+
+	it("không trừ chứng từ âm hoàn tiền mặt hoặc ngân hàng", () => {
+		const projected = project([...book.rows, returned(-300, "1111")]);
+		expect(projected.balance?.remaining).toBe(1400);
+		expect(projected.unverifiedCount).toBe(1);
+	});
+
+	it("đưa giảm trừ vào biên bản và để khách dư có ra khỏi danh sách còn nợ", () => {
+		const rows = [...book.rows, returned(-300)];
+		const statement = buildReceivableStatement(
+			{ ...book, rows },
+			emptyReceiptLedger,
+			[customer],
+			customer,
+			"2024-06-01",
+			"2024-06-30",
+		);
+		expect(statement).toMatchObject({ increase: 1100, closing: 1100, omitted: 0 });
+		expect(statement.rows).toContainEqual(
+			expect.objectContaining({
+				increase: -300,
+				payment: 0,
+				note: "Hàng trả lại / giảm trừ · CT BTL01",
+			}),
+		);
+
+		const credit = [...book.rows, returned(-2000)];
+		const summary = buildDashboardSummary(
+			{ ...book, rows: credit },
+			emptyReceiptLedger,
+			[customer],
+			[],
+			"2024-06-01",
+			"2024-06-30",
+		);
+		expect(project(credit).balance?.remaining).toBe(-600);
+		expect(summary).toMatchObject({ remaining: 0, receivables: [] });
 	});
 });
