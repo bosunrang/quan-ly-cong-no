@@ -190,8 +190,8 @@ export function Dashboard({
 
 					{summary && (
 						<Notice tone="info">
-							Chưa có dữ liệu hạn thanh toán và số dư đầu kỳ. Chỉ tiêu đến hạn
-							và quá hạn chưa thể tính.
+							Chưa có dữ liệu hạn thanh toán để tính chỉ tiêu đến hạn và quá
+							hạn.
 							{summary.unverifiedCount > 0 &&
 								` Có ${number.format(summary.unverifiedCount)} chứng từ chưa đủ điều kiện tính số còn phải thu.`}
 							{summary.unmatchedCount > 0 &&

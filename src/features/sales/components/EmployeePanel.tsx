@@ -10,6 +10,7 @@ export function employeeInitials(name: string): string {
 
 interface EmployeePanelProps {
 	employees: SalesEmployee[];
+	canManageEmployees: boolean;
 	linkableAccounts?: readonly Pick<AccountProfile, "id" | "username">[];
 	assignmentCountByEmployee: Record<string, number>;
 	selectedEmployeeId?: string;
@@ -24,6 +25,7 @@ interface EmployeePanelProps {
 
 export function EmployeePanel({
 	employees,
+	canManageEmployees,
 	linkableAccounts,
 	assignmentCountByEmployee,
 	selectedEmployeeId,
@@ -43,25 +45,33 @@ export function EmployeePanel({
 			<header className="sales-panel-head">
 				<div>
 					<span>BƯỚC 1</span>
-					<h2>Chọn nhân viên</h2>
-					<p>Chọn người sẽ nhận phân công mới</p>
+					<h2>{canManageEmployees ? "Chọn nhân viên" : "Người phụ trách"}</h2>
+					<p>
+						{canManageEmployees
+							? "Chọn người sẽ nhận phân công mới"
+							: "Hồ sơ nhân viên liên kết với tài khoản của bạn"}
+					</p>
 				</div>
-				<button
-					className="button primary sales-add-employee"
-					type="button"
-					onClick={onAdd}
-				>
-					<Plus className="icon-size-16" /> Thêm nhân viên
-				</button>
+				{canManageEmployees && (
+					<button
+						className="button primary sales-add-employee"
+						type="button"
+						onClick={onAdd}
+					>
+						<Plus className="icon-size-16" /> Thêm nhân viên
+					</button>
+				)}
 			</header>
-			<div className="sales-search">
-				<Search className="icon-size-16" />
-				<input
-					value={query}
-					onChange={(event) => onQueryChange(event.target.value)}
-					placeholder="Tìm nhân viên..."
-				/>
-			</div>
+			{canManageEmployees && (
+				<div className="sales-search">
+					<Search className="icon-size-16" />
+					<input
+						value={query}
+						onChange={(event) => onQueryChange(event.target.value)}
+						placeholder="Tìm nhân viên..."
+					/>
+				</div>
+			)}
 			<div className="employee-list">
 				{employees.map((employee) => {
 					const username = usernames.get(employee.linkedAccountId ?? "");
@@ -102,28 +112,30 @@ export function EmployeePanel({
 									</small>
 								</span>
 							</button>
-							<span className="employee-card-actions">
-								<RowActionButton
-									action="edit"
-									label={`Chỉnh sửa ${employee.name}`}
-									title="Chỉnh sửa nhân viên"
-									onClick={() => onEdit(employee.id)}
-								/>
-								{employee.status === "active" && (
+							{canManageEmployees && (
+								<span className="employee-card-actions">
 									<RowActionButton
-										action="deactivate"
-										onClick={() => onDeactivate(employee.id)}
-										label={`Ngừng hoạt động ${employee.name}`}
-										title="Ngừng hoạt động"
+										action="edit"
+										label={`Chỉnh sửa ${employee.name}`}
+										title="Chỉnh sửa nhân viên"
+										onClick={() => onEdit(employee.id)}
 									/>
-								)}
-								<RowActionButton
-									action="delete"
-									label={`Xóa ${employee.name}`}
-									title="Xóa nhân viên"
-									onClick={() => onDelete(employee.id)}
-								/>
-							</span>
+									{employee.status === "active" && (
+										<RowActionButton
+											action="deactivate"
+											onClick={() => onDeactivate(employee.id)}
+											label={`Ngừng hoạt động ${employee.name}`}
+											title="Ngừng hoạt động"
+										/>
+									)}
+									<RowActionButton
+										action="delete"
+										label={`Xóa ${employee.name}`}
+										title="Xóa nhân viên"
+										onClick={() => onDelete(employee.id)}
+									/>
+								</span>
+							)}
 						</article>
 					);
 				})}

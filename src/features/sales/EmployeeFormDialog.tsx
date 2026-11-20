@@ -188,6 +188,10 @@ export function EmployeeFormDialog({
 							</option>
 						))}
 					</select>
+					<small>
+						Tài khoản nhân viên cần liên kết để đăng nhập và chỉ được xem dữ liệu
+						của khách hàng đang được phân công.
+					</small>
 				</label>
 				{assignedCount > 0 && (
 					<Notice tone="warning">

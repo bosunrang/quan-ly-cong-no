@@ -166,6 +166,7 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     draft: { name: 'Người xem', username: 'view', password: 'temporary-view', role: 'viewer', pages: ['dashboard'] },
   }, actor);
   assert.equal(viewer.status, 200);
+  await call('POST', 'employees', { ...employee, code: 'VIEW', linkedAccountId: viewer.value.account.id }, actor);
   const viewerSession = await call('POST', 'session', { username: 'view', password: 'temporary-view' });
   const viewerChanged = await call('PATCH', 'session/password', { password: 'viewer-password' }, viewerSession.cookie);
   assert.equal((await call('GET', 'dashboard?from=2026-01-01&through=2026-12-31', undefined, viewerChanged.cookie)).status, 200);
@@ -180,7 +181,7 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     ['POST', 'customers', {}], ['POST', 'customers/imports', {}],
     ['PATCH', 'customers/missing', {}], ['DELETE', 'customers/missing', {}],
     ['POST', 'employees', {}], ['PATCH', 'employees/missing', {}], ['DELETE', 'employees/missing', {}],
-    ['POST', 'assignments', {}], ['PATCH', 'assignments/missing', {}],
+    ['GET', 'assignments'], ['POST', 'assignments', {}], ['PATCH', 'assignments/missing', {}],
     ['GET', 'sales-book'], ['GET', 'sales-book/status'],
     ['POST', 'sales-imports/preview', {}], ['POST', 'sales-imports/missing', {}], ['POST', 'sales-imports', {}], ['GET', 'dashboard'],
     ['GET', 'receivables'], ['GET', 'receivables/c/invoices'], ['GET', 'receivables/c/invoices/d'],
@@ -219,6 +220,9 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     draft: { name: 'Người nhập liệu', username: 'editor', password: 'temporary-editor', role: 'editor', pages: ['sales'] },
   }, actor);
   assert.equal(editor.status, 200);
+  const editorEmployee = (await call('POST', 'employees', {
+    ...employee, code: 'EDITOR', linkedAccountId: editor.value.account.id,
+  }, actor)).value;
   const editorSession = await call('POST', 'session', { username: 'editor', password: 'temporary-editor' });
   const editorChanged = await call('PATCH', 'session/password', { password: 'editor-password' }, editorSession.cookie);
   assert.equal(editorChanged.status, 200);
@@ -227,6 +231,7 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   const misa = (await call('POST', 'accounts', {
     draft: { name: 'Nhập MISA', username: 'misa-only', password: 'temporary-misa', role: 'editor', pages: ['misa'] },
   }, actor)).value.account;
+  await call('POST', 'employees', { ...employee, code: 'MISA', linkedAccountId: misa.id }, actor);
   const misaLogin = await call('POST', 'session', { username: misa.username, password: 'temporary-misa' });
   const misaCookie = (await call('PATCH', 'session/password', { password: 'misa-password' }, misaLogin.cookie)).cookie;
   assert.equal((await call('GET', 'sales-book/status', undefined, misaCookie)).status, 200);
@@ -318,9 +323,32 @@ test('four company stores, independent accounts and concurrent writes over LAN',
 
   const employeeRoute = 'employees/' + createdEmployee.id;
   const withLink = { ...createdEmployee, linkedAccountId: editor.value.account.id };
-  assert.equal((await call('PATCH', employeeRoute, { expected: createdEmployee, employee: withLink }, editorChanged.cookie)).status, 403);
+  assert.equal((await call('GET', 'employees', undefined, editorChanged.cookie)).status, 200);
+  assert.equal((await call('POST', 'employees', { ...employee, code: 'NEW' }, editorChanged.cookie)).status, 403);
+  for (const employee of [{ ...createdEmployee, name: 'Đổi tên' }, { ...createdEmployee, status: 'inactive' }, withLink])
+    assert.equal((await call('PATCH', employeeRoute, { expected: createdEmployee, employee }, editorChanged.cookie)).status, 403);
+  assert.equal((await call('DELETE', employeeRoute, { expected: createdEmployee }, editorChanged.cookie)).status, 403);
+  assert.equal((await call('DELETE', 'employees/' + editorEmployee.id, { expected: editorEmployee }, actor)).status, 200);
   const linked = (await call('PATCH', employeeRoute, { expected: createdEmployee, employee: withLink }, actor)).value.employee;
   const salesCookie = editorChanged.cookie;
+  const otherEmployee = (await call('POST', 'employees', { ...employee, code: 'OTHER-OWNER' }, actor)).value;
+  const reserved = (await call('POST', 'customers', { ...customer, misaCode: 'RESERVED' }, actor)).value;
+  const paused = (await call('POST', 'customers', { ...customer, misaCode: 'PAUSED', status: 'paused' }, actor)).value;
+  const assignmentFor = (employee, customer) => ({ employeeId: employee.id, employeeName: employee.name,
+    effectiveFrom: '2026-02-01', customers: [{ id: customer.id, expected: customer.updatedAt }] });
+  const reservedAssignment = (await call('POST', 'assignments', assignmentFor(otherEmployee, reserved), actor)).value[0];
+  const readSales = async () => (await call('GET', 'assignments', undefined, salesCookie)).value;
+  const pool = await readSales();
+  assert.deepEqual(pool.employees.map(({ id }) => id), [linked.id]);
+  assert.ok(pool.customers.some(({ id }) => id === createdCustomer.id));
+  assert.ok(!pool.customers.some(({ id }) => id === reserved.id || id === paused.id));
+  assert.deepEqual((await call('GET', 'customers', undefined, salesCookie)).value, []);
+  assert.equal((await call('POST', 'assignments', assignmentFor(otherEmployee, writes[0].value), salesCookie)).status, 403);
+  const transfer = { ...assignmentFor(linked, reservedAssignment), effectiveFrom: '2026-02-02' };
+  assert.equal((await call('POST', 'assignments', transfer, salesCookie)).status, 409);
+  assert.equal((await call('PATCH', 'assignments/' + reservedAssignment.assignments[0].id, {
+    expected: reservedAssignment.updatedAt, effectiveTo: '2026-02-02',
+  }, salesCookie)).status, 403);
   const assignment = {
     employeeId: linked.id, employeeName: linked.name, effectiveFrom: '2026-02-01',
     customers: writes.map(({ value }) => ({ id: value.id, expected: value.updatedAt })),
@@ -329,15 +357,17 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     ...assignment, customers: [assignment.customers[0], { ...assignment.customers[1], expected: 'stale' }],
   }, salesCookie);
   assert.equal(failedBulk.status, 409);
-  assert.ok((await call('GET', 'customers', undefined, actor)).value.every((item) => !item.assignments.length));
+  assert.ok((await readSales()).customers.filter(({ id }) => assignment.customers.some((target) => target.id === id))
+    .every((item) => !item.assignments.length));
   const assignedResponse = await call('POST', 'assignments', assignment, salesCookie);
   assert.equal(assignedResponse.status, 200);
   const [assigned, otherAssigned] = assignedResponse.value;
   const currentAssignment = assigned.assignments[0];
   assert.equal(currentAssignment.employeeId, linked.id);
+  assert.ok((await call('GET', 'customers', undefined, salesCookie)).value.some(({ id }) => id === assigned.id));
   const renamed = await call('PATCH', employeeRoute, {
     expected: linked, employee: { ...linked, name: 'Tên nhân viên đã sửa' },
-  }, salesCookie);
+  }, actor);
   assert.equal(renamed.status, 200);
   assert.equal(renamed.value.employee.linkedAccountId, editor.value.account.id);
   assert.equal(renamed.value.customers.length, 2);
@@ -350,6 +380,8 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   const renamedCustomer = renamed.value.customers.find(({ id }) => id === assigned.id);
   const ended = await call('PATCH', assignmentPath, { expected: renamedCustomer.updatedAt, effectiveTo: '2026-02-02' }, salesCookie);
   assert.equal(ended.value.assignments[0].effectiveTo, '2026-02-02');
+  assert.ok((await readSales()).customers.some(({ id, assignments }) => id === assigned.id && assignments.every((item) => item.effectiveTo)));
+  assert.ok(!(await call('GET', 'customers', undefined, salesCookie)).value.some(({ id }) => id === assigned.id));
   const removed = await call('DELETE', employeeRoute, { expected: renamed.value.employee, effectiveTo: '2026-02-03' }, actor);
   assert.equal(removed.status, 200);
   assert.equal(removed.value[0].id, otherAssigned.id);

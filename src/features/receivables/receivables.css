@@ -136,6 +136,30 @@
 	min-width: var(--layout-760);
 }
 
+.receivable-opening {
+	padding: var(--space-16);
+}
+
+.receivable-opening h3 {
+	margin: 0 0 var(--space-10);
+}
+
+.receivable-opening-fields {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: var(--field-gap);
+}
+
+.receivable-opening-fields > .ui-field {
+	flex: 1 1 var(--layout-150);
+}
+
+.receivable-opening p {
+	margin: var(--space-10) 0 0;
+	color: var(--text-subtle);
+}
+
 .receivable-invoice-table .receivable-amount-column {
 	width: 15%;
 }

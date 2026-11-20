@@ -2,8 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 
 const changed = "accounting-changed";
+let channel: BroadcastChannel | undefined;
+
+function accountingChannel() {
+	if (typeof window.BroadcastChannel === "function") {
+		channel ??= new window.BroadcastChannel(changed);
+	}
+	return channel;
+}
+
 export function accountingChanged() {
 	window.dispatchEvent(new Event(changed));
+	accountingChannel()?.postMessage(changed);
 }
 
 export function resourceWithQuery(
@@ -49,11 +59,14 @@ export function useServerData<T>(resource?: string) {
 	}, [resource, request]);
 	useEffect(() => {
 		if (!resource) return;
+		const changes = accountingChannel();
 		window.addEventListener("focus", refresh);
 		window.addEventListener(changed, refresh);
+		changes?.addEventListener("message", refresh);
 		return () => {
 			window.removeEventListener("focus", refresh);
 			window.removeEventListener(changed, refresh);
+			changes?.removeEventListener("message", refresh);
 		};
 	}, [resource, refresh]);
 	const current =

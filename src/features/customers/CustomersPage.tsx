@@ -36,7 +36,11 @@ import {
 import { useCustomers } from "./useCustomers";
 import { usePagination } from "../../shared/hooks/usePagination";
 
-export function CustomersPage() {
+export function CustomersPage({
+	showEmployeeFilter,
+}: {
+	showEmployeeFilter: boolean;
+}) {
 	const {
 		customers,
 		salesEmployees,
@@ -52,7 +56,8 @@ export function CustomersPage() {
 	const searchQuery = useDeferredValue(query);
 	const [status, setStatus] = useState<StatusFilter>("all");
 	const [province, setProvince] = useState("all");
-	const [employee, setEmployee] = useState("all");
+	const [selectedEmployee, setEmployee] = useState("all");
+	const employee = showEmployeeFilter ? selectedEmployee : "all";
 	const [detailCustomerId, setDetailCustomerId] = useState<string>();
 	const [formCustomer, setFormCustomer] = useState<Customer | null>();
 	const [formOpen, setFormOpen] = useState(false);
@@ -266,6 +271,7 @@ export function CustomersPage() {
 					currentPage={currentPage}
 					pageCount={pageCount}
 					pageSize={pageSize}
+					showEmployeeFilter={showEmployeeFilter}
 					employees={salesEmployees}
 					provinces={provinceOptions}
 					query={query}

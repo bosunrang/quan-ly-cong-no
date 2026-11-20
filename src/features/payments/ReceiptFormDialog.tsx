@@ -13,7 +13,7 @@ import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { Notice } from "../../shared/ui/Notice";
 import { SearchableInput } from "../../shared/ui/SearchableInput";
-import { parseVnd, VndAmountInput } from "./VndAmountInput";
+import { parseVnd, VndAmountInput } from "../../shared/ui/VndAmountInput";
 
 interface Props {
 	customers: Customer[];

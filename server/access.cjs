@@ -1,5 +1,6 @@
 const { fail } = require('./access-errors.cjs');
 const { requestPeer } = require('./client-address.cjs');
+const { requireLinkedEmployee } = require('./customer-scope.cjs');
 const { createHash, pbkdf2, randomBytes, randomUUID, timingSafeEqual } = require('node:crypto');
 const { promisify } = require('node:util');
 
@@ -196,6 +197,11 @@ function createAccess(db, company, tls, tunnelOrigin) {
       const account = accountsOf(db).find((item) =>
         item.id === session.id && item.active && item.sessionVersion === session.version);
       if (account) {
+        try { requireLinkedEmployee(db, account, 401); }
+        catch (error) {
+          db.deleteSession(tokenHash(key));
+          throw error;
+        }
         if (req.headers['x-cong-no-session'] && req.headers['x-cong-no-session'] !== account.sessionVersion)
           fail(401, 'Tài khoản trong trình duyệt đã thay đổi. Hãy đăng nhập lại.');
         if (account.mustChangePassword && !allowPending) fail(403, 'Bạn cần đổi mật khẩu trước.');
@@ -239,6 +245,7 @@ function createAccess(db, company, tls, tunnelOrigin) {
         if (!latest) fail(401, 'Tài khoản vừa thay đổi. Hãy đăng nhập lại.');
         refundLoginAttempt(address);
         accountFailures.delete(username);
+        requireLinkedEmployee(db, latest);
         createSession(req, res, latest);
         audit(db, latest, 'session', 'Đăng nhập');
         return profilesFor(db, latest);

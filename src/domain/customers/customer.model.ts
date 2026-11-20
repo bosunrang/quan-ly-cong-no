@@ -3,6 +3,11 @@ import { isIsoDate, isIsoTimestamp } from "../../shared/lib/date";
 export type CustomerGroup = "state" | "private" | "unknown";
 export type CustomerStatus = "active" | "paused";
 
+export interface OpeningBalance {
+	date: string;
+	amount: number;
+}
+
 export interface SalesAssignment {
 	id: string;
 	employeeId: string;
@@ -23,6 +28,7 @@ export interface Customer {
 	address: string;
 	status: CustomerStatus;
 	assignments: SalesAssignment[];
+	openingBalance?: OpeningBalance;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -87,6 +93,12 @@ export function isCustomer(value: unknown): value is Customer {
 		(value.status === "active" || value.status === "paused") &&
 		Array.isArray(value.assignments) &&
 		value.assignments.every(isSalesAssignment) &&
+		(value.openingBalance === undefined ||
+			(isRecord(value.openingBalance) &&
+				isIsoDate(value.openingBalance.date) &&
+				typeof value.openingBalance.amount === "number" &&
+				Number.isSafeInteger(value.openingBalance.amount) &&
+				value.openingBalance.amount > 0)) &&
 		isIsoTimestamp(value.createdAt) &&
 		isIsoTimestamp(value.updatedAt)
 	);

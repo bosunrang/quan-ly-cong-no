@@ -20,6 +20,7 @@ import { StatusPill, type StatusTone } from "../../../shared/ui/StatusPill";
 export type CustomerScope = "unassigned" | "other" | "owned" | "all";
 
 interface CustomerPoolPanelProps {
+	selfService: boolean;
 	customers: Customer[];
 	filteredCount: number;
 	currentPage: number;
@@ -45,6 +46,7 @@ interface CustomerPoolPanelProps {
 
 export function CustomerPoolPanel(props: CustomerPoolPanelProps) {
 	const {
+		selfService,
 		customers,
 		filteredCount,
 		currentPage,
@@ -86,7 +88,7 @@ export function CustomerPoolPanel(props: CustomerPoolPanelProps) {
 			<header className="sales-panel-head">
 				<div>
 					<span>BƯỚC 2</span>
-					<h2>Chọn đơn vị để giao</h2>
+					<h2>{selfService ? "Chọn đơn vị để nhận" : "Chọn đơn vị để giao"}</h2>
 					<p>Lọc theo khu vực để chọn nhiều khách hàng cùng lúc</p>
 				</div>
 				<span className="sales-result-count">{filteredCount} đơn vị</span>
@@ -118,26 +120,30 @@ export function CustomerPoolPanel(props: CustomerPoolPanelProps) {
 						/>
 					</label>
 				</div>
-				<fieldset className="filter-switch customer-scope-tabs">
+				<fieldset
+					className={`filter-switch customer-scope-tabs${selfService ? " customer-scope-tabs--self-service" : ""}`}
+				>
 					<legend className="visually-hidden">Lọc tình trạng phân công</legend>
 					{(
 						[
 							["unassigned", "Chưa phân công"],
 							["other", "Của người khác"],
-							["owned", "Của nhân viên này"],
+							["owned", selfService ? "Đang phụ trách" : "Của nhân viên này"],
 							["all", "Tất cả"],
 						] as const
-					).map(([value, label]) => (
-						<button
-							key={value}
-							className={scope === value ? "is-active" : ""}
-							type="button"
-							aria-pressed={scope === value}
-							onClick={() => onScopeChange(value)}
-						>
-							{label}
-						</button>
-					))}
+					)
+						.filter(([value]) => !selfService || value !== "other")
+						.map(([value, label]) => (
+							<button
+								key={value}
+								className={scope === value ? "is-active" : ""}
+								type="button"
+								aria-pressed={scope === value}
+								onClick={() => onScopeChange(value)}
+							>
+								{label}
+							</button>
+						))}
 				</fieldset>
 			</div>
 			<div className="pool-bulk-row">
@@ -257,7 +263,9 @@ export function CustomerPoolPanel(props: CustomerPoolPanelProps) {
 							{selectedIds.size
 								? transferCount
 									? `${transferCount} đơn vị sẽ được chuyển giao`
-									: `Sẵn sàng giao cho ${employee?.name ?? "nhân viên"}`
+									: selfService
+										? "Sẵn sàng nhận phụ trách"
+										: `Sẵn sàng giao cho ${employee?.name ?? "nhân viên"}`
 								: ""}
 						</span>
 					</div>
@@ -270,7 +278,9 @@ export function CustomerPoolPanel(props: CustomerPoolPanelProps) {
 				>
 					{employee?.status === "inactive"
 						? "Nhân viên đã ngừng hoạt động"
-						: `Giao cho ${employee?.name ?? "nhân viên"}`}{" "}
+						: selfService
+							? "Nhận phụ trách"
+							: `Giao cho ${employee?.name ?? "nhân viên"}`}{" "}
 					{employee?.status === "active" && (
 						<ArrowRight className="icon-size-16" />
 					)}

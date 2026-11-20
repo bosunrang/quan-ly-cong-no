@@ -19,6 +19,7 @@ interface CustomerDirectoryPanelProps {
 	currentPage: number;
 	pageCount: number;
 	pageSize: number;
+	showEmployeeFilter: boolean;
 	employees: SalesEmployee[];
 	provinces: string[];
 	query: string;
@@ -45,6 +46,7 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 		currentPage,
 		pageCount,
 		pageSize,
+		showEmployeeFilter,
 		employees,
 		provinces,
 		query,
@@ -96,18 +98,20 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 						<option key={item}>{item}</option>
 					))}
 				</select>
-				<select
-					aria-label="Lọc nhân viên"
-					value={employee}
-					onChange={(event) => onEmployeeChange(event.target.value)}
-				>
-					<option value="all">Tất cả nhân viên</option>
-					{employees.map((item) => (
-						<option key={item.id} value={item.id}>
-							{item.name}
-						</option>
-					))}
-				</select>
+				{showEmployeeFilter && (
+					<select
+						aria-label="Lọc nhân viên"
+						value={employee}
+						onChange={(event) => onEmployeeChange(event.target.value)}
+					>
+						<option value="all">Tất cả nhân viên</option>
+						{employees.map((item) => (
+							<option key={item.id} value={item.id}>
+								{item.name}
+							</option>
+						))}
+					</select>
+				)}
 				<select
 					aria-label="Lọc trạng thái"
 					value={status}

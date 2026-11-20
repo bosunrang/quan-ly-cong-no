@@ -40,7 +40,7 @@ function createAccountingState(db) {
     return lastGroups.groups;
   }
   function sourcesFor(book, receipt, current = catalog()) {
-    return book ? domain.receiptInvoiceSourcesFromGroups(groupsFor(book, current), book.fileName, receipt) : [];
+    return domain.receiptInvoiceSourcesFromGroups(groupsFor(book, current), book?.fileName ?? '', receipt);
   }
 
   // Nhóm khách tính đến một ngày chốt chỉ phụ thuộc sổ bán hàng và danh mục, không phụ thuộc sổ thu:
@@ -48,10 +48,12 @@ function createAccountingState(db) {
   const throughGroups = new Map();
   function groupsThrough(book, current, through) {
     const rows = domain.salesRowsThrough(book?.rows ?? [], through);
-    if (rows.length === (book?.rows.length ?? 0)) return groupsFor(book, current);
+    if (rows.length === (book?.rows.length ?? 0) &&
+        !current.directory.some(({ openingBalance }) => openingBalance && openingBalance.date > through))
+      return groupsFor(book, current);
     const cached = throughGroups.get(through);
     if (cached && cached.book === book && cached.key === current.key) return cached.groups;
-    const groups = domain.buildSalesReceivables(rows, current.directory, current.staff);
+    const groups = domain.buildSalesReceivables(rows, current.directory, current.staff, { through });
     throughGroups.delete(through);
     throughGroups.set(through, { book, key: current.key, groups });
     while (throughGroups.size > 6) throughGroups.delete(throughGroups.keys().next().value);
@@ -59,10 +61,12 @@ function createAccountingState(db) {
   }
 
   let lastView;
-  function projected() {
+  function projected(scope) {
     const book = sales();
     const data = ledger();
     const groups = groupsFor(book, catalog());
+    if (scope && !scope.unrestricted)
+      return domain.projectReceiptReceivables(scope.groups(groups), book?.fileName ?? '', scope.ledger(data));
     if (!lastView || lastView.groups !== groups || lastView.data !== data)
       lastView = { groups, data, result: domain.projectReceiptReceivables(groups, book?.fileName ?? '', data) };
     return lastView.result;
@@ -70,26 +74,31 @@ function createAccountingState(db) {
 
   // Nhớ vài kỳ Dashboard gần nhất: nhiều người xem các kỳ khác nhau không phải tính lại liên tục.
   const summaries = new Map();
-  function summary(query) {
+  function summary(query, scope) {
     const book = sales();
     const data = ledger();
     const current = catalog();
     const [from, through] = period(query);
-    const key = JSON.stringify([current.key, from, through]);
+    const key = JSON.stringify([current.key, from, through, scope?.key ?? '*']);
     const cached = summaries.get(key);
     if (cached && cached.book === book && cached.data === data) {
       summaries.delete(key);
       summaries.set(key, cached);
       return cached.result;
     }
-    const result = domain.buildDashboardSummary(book, data, current.directory, current.staff, from, through,
-      groupsThrough(book, current, through));
+    const groups = groupsThrough(book, current, through);
+    const visibleGroups = scope ? scope.groups(groups) : groups;
+    const visibleLines = scope && !scope.unrestricted
+      ? new Set(visibleGroups.flatMap((group) => group.documents.flatMap((document) => document.lines))) : null;
+    const visibleBook = book && visibleLines ? { ...book, rows: book.rows.filter((row) => visibleLines.has(row)) } : book;
+    const result = domain.buildDashboardSummary(visibleBook, scope ? scope.ledger(data) : data,
+      current.directory, current.staff, from, through, visibleGroups);
     summaries.delete(key);
     summaries.set(key, { book, data, result });
     while (summaries.size > 12) summaries.delete(summaries.keys().next().value);
     return result;
   }
-  return { sales, ledger, customers, employees, catalog, groupsFor, sourcesFor, groupsThrough, projected, summary };
+  return { sales, ledger, customers, employees, catalog, groupsFor, sourcesFor, projected, summary };
 }
 
 module.exports = { createAccountingState };

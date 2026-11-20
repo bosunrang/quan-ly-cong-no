@@ -2,9 +2,9 @@ import { useRef, useState } from "react";
 import {
 	createAssignments,
 	endAssignment,
+	readAssignmentDirectory,
 } from "../../domain/assignments/assignment.repository";
 import type { Customer } from "../../domain/customers/customer.model";
-import { readDirectory } from "../../domain/customers/directory.repository";
 import { currentAssignment } from "../../domain/customers/customer.selectors";
 import { createEmployee } from "../../domain/employees/employee.factory";
 import type {
@@ -17,12 +17,13 @@ import {
 	updateSalesEmployee,
 } from "../../domain/employees/employee.repository";
 import { useAsyncData } from "../../shared/hooks/useAsyncData";
+import { accountingChanged } from "../../shared/hooks/useServerData";
 import { reportStorageIssue } from "../../shared/storage/storageIssues";
 
 const empty = { customers: [], employees: [] };
 
 export function useSalesAssignments() {
-	const { data, setData, error, loading } = useAsyncData(readDirectory);
+	const { data, setData, error, loading } = useAsyncData(readAssignmentDirectory);
 	const { customers, employees } = data ?? empty;
 	const saving = useRef(false);
 	const [busy, setBusy] = useState(false);
@@ -92,6 +93,7 @@ export function useSalesAssignments() {
 					effectiveFrom,
 				);
 				updateDirectory(records);
+				accountingChanged();
 				return { count: records.length };
 			});
 		},
@@ -107,6 +109,7 @@ export function useSalesAssignments() {
 				updateDirectory([
 					await endAssignment(assignment.id, customer, effectiveTo),
 				]);
+				accountingChanged();
 				return true;
 			});
 		},

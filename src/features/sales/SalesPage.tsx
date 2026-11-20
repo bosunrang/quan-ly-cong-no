@@ -27,6 +27,8 @@ export function SalesPage({
 }: {
 	linkableAccounts?: readonly AccountProfile[];
 }) {
+	const canManageEmployees = linkableAccounts !== undefined;
+	const selfService = !canManageEmployees;
 	const {
 		customers,
 		employees,
@@ -65,6 +67,7 @@ export function SalesPage({
 	const selectedEmployee =
 		employees.find((employee) => employee.id === selectedEmployeeId) ??
 		activeEmployees[0];
+	const ownerId = selectedEmployee?.id;
 	const provinceOptions = useMemo(
 		() =>
 			[...new Set(customers.map((customer) => customer.province))].sort(
@@ -98,6 +101,8 @@ export function SalesPage({
 		() =>
 			customers.filter((customer) => {
 				const assignment = activeSalesAssignment(customer);
+				if (selfService && !assignment && customer.status !== "active")
+					return false;
 				const searchable =
 					`${customer.misaCode} ${customer.name} ${customer.taxCode} ${customer.address}`.toLowerCase();
 				return (
@@ -106,13 +111,14 @@ export function SalesPage({
 					(scope === "all" ||
 						(scope === "unassigned" && !assignment) ||
 						(scope === "owned" &&
-							assignment?.employeeId === selectedEmployeeId) ||
+							assignment &&
+							assignment.employeeId === ownerId) ||
 						(scope === "other" &&
 							assignment &&
-							assignment.employeeId !== selectedEmployeeId))
+							assignment.employeeId !== ownerId))
 				);
 			}),
-		[customers, province, customerQuery, scope, selectedEmployeeId],
+		[customers, province, customerQuery, scope, ownerId, selfService],
 	);
 	const {
 		currentPage: customerPage,
@@ -280,7 +286,9 @@ export function SalesPage({
 		setAssignmentOpen(false);
 		setSelectedCustomerIds(new Set());
 		showNotice(
-			`Đã phân công ${result.count} khách hàng cho ${selectedEmployee.name}.`,
+			selfService
+				? `Đã nhận phụ trách ${result.count} khách hàng.`
+				: `Đã phân công ${result.count} khách hàng cho ${selectedEmployee.name}.`,
 		);
 	};
 
@@ -307,6 +315,7 @@ export function SalesPage({
 			<section className="sales-board" aria-label="Bảng phân công khách hàng">
 				<EmployeePanel
 					employees={visibleEmployees}
+					canManageEmployees={canManageEmployees}
 					linkableAccounts={linkableAccounts}
 					assignmentCountByEmployee={assignmentCountByEmployee}
 					selectedEmployeeId={selectedEmployee?.id}
@@ -328,6 +337,7 @@ export function SalesPage({
 					onAdd={() => setEmployeeEditorId("new")}
 				/>
 				<CustomerPoolPanel
+					selfService={selfService}
 					customers={pagedVisibleCustomers}
 					filteredCount={visibleCustomers.length}
 					currentPage={customerPage}
@@ -368,6 +378,7 @@ export function SalesPage({
 					}}
 				/>
 				<AssignedCustomerPanel
+					selfService={selfService}
 					ownerKey={selectedEmployee?.id ?? ""}
 					employeeName={selectedEmployee?.name}
 					customers={ownedCustomers}
@@ -383,7 +394,7 @@ export function SalesPage({
 				/>
 			)}
 
-			{employeeEditorId && (
+			{canManageEmployees && employeeEditorId && (
 				<EmployeeFormDialog
 					busy={busy}
 					employees={employees}
@@ -409,7 +420,7 @@ export function SalesPage({
 					}}
 				/>
 			)}
-			{employeeToDeactivate && (
+			{canManageEmployees && employeeToDeactivate && (
 				<EmployeeDeactivateDialog
 					busy={busy}
 					employee={employeeToDeactivate}
@@ -438,7 +449,7 @@ export function SalesPage({
 					}}
 				/>
 			)}
-			{employeeToDelete && (
+			{canManageEmployees && employeeToDelete && (
 				<EmployeeDeleteDialog
 					busy={busy}
 					employee={employeeToDelete}
@@ -494,6 +505,7 @@ export function SalesPage({
 			)}
 			{assignmentOpen && selectedEmployee && (
 				<AssignmentDialog
+					selfService={selfService}
 					busy={busy}
 					customers={selectedCustomers}
 					employee={selectedEmployee}

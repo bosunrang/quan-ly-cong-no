@@ -6,6 +6,7 @@ import { PaginationControls } from "../../../shared/ui/Pagination/PaginationCont
 import { RowActionButton } from "../../../shared/ui/RowActionButton";
 
 interface AssignedCustomerPanelProps {
+	selfService: boolean;
 	ownerKey: string;
 	employeeName?: string;
 	customers: Customer[];
@@ -14,6 +15,7 @@ interface AssignedCustomerPanelProps {
 }
 
 export function AssignedCustomerPanel({
+	selfService,
 	ownerKey,
 	employeeName,
 	customers,
@@ -57,8 +59,11 @@ export function AssignedCustomerPanel({
 			<header className="sales-panel-head">
 				<div>
 					<span>PHÂN CÔNG HIỆN TẠI</span>
-					<h2>Đơn vị của {employeeName ?? "nhân viên"}</h2>
-					<p>Kết quả đang có, không phải lựa chọn mới</p>
+					<h2>
+						{selfService
+							? "Đơn vị tôi phụ trách"
+							: `Đơn vị của ${employeeName ?? "nhân viên"}`}
+					</h2>
 				</div>
 				<span className="sales-result-count teal">
 					{customers.length} đơn vị

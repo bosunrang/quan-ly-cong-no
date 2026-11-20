@@ -285,7 +285,8 @@ function migrateBooks(db) {
 function allocatedDocuments(db) {
   return db.prepare(`SELECT DISTINCT l.document_number FROM allocation_lines l
     LEFT JOIN reversals v ON v.allocation_id = l.allocation_id
-    WHERE v.allocation_id IS NULL ORDER BY l.document_number`).all().map((row) => row.document_number);
+    WHERE v.allocation_id IS NULL AND l.invoice_id <> ('opening-balance:' || l.customer_id)
+    ORDER BY l.document_number`).all().map((row) => row.document_number);
 }
 
 module.exports = { SALE, LEDGER, migrateBooks, readSales, readLedger, clearSales, clearLedger, writeSales, writeLedger,

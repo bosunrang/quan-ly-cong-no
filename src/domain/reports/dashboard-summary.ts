@@ -42,7 +42,8 @@ export function buildDashboardSummary(
 
 	const salesRows = salesRowsThrough(book?.rows ?? [], through);
 	const groups =
-		groupsThrough ?? buildSalesReceivables(salesRows, customers, employees);
+		groupsThrough ??
+		buildSalesReceivables(salesRows, customers, employees, { through });
 	const projected = projectReceiptReceivables(
 		groups,
 		book?.fileName ?? "",

@@ -17,6 +17,7 @@ import { Drawer } from "../../shared/ui/Dialog/Drawer";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { SalesInvoiceLinesDialog } from "../../shared/ui/SalesInvoiceLinesDialog";
 import { InvoiceReceiptAllocationsDialog } from "./InvoiceReceiptAllocationsDialog";
+import { OpeningBalancePanel } from "./OpeningBalancePanel";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 
@@ -24,10 +25,12 @@ export function SalesInvoiceDrawer({
 	customer,
 	asOfDate,
 	from,
+	canEditOpeningBalance = false,
 	onClose,
 }: {
 	customer: InvoiceCustomer;
 	from?: string;
+	canEditOpeningBalance?: boolean;
 	asOfDate?: string;
 	onClose: () => void;
 }) {
@@ -82,6 +85,12 @@ export function SalesInvoiceDrawer({
 					</button>
 				</header>
 				<div className="customer-detail-body">
+					{!asOfDate && customer.customerId && (
+						<OpeningBalancePanel
+							customerId={customer.customerId}
+							canEdit={canEditOpeningBalance}
+						/>
+					)}
 					{(response.loading || detailResponse.loading) && (
 						<p role="status">Đang tải chứng từ…</p>
 					)}
@@ -174,7 +183,7 @@ export function SalesInvoiceDrawer({
 												)}
 											</td>
 											<td>
-												{document.invoiceNumber ? (
+												{document.invoiceNumber || document.openingBalance ? (
 													document.documentNumbers.join(", ")
 												) : (
 													<button
@@ -193,7 +202,9 @@ export function SalesInvoiceDrawer({
 												)}
 											</td>
 											<td className="receivable-number">
-												{number.format(document.lineCount)}
+												{document.openingBalance
+													? "—"
+													: number.format(document.lineCount)}
 											</td>
 											<td className="receivable-number strong-number">
 												{document.paymentTotal === null

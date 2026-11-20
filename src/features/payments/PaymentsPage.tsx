@@ -1,6 +1,6 @@
 import { GitMerge, Plus, ReceiptText, Search, Undo2, X } from "lucide-react";
 import { useDeferredValue, useRef, useState } from "react";
-import { readCustomers } from "../../domain/customers/customer.repository";
+import type { Customer } from "../../domain/customers/customer.model";
 import {
 	saveAllocation,
 	saveReceipt,
@@ -11,7 +11,6 @@ import type {
 	ReceiptList,
 	SalesMetadata,
 } from "../../domain/reports/view-types";
-import { useAsyncData } from "../../shared/hooks/useAsyncData";
 import {
 	accountingChanged,
 	pageControls,
@@ -35,7 +34,7 @@ type Action =
 	| { kind: "create" | "allocate" | "reverseReceipt" }
 	| { kind: "reverse"; id: string };
 
-const emptyCustomers: Awaited<ReturnType<typeof readCustomers>> = [];
+const emptyCustomers: Customer[] = [];
 
 const statuses = {
 	reversed: { tone: "neutral", label: "Đã hủy khoản thu" },
@@ -48,7 +47,7 @@ const errorText = (reason: unknown) =>
 	reason instanceof Error ? reason.message : "Không thể hoàn tất thao tác.";
 
 export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
-	const directory = useAsyncData(readCustomers);
+	const directory = useServerData<Customer[]>("customers");
 	const customers = directory.data ?? emptyCustomers;
 	const [query, setQuery] = useState("");
 	// Ô tìm kiếm cập nhật ngay; danh sách lọc lại sau đó để gõ phím không bị khựng.
@@ -118,7 +117,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 				{directory.error}
 			</Notice>
 		);
-	if (directory.loading)
+	if (directory.loading && !directory.data)
 		return (
 			<p className="panel empty-state" role="status">
 				Đang tải khách hàng…
@@ -165,7 +164,8 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 			)}
 			{book === null && (
 				<Notice tone="info">
-					Nhập sổ bán hàng để có chứng từ phân bổ.{" "}
+					Có thể phân bổ vào số dư đầu kỳ đã nhập. Nhập sổ bán hàng để phân bổ
+					theo hóa đơn.{" "}
 					{onOpenMisa && (
 						<button type="button" className="text-button" onClick={onOpenMisa}>
 							Mở Dữ liệu MISA
@@ -363,7 +363,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 						)}
 						{!selectedData.data?.hasInvoices && remaining > 0 && (
 							<Notice tone="info">
-								Chưa có chứng từ MISA phù hợp cho khoản thu này.
+								Chưa có hóa đơn hoặc số dư đầu kỳ phù hợp cho khoản thu này.
 							</Notice>
 						)}
 						<section className="payment-history" aria-label="Lịch sử phân bổ">

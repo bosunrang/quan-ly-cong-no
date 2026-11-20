@@ -3,8 +3,8 @@ const { opts, normalize, pageOf, customerSummary, search } = require('./helpers.
 
 function register(router, db, state) {
   const { summary } = state;
-  router.get('/api/dashboard', ({ query }) => {
-    const { receivables, periodReceipts, unallocatedReceipts, ...totals } = summary(query);
+  router.get('/api/dashboard', ({ query, scope }) => {
+    const { receivables, periodReceipts, unallocatedReceipts, ...totals } = summary(query, scope);
     const view = query.get('view');
     const q = search(query);
     const rows = view === 'period' ? periodReceipts : view === 'unallocated' ? unallocatedReceipts :

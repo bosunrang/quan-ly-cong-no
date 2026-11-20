@@ -288,11 +288,14 @@ function App() {
 		if (activePage === "receivables")
 			return (
 				<SalesReceivablesPage
+					showEmployeeFilter={role === "admin"}
+					canEditOpeningBalance={role !== "viewer"}
 					onOpenMisa={openMisa}
 					onOpenCustomers={openCustomers}
 				/>
 			);
-		if (activePage === "customers") return <CustomersPage />;
+		if (activePage === "customers")
+			return <CustomersPage showEmployeeFilter={role === "admin"} />;
 		if (activePage === "sales")
 			return (
 				<SalesPage linkableAccounts={role === "admin" ? accounts : undefined} />

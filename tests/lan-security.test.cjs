@@ -30,6 +30,8 @@ test('không thể dùng tài khoản của mình để đặt lại giới hạ
     const viewer = { ...admin, id: 'viewer', username: 'ketoan', role: 'viewer', pages: ['dashboard'],
       mustChangePassword: false };
     assert.equal(db.writeAccounts([admin], [admin, viewer]), true);
+    db.writeDataset('cong-no.sales-employees.v2', 2, [{ id: 'viewer-employee', code: 'VIEW', name: 'Người xem',
+      phone: '', email: '', status: 'active', createdAt: '2026-01-01T00:00:00.000Z', linkedAccountId: viewer.id }]);
     const access = createAccess(db, company, false);
     const login = (username, secret) =>
       statusOf(access.handle('login', { username, password: secret }, request(), response()));

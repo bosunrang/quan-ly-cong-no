@@ -215,7 +215,6 @@ button:where(.text-button) { display: flex; align-items: center; gap: var(--spac
 	border-radius: var(--control-radius);
 	background: var(--surface-muted);
 }
-.filter-switch.customer-scope-tabs { display: grid; }
 .filter-switch button {
 	min-height: var(--control-height-small);
 	padding: 0 var(--control-padding);
@@ -294,6 +293,17 @@ button:where(.text-button) { display: flex; align-items: center; gap: var(--spac
 
 .ui-field { display: grid; gap: var(--field-label-gap); min-width: 0; }
 .ui-field-label { color: var(--muted); font-size: var(--type-body-sm); font-weight: 650; }
+.ui-text-input {
+	width: 100%;
+	min-width: 0;
+	height: var(--control-height);
+	padding: 0 var(--control-padding);
+	border: var(--border-width) solid var(--line-strong);
+	border-radius: var(--control-radius);
+	background: var(--panel);
+	color: var(--ink);
+	font-size: var(--control-font-size);
+}
 .ui-combobox { display: flex; align-items: stretch; min-width: 0; height: var(--control-height); border: var(--border-width) solid var(--line-strong); border-radius: var(--control-radius); background: var(--panel); }
 .app-shell .ui-combobox input { min-width: 0; flex: 1; height: 100%; padding: 0 var(--control-padding); border: none; background: transparent; color: var(--ink); font-size: var(--control-font-size); }
 .ui-combobox-toggle { display: grid; place-items: center; flex: 0 0 var(--control-height-compact); padding: 0; border-radius: 0 var(--control-radius) var(--control-radius) 0; background: transparent; color: var(--muted); cursor: pointer; }

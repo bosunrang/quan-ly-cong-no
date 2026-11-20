@@ -13,6 +13,7 @@ import { StatusPill } from "../../shared/ui/StatusPill";
 import { formatDateOnly, isIsoDate, todayLocal } from "../../shared/lib/date";
 
 interface AssignmentDialogProps {
+	selfService: boolean;
 	customers: Customer[];
 	employee: SalesEmployee;
 	error: string;
@@ -22,6 +23,7 @@ interface AssignmentDialogProps {
 }
 
 export function AssignmentDialog({
+	selfService,
 	customers,
 	employee,
 	error,
@@ -42,7 +44,11 @@ export function AssignmentDialog({
 		<Dialog
 			ariaLabelledBy="assignment-dialog-title"
 			eyebrow="XÁC NHẬN PHÂN CÔNG"
-			title={`Giao ${customers.length} khách hàng cho ${employee.name}`}
+			title={
+				selfService
+					? `Nhận phụ trách ${customers.length} khách hàng`
+					: `Giao ${customers.length} khách hàng cho ${employee.name}`
+			}
 			icon={<ArrowRightLeft className="icon-size-19" />}
 			className="assignment-dialog"
 			onClose={onClose}
@@ -65,7 +71,8 @@ export function AssignmentDialog({
 						}
 						onClick={() => onConfirm(effectiveFrom)}
 					>
-						<CheckCircle2 className="icon-size-16" /> Xác nhận phân công
+						<CheckCircle2 className="icon-size-16" />
+						{selfService ? "Xác nhận nhận khách" : "Xác nhận phân công"}
 					</button>
 				</>
 			}
@@ -83,12 +90,14 @@ export function AssignmentDialog({
 							<strong>{customers.length - transferCount}</strong> phân công mới
 						</span>
 					</div>
-					<div>
-						<ArrowRightLeft className="icon-size-18" />
-						<span>
-							<strong>{transferCount}</strong> chuyển người phụ trách
-						</span>
-					</div>
+					{!selfService && (
+						<div>
+							<ArrowRightLeft className="icon-size-18" />
+							<span>
+								<strong>{transferCount}</strong> chuyển người phụ trách
+							</span>
+						</div>
+					)}
 				</div>
 				<label
 					className="assignment-date-field"

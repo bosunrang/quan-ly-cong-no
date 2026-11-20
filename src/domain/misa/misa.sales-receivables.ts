@@ -14,6 +14,7 @@ export interface SalesDocumentGroup {
 	lines: MisaSalesLine[];
 	lineCount: number;
 	paymentTotal: number | null;
+	openingBalance?: true;
 }
 
 export interface SalesCustomerGroup {
@@ -71,35 +72,36 @@ export function salesRowsThrough(rows: readonly MisaSalesLine[], date: string) {
 	);
 }
 
+export const openingBalanceDocumentId = (customerId: string) =>
+	`opening-balance:${customerId}`;
+
 export function buildSalesReceivables(
 	rows: readonly MisaSalesLine[],
 	customers: readonly Customer[],
 	employees: readonly SalesEmployee[],
+	{
+		through,
+		includeEmptyCustomers = false,
+	}: { through?: string; includeEmptyCustomers?: boolean } = {},
 ): SalesCustomerGroup[] {
 	const byCode = indexCustomers(customers, (customer) => customer.misaCode);
 	const byName = indexCustomers(customers, (customer) => customer.name);
 	const employeeNames = new Map(employees.map(({ id, name }) => [id, name]));
 	const groups = new Map<string, CustomerAccumulator>();
-
-	for (const row of rows) {
-		const customerCode = row.source?.customerCode ?? "";
-		const code = identity(customerCode);
-		const name = identity(row.customerName);
-		// Only use a unique name for older sales rows that have no MISA customer code.
-		const customer = code ? byCode.get(code) : byName.get(name);
-		const id = customer
-			? `catalog:${customer.id}`
-			: code
-				? `code:${code}`
-				: `name:${name}`;
+	function groupFor(
+		id: string,
+		customer: Customer | null | undefined,
+		name: string,
+		code: string,
+	) {
 		let group = groups.get(id);
 		if (!group) {
 			const assignment = customer ? currentAssignment(customer) : undefined;
 			group = {
 				id,
 				customerId: customer?.id,
-				name: customer?.name ?? (row.customerName || "Chưa rõ khách hàng"),
-				customerCode: customer?.misaCode ?? customerCode,
+				name: customer?.name ?? (name || "Chưa rõ khách hàng"),
+				customerCode: customer?.misaCode ?? code,
 				catalogMatch: Boolean(customer),
 				province: customer?.province.trim() ?? "",
 				employeeId: assignment?.employeeId ?? "",
@@ -112,6 +114,21 @@ export function buildSalesReceivables(
 			};
 			groups.set(id, group);
 		}
+		return group;
+	}
+
+	for (const row of rows) {
+		const customerCode = row.source?.customerCode ?? "";
+		const code = identity(customerCode);
+		const name = identity(row.customerName);
+		// Only use a unique name for older sales rows that have no MISA customer code.
+		const customer = code ? byCode.get(code) : byName.get(name);
+		const id = customer
+			? `catalog:${customer.id}`
+			: code
+				? `code:${code}`
+				: `name:${name}`;
+		const group = groupFor(id, customer, row.customerName, customerCode);
 
 		const number = identity(row.invoiceNumber);
 		const series = identity(row.source?.invoiceSeries ?? "");
@@ -148,6 +165,36 @@ export function buildSalesReceivables(
 		if (row.paymentTotal === null) group.missingTotalCount += 1;
 		else
 			document.paymentTotal = (document.paymentTotal ?? 0) + row.paymentTotal;
+	}
+	for (const customer of customers) {
+		const balance = customer.openingBalance;
+		if (includeEmptyCustomers)
+			groupFor(
+				`catalog:${customer.id}`,
+				customer,
+				customer.name,
+				customer.misaCode,
+			);
+		if (!balance || (through && balance.date > through)) continue;
+		const group = groupFor(
+			`catalog:${customer.id}`,
+			customer,
+			customer.name,
+			customer.misaCode,
+		);
+		const id = openingBalanceDocumentId(customer.id);
+		group.documents.set(id, {
+			id,
+			openingBalance: true,
+			invoiceNumber: "",
+			invoiceSeries: "",
+			invoiceDate: "",
+			firstDate: balance.date,
+			lastDate: balance.date,
+			documentNumbers: new Set(["Số dư đầu kỳ"]),
+			lines: [],
+			paymentTotal: balance.amount,
+		});
 	}
 
 	return [...groups.values()]

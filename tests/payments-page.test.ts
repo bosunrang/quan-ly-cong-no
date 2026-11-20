@@ -41,8 +41,9 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 			},
 		},
 	];
+	let customers: typeof seedCustomers = [];
 	vi.mocked(api).mockImplementation(async (_method, resource) => {
-		if (resource === "customers") return [] as never;
+		if (resource === "customers") return customers as never;
 		if (resource === "sales-book/status") return null as never;
 		const status = new URLSearchParams(resource.split("?")[1]).get("status");
 		const items = receipts
@@ -62,6 +63,18 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 	});
 
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+	let channel: EventTarget | undefined;
+	const postMessage = vi.fn();
+	vi.stubGlobal(
+		"BroadcastChannel",
+		class extends EventTarget {
+			postMessage = postMessage;
+			constructor() {
+				super();
+				channel = this;
+			}
+		},
+	);
 	const container = document.createElement("div");
 	document.body.append(container);
 	const root = createRoot(container);
@@ -94,9 +107,24 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 		await selectStatus("active");
 		expect(receiptNumbers()).toEqual(["PT001"]);
 
+		const recordReceiptButton = Array.from(
+			container.querySelectorAll("button"),
+		).find((button) => button.textContent?.trim() === "Ghi khoản thu");
+		expect(recordReceiptButton?.disabled).toBe(true);
+		customers = [seedCustomers[0]];
 		receipts = [receipt, { ...receipt, id: "three", number: "PT003" }];
 		await act(async () => accountingChanged());
 		expect(receiptNumbers()).toEqual(["PT001", "PT003"]);
+		expect(recordReceiptButton?.disabled).toBe(false);
+		expect(postMessage).toHaveBeenCalledOnce();
+
+		customers = [];
+		receipts = [];
+		await act(async () => {
+			channel?.dispatchEvent(new MessageEvent("message"));
+		});
+		expect(receiptNumbers()).toEqual([]);
+		expect(recordReceiptButton?.disabled).toBe(true);
 	} finally {
 		await act(async () => root.unmount());
 		container.remove();

@@ -2,6 +2,13 @@ import { api } from "../../shared/api/client";
 import type { Customer } from "../customers/customer.model";
 import type { SalesEmployee } from "../employees/employee.model";
 
+export function readAssignmentDirectory() {
+	return api<{ customers: Customer[]; employees: SalesEmployee[] }>(
+		"GET",
+		"assignments",
+	);
+}
+
 export function createAssignments(
 	customers: Customer[],
 	employee: SalesEmployee,

@@ -3,6 +3,7 @@
 const { requirePage, fail } = require('./access.cjs');
 const { createRouter, readJsonBody, sendJson } = require('./http.cjs');
 const { createAccountingState } = require('./accounting-state.cjs');
+const { customerScope } = require('./customer-scope.cjs');
 
 const PUBLIC_ROUTES = new Set(['POST /api/session', 'GET /api/branding']);
 // Các thẻ được đọc danh mục khách hàng và nhân viên.
@@ -22,7 +23,7 @@ function createApi(tenant) {
   require('./routes/customers.cjs').register(router, db, directoryReaders);
   require('./routes/employees.cjs').register(router, db, directoryReaders);
   const state = createAccountingState(db);
-  for (const name of ['misa', 'dashboard', 'receivables', 'reports', 'payments'])
+  for (const name of ['misa', 'dashboard', 'receivables', 'opening-balances', 'reports', 'payments'])
     require('./routes/' + name + '.cjs').register(router, db, state);
   require('./routes/audit.cjs').register(router, tenant);
 
@@ -46,7 +47,8 @@ function createApi(tenant) {
       account = access.actor(req, route.options.allowPending);
       requirePage(account, route.options.pages);
     }
-    const value = await route.handler({ req, res, params: route.params, body, account, query });
+    const scope = account ? customerScope(db, account) : undefined;
+    const value = await route.handler({ req, res, params: route.params, body, account, query, scope });
     sendJson(res, 200, { ok: true, value });
   };
 }

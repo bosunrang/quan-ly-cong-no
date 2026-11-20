@@ -62,7 +62,7 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	let currentCustomers = customers;
 	const { datasets, api } = directoryServer(customers, [employee, other]);
-	api.mockImplementation(async (_method, operation, payload) => {
+	api.mockImplementation(async (method, operation, payload) => {
 		if (operation === "session") {
 			const profile = {
 				id: "admin",
@@ -77,6 +77,11 @@ it("giao cả khu vực qua nhiều trang và lọc công nợ theo người nh�
 		if (operation.endsWith("/stamp") || operation === "receipt-ledger")
 			return null as never;
 		if (operation === "assignments") {
+			if (method === "GET")
+				return {
+					customers: currentCustomers,
+					employees: [employee, other],
+				} as never;
 			const args = payload as {
 				customers: { id: string }[];
 				effectiveFrom: string;

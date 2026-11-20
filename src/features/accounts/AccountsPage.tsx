@@ -104,6 +104,10 @@ export function AccountsPage({
 				</div>
 				<div className="data-source-copy">
 					<h2 id="account-heading">Tài khoản người dùng</h2>
+					<p>
+						Tài khoản Nhập liệu và Chỉ xem cần được liên kết với nhân viên tại
+						mục Nhân viên &amp; khu vực trước khi đăng nhập.
+					</p>
 				</div>
 				<button
 					className="button primary"

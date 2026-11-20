@@ -2,6 +2,7 @@ import { ArrowRight, Database, FilterX, Search } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
 	InvoiceCustomer,
+	ReceivableRow,
 	ReceivablesView,
 } from "../../domain/reports/view-types";
 import {
@@ -18,10 +19,32 @@ const missing = "?";
 const searchDelay = 250;
 const initialFilters = { q: "", employee: "", province: "", page: 1 };
 
+function InvoiceCount({ row }: { row: ReceivableRow }) {
+	const unnumberedCount =
+		row.documentCount - row.invoiceCount - (row.hasOpeningBalance ? 1 : 0);
+	return (
+		<>
+			{number.format(row.invoiceCount)}
+			{unnumberedCount > 0 && (
+				<span className="cell-meta">
+					{number.format(unnumberedCount)} chứng từ thiếu số HĐ
+				</span>
+			)}
+			{row.hasOpeningBalance && (
+				<span className="cell-meta">Có số dư đầu kỳ</span>
+			)}
+		</>
+	);
+}
+
 export function SalesReceivablesPage({
+	showEmployeeFilter,
+	canEditOpeningBalance = false,
 	onOpenMisa,
 	onOpenCustomers,
 }: {
+	showEmployeeFilter: boolean;
+	canEditOpeningBalance?: boolean;
 	onOpenMisa?: () => void;
 	onOpenCustomers?: () => void;
 }) {
@@ -32,7 +55,8 @@ export function SalesReceivablesPage({
 	const shownResource = useRef<string | undefined>(undefined);
 	const searchQuery = query.trim();
 	const queryPending = searchQuery !== filters.q;
-	const resource = resourceWithQuery("receivables", filters);
+	const employee = showEmployeeFilter ? filters.employee : undefined;
+	const resource = resourceWithQuery("receivables", { ...filters, employee });
 	const response = useServerData<ReceivablesView>(resource);
 	const { data: currentData } = response;
 	const data = response.data ?? response.previous;
@@ -65,11 +89,11 @@ export function SalesReceivablesPage({
 			</p>
 		);
 	const { filterOptions, unmatchedAllocationCount, missingTotalCount } = data;
-	const { employee, province } = filters;
+	const { province } = filters;
 	const { page, limit, total, items } = data.rows;
 	const pagination = pageControls(page, limit, total);
 
-	if (!data.hasBook) {
+	if (!data.hasBook && !data.hasOpeningBalances && !canEditOpeningBalance) {
 		return (
 			<section className="panel empty-state receivable-empty">
 				<strong>Chưa có sổ bán hàng MISA</strong>
@@ -116,12 +140,15 @@ export function SalesReceivablesPage({
 				<div className="data-source-copy">
 					<h2 id="receivables-heading">Hóa đơn theo khách hàng</h2>
 					<p>
-						<strong>{data.fileName}</strong>
+						<strong>{data.fileName || "Chưa nhập sổ bán hàng MISA"}</strong>
 					</p>
 					<p>
-						Số đã thu lấy từ phân bổ đang hiệu lực. Số còn phải thu tính trên
-						chứng từ đủ điều kiện trong sổ này. Số dư đầu kỳ chưa được tính.
+						Số còn phải thu gồm chứng từ đủ điều kiện và số dư đầu kỳ đã nhập,
+						sau khi trừ các khoản thu đã phân bổ.
 					</p>
+					{canEditOpeningBalance && !data.hasBook && (
+						<p>Tìm khách hàng theo tên hoặc mã MISA để nhập số dư đầu kỳ.</p>
+					)}
 				</div>
 			</section>
 			<section className="panel data-panel">
@@ -139,29 +166,31 @@ export function SalesReceivablesPage({
 							/>
 						</span>
 					</label>
-					<label className="ui-field">
-						<span>Nhân viên phụ trách</span>
-						<select
-							aria-label="Lọc theo nhân viên phụ trách"
-							value={employee}
-							onChange={(event) =>
-								setFilters({
-									...filters,
-									q: searchQuery,
-									employee: event.target.value,
-									page: 1,
-								})
-							}
-						>
-							<option value="">Tất cả nhân viên</option>
-							{filterOptions.employees.map(([id, name]) => (
-								<option key={id} value={id}>
-									{name}
-								</option>
-							))}
-							<option value={missing}>Chưa có người phụ trách</option>
-						</select>
-					</label>
+					{showEmployeeFilter && (
+						<label className="ui-field">
+							<span>Nhân viên phụ trách</span>
+							<select
+								aria-label="Lọc theo nhân viên phụ trách"
+								value={employee}
+								onChange={(event) =>
+									setFilters({
+										...filters,
+										q: searchQuery,
+										employee: event.target.value,
+										page: 1,
+									})
+								}
+							>
+								<option value="">Tất cả nhân viên</option>
+								{filterOptions.employees.map(([id, name]) => (
+									<option key={id} value={id}>
+										{name}
+									</option>
+								))}
+								<option value={missing}>Chưa có người phụ trách</option>
+							</select>
+						</label>
+					)}
 					<label className="ui-field">
 						<span>Khu vực</span>
 						<select
@@ -250,15 +279,7 @@ export function SalesReceivablesPage({
 									<td>{group.employeeName || "—"}</td>
 									<td>{group.province || "—"}</td>
 									<td className="receivable-number">
-										{number.format(group.invoiceCount)}
-										{group.documentCount > group.invoiceCount && (
-											<span className="cell-meta">
-												{number.format(
-													group.documentCount - group.invoiceCount,
-												)}{" "}
-												chứng từ thiếu số HĐ
-											</span>
-										)}
+										<InvoiceCount row={group} />
 									</td>
 									<td className="receivable-number strong-number">
 										{group.paymentTotal === null
@@ -319,6 +340,7 @@ export function SalesReceivablesPage({
 				<SalesInvoiceDrawer
 					key={opened.id}
 					customer={opened}
+					canEditOpeningBalance={canEditOpeningBalance}
 					onClose={() => setOpened(undefined)}
 				/>
 			)}

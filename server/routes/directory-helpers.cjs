@@ -43,13 +43,11 @@ function employeeAt(tx, id, expected) {
   return item;
 }
 
-function employeeData(input, current, account) {
+function employeeData(input, current) {
   const next = { id: current?.id ?? randomUUID(), createdAt: current?.createdAt ?? new Date().toISOString(),
     ...pick(input, employeeFields) };
   if (!isValidEmployeeList([next]) || !next.name.trim() || !next.code.trim())
     fail(400, 'Thông tin nhân viên không hợp lệ.');
-  if (next.linkedAccountId !== current?.linkedAccountId && account.role !== 'admin')
-    fail(403, 'Chỉ quản trị viên được thay đổi tài khoản liên kết.');
   return { ...next, code: next.code.trim(), name: next.name.trim() };
 }
 
@@ -58,7 +56,8 @@ function customerData(input, current) {
   const now = Date.now();
   const next = { id: current?.id ?? randomUUID(), createdAt: current?.createdAt ?? new Date(now).toISOString(),
     updatedAt: new Date(Math.max(now, current ? Date.parse(current.updatedAt) + 1 : 0)).toISOString(),
-    assignments: current?.assignments ?? [], ...pick(input, customerFields) };
+    assignments: current?.assignments ?? [], ...(current?.openingBalance ? { openingBalance: current.openingBalance } : {}),
+    ...pick(input, customerFields) };
   if (!isValidCustomerList([next]) || !next.misaCode.trim() || !next.name.trim())
     fail(400, 'Thông tin khách hàng không hợp lệ.');
   return { ...next, misaCode: next.misaCode.trim(), name: next.name.trim(), taxCode: next.taxCode.trim(),

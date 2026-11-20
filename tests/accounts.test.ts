@@ -105,6 +105,13 @@ describe("Tài khoản qua máy chủ, kể cả desktop", () => {
 		).rejects.toThrow();
 		await authenticateAccount("admin", password);
 		await changeAccountStatus(session, viewer.id, true);
+		await expect(authenticateAccount(draft.username, temporary)).rejects.toThrow(
+			"chưa liên kết",
+		);
+		await api("POST", "employees", {
+			code: "VIEW", name: "Tra cứu thử", phone: "", email: "", status: "active",
+			linkedAccountId: viewer.id,
+		});
 		const pending = await authenticateAccount(draft.username, temporary);
 		await changeInitialPassword(accountSession(pending), "viewer-password-789");
 		await expect(saveAccount(undefined, draft)).rejects.toThrow();
@@ -113,7 +120,7 @@ describe("Tài khoản qua máy chủ, kể cả desktop", () => {
 				"GET",
 				"reports/statements/missing?from=2026-01-01&through=2026-12-31",
 			),
-		).resolves.toBeNull();
+		).rejects.toThrow("Không tìm thấy khách hàng");
 		await expect(
 			api("POST", "receipts", {
 				revision: "",

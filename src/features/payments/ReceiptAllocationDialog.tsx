@@ -22,7 +22,8 @@ import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { Notice } from "../../shared/ui/Notice";
 import { SalesInvoiceLinesDialog } from "../../shared/ui/SalesInvoiceLinesDialog";
-import { parseVnd, VndAmountInput } from "./VndAmountInput";
+import { parseVnd, VndAmountInput } from "../../shared/ui/VndAmountInput";
+import { openingBalanceDocumentId } from "../../domain/misa/misa.sales-receivables";
 
 export const money = new Intl.NumberFormat("vi-VN");
 const documentOrder = new Intl.Collator("vi-VN", { numeric: true });
@@ -136,6 +137,7 @@ export function ReceiptAllocationDialog({
 			kind === "document"
 				? invoice.documentNumber
 				: `${invoice.invoiceSeries} ${invoice.invoiceNumber}`.trim();
+		if (invoice.id === openingBalanceDocumentId(invoice.customerId)) return label;
 		return (
 			<button
 				type="button"

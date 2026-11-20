@@ -24,7 +24,7 @@ export const statementSignatures = ["ĐẠI DIỆN KHÁCH HÀNG", "ĐẠI DIỆN
 export const statementConfirmation =
 	"Nếu đồng ý với số liệu trên, xin vui lòng ký xác nhận, đóng dấu và gửi lại 01 bản.";
 export const statementBasis =
-	"Số dư đầu kỳ được tính từ sổ MISA đã nhập. Số thanh toán là chênh lệch phân bổ có hiệu lực trong kỳ. Tiền đã thu chưa phân bổ được trình bày riêng và trừ vào công nợ thuần. Số dư đầu kỳ ngoài sổ MISA chưa được tính.";
+	"Số dư đầu kỳ gồm công nợ trước kỳ từ sổ MISA đã nhập và số dư nhập tay có ngày chốt trước kỳ, sau khi trừ khoản thu đã phân bổ. Số thanh toán là chênh lệch phân bổ có hiệu lực trong kỳ. Tiền đã thu chưa phân bổ được trình bày riêng và trừ vào công nợ thuần.";
 
 export function statementSeller(settings: AppSettings) {
 	// Không tự điền tên công ty khác khi Cài đặt còn trống: mỗi kho LAN là một
@@ -49,7 +49,7 @@ export interface StatementLine {
 }
 
 export function buildReceivableStatement(
-	book: MisaSalesBook,
+	book: MisaSalesBook | null,
 	ledger: ReceiptLedger,
 	customers: readonly Customer[],
 	customer: Customer,
@@ -68,13 +68,13 @@ export function buildReceivableStatement(
 		),
 	};
 	const at = (date: string) => {
-		const rows = salesRowsThrough(book.rows, date);
-		const groups = buildSalesReceivables(rows, customers, []).filter(
-			({ customerId }) => customerId === customer.id,
-		);
+		const rows = salesRowsThrough(book?.rows ?? [], date);
+		const groups = buildSalesReceivables(rows, customers, [], {
+			through: date,
+		}).filter(({ customerId }) => customerId === customer.id);
 		return projectReceiptReceivables(
 			groups,
-			book.fileName,
+			book?.fileName ?? "",
 			receiptLedgerAt(customerLedger, date),
 		);
 	};
@@ -119,8 +119,11 @@ export function buildReceivableStatement(
 			),
 		].sort();
 		const note = [
-			!document.invoiceNumber && `CT ${document.documentNumbers.join(", ")}`,
-			previous && !increase && "Hóa đơn trước kỳ",
+			document.openingBalance
+				? "Số dư đầu kỳ nhập tay"
+				: !document.invoiceNumber &&
+					`CT ${document.documentNumbers.join(", ")}`,
+			!document.openingBalance && previous && !increase && "Hóa đơn trước kỳ",
 			receiptsInPeriod.length > 0 &&
 				`Thu ngày ${receiptsInPeriod.map((date) => formatDateOnly(date)).join(", ")}`,
 			[...previousIds].some((id) => !currentIds.has(id)) &&
