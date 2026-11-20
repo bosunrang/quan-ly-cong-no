@@ -20,8 +20,7 @@ const searchDelay = 250;
 const initialFilters = { q: "", employee: "", province: "", page: 1 };
 
 function InvoiceCount({ row }: { row: ReceivableRow }) {
-	const unnumberedCount =
-		row.documentCount - row.invoiceCount - (row.hasOpeningBalance ? 1 : 0);
+	const unnumberedCount = row.documentCount - row.invoiceCount;
 	return (
 		<>
 			{number.format(row.invoiceCount)}
@@ -30,21 +29,16 @@ function InvoiceCount({ row }: { row: ReceivableRow }) {
 					{number.format(unnumberedCount)} chứng từ thiếu số HĐ
 				</span>
 			)}
-			{row.hasOpeningBalance && (
-				<span className="cell-meta">Có số dư đầu kỳ</span>
-			)}
 		</>
 	);
 }
 
 export function SalesReceivablesPage({
 	showEmployeeFilter,
-	canEditOpeningBalance = false,
 	onOpenMisa,
 	onOpenCustomers,
 }: {
 	showEmployeeFilter: boolean;
-	canEditOpeningBalance?: boolean;
 	onOpenMisa?: () => void;
 	onOpenCustomers?: () => void;
 }) {
@@ -93,7 +87,7 @@ export function SalesReceivablesPage({
 	const { page, limit, total, items } = data.rows;
 	const pagination = pageControls(page, limit, total);
 
-	if (!data.hasBook && !data.hasOpeningBalances && !canEditOpeningBalance) {
+	if (!data.hasBook) {
 		return (
 			<section className="panel empty-state receivable-empty">
 				<strong>Chưa có sổ bán hàng MISA</strong>
@@ -140,15 +134,12 @@ export function SalesReceivablesPage({
 				<div className="data-source-copy">
 					<h2 id="receivables-heading">Hóa đơn theo khách hàng</h2>
 					<p>
-						<strong>{data.fileName || "Chưa nhập sổ bán hàng MISA"}</strong>
+						<strong>{data.fileName}</strong>
 					</p>
 					<p>
-						Số còn phải thu gồm chứng từ đủ điều kiện và số dư đầu kỳ đã nhập,
-						sau khi trừ các khoản thu đã phân bổ.
+						Số đã thu lấy từ phân bổ đang hiệu lực. Số còn phải thu tính trên
+						chứng từ đủ điều kiện trong sổ này. Số dư đầu kỳ chưa được tính.
 					</p>
-					{canEditOpeningBalance && !data.hasBook && (
-						<p>Tìm khách hàng theo tên hoặc mã MISA để nhập số dư đầu kỳ.</p>
-					)}
 				</div>
 			</section>
 			<section className="panel data-panel">
@@ -340,7 +331,6 @@ export function SalesReceivablesPage({
 				<SalesInvoiceDrawer
 					key={opened.id}
 					customer={opened}
-					canEditOpeningBalance={canEditOpeningBalance}
 					onClose={() => setOpened(undefined)}
 				/>
 			)}

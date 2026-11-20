@@ -55,7 +55,7 @@ export function ReportsPage({
 	const customer = customersByLabel.get(selectedCustomer);
 	const validDates = isIsoDate(from) && isIsoDate(through) && from <= through;
 	const result = useServerData<ReceivableStatement | null>(
-		(sales.data || customer?.openingBalance) && customer && validDates
+		sales.data && customer && validDates
 			? resourceWithQuery(
 					`reports/statements/${encodeURIComponent(customer.id)}`,
 					{ from, through },
@@ -187,7 +187,7 @@ export function ReportsPage({
 				</div>
 			</section>
 
-			{!(sales.data ?? sales.previous) && !customer?.openingBalance ? (
+			{!(sales.data ?? sales.previous) ? (
 				<div className="panel empty-state report-empty">
 					<p>Chưa có sổ bán hàng MISA để lập biên bản.</p>
 					{onOpenMisa && (

@@ -23,18 +23,15 @@ export interface Page<T> {
 }
 export type InvoiceCustomer = {
 	id: string;
-	customerId?: string;
 	customerCode: string;
 	name: string;
 };
 export type InvoiceRow = Omit<ReceivableDocument, "lines">;
 export type ReceivableRow = Omit<CustomerReceivables, "documents"> & {
 	documentCount: number;
-	hasOpeningBalance?: boolean;
 };
 export interface ReceivablesView {
 	hasBook: boolean;
-	hasOpeningBalances?: boolean;
 	fileName: string;
 	unmatchedAllocationCount: number;
 	missingTotalCount: number;

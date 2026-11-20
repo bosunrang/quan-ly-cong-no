@@ -56,7 +56,6 @@ function register(router, db, readers) {
   }), options(['customers'], FORM));
   router.delete(customers + '/:id', ({ body, params, account }) => change(db, (tx) => {
     const current = customerAt(tx, params.id, body.expected);
-    if (current.openingBalance) fail(409, 'Khách hàng đang có số dư đầu kỳ. Hãy kiểm tra số dư trước khi xóa.');
     if (tx.customerHasReceipts(current.id))
       fail(409, 'Khách hàng đã có chứng từ thu. Hãy chuyển sang trạng thái tạm dừng.');
     tx.deleteCustomer(current.id);

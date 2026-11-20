@@ -235,7 +235,6 @@ export function getGroupReceiptInvoices(
 		JSON.stringify([identity(voucher), date.slice(0, 4)]);
 	const voucherCounts = new Map<string, number>();
 	for (const document of documents) {
-		if (document.openingBalance) continue;
 		const date = documentPostingDate(document);
 		for (const voucher of document.documentNumbers) {
 			const key = voucherKey(voucher, date);
@@ -246,19 +245,6 @@ export function getGroupReceiptInvoices(
 		const documentNumber = document.documentNumbers[0] ?? "";
 		const voucher = identity(documentNumber);
 		const date = documentPostingDate(document);
-		if (document.openingBalance && positiveMoney(document.paymentTotal)) {
-			invoices.set(document.id, {
-				id: document.id,
-				customerId,
-				date,
-				invoiceNumber: "",
-				invoiceSeries: "",
-				documentNumber,
-				amount: document.paymentTotal,
-				sourceFile: "Nhập tay",
-			});
-			continue;
-		}
 		// Dòng âm (chiết khấu, giảm giá) trong cùng một chứng từ được cộng vào giá trị
 		// hóa đơn. Chứng từ có tổng không dương, như hàng bán trả lại tách riêng,
 		// vẫn cần nghiệp vụ điều chỉnh có tham chiếu nên chưa được tính.

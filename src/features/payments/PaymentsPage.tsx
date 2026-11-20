@@ -164,8 +164,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 			)}
 			{book === null && (
 				<Notice tone="info">
-					Có thể phân bổ vào số dư đầu kỳ đã nhập. Nhập sổ bán hàng để phân bổ
-					theo hóa đơn.{" "}
+					Nhập sổ bán hàng để có chứng từ phân bổ.{" "}
 					{onOpenMisa && (
 						<button type="button" className="text-button" onClick={onOpenMisa}>
 							Mở Dữ liệu MISA
@@ -363,7 +362,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 						)}
 						{!selectedData.data?.hasInvoices && remaining > 0 && (
 							<Notice tone="info">
-								Chưa có hóa đơn hoặc số dư đầu kỳ phù hợp cho khoản thu này.
+								Chưa có chứng từ MISA phù hợp cho khoản thu này.
 							</Notice>
 						)}
 						<section className="payment-history" aria-label="Lịch sử phân bổ">

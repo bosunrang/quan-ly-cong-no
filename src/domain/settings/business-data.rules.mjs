@@ -3,8 +3,6 @@ const record = (value) => !!value && typeof value === "object" && !Array.isArray
 const fields = (value, names) => record(value) && names.every((name) => text(value[name]));
 const optional = (value, check) => value === undefined || check(value);
 const date = (value) => text(value) && /^\d{4}-\d{2}-\d{2}$/.test(value);
-const calendarDate = (value) => date(value) && Number.isFinite(Date.parse(value)) &&
-  new Date(value).toISOString().slice(0, 10) === value;
 const timestamp = (value) => text(value) && Number.isFinite(Date.parse(value));
 const money = (value) => value === null || Number.isFinite(value);
 const positive = (value) => Number.isSafeInteger(value) && value > 0;
@@ -18,7 +16,6 @@ const customer = (value) =>
   ["unknown", "state", "private"].includes(value.group) &&
   ["active", "paused"].includes(value.status) &&
   timestamp(value.createdAt) && timestamp(value.updatedAt) &&
-  optional(value.openingBalance, (balance) => record(balance) && calendarDate(balance.date) && positive(balance.amount)) &&
   Array.isArray(value.assignments) && value.assignments.every(assignment);
 const employee = (value) =>
   fields(value, ["id", "code", "name", "phone", "email"]) &&

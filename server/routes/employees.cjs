@@ -51,8 +51,7 @@ function register(router, db, readers) {
       customers: customers.flatMap((customer) => {
         const assignment = openAssignment(customer);
         if (assignment) return assignment.employeeId === employee.id ? [customer] : [];
-        const { openingBalance: _private, ...available } = customer;
-        return customer.status === 'active' ? [available] : [];
+        return customer.status === 'active' ? [customer] : [];
       }),
     };
   }, options(['sales']));

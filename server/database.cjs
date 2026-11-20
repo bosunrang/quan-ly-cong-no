@@ -7,7 +7,7 @@ const { deleteBusinessGroups, makeBusinessBackup, restoreBusinessData } = requir
 
 const books = require('./books.cjs');
 const accountStore = require('./account-store.cjs');
-const SCHEMA_VERSION = 15;
+const SCHEMA_VERSION = 16;
 const DATASET_KEYS = {
   customers: 'cong-no.customers.v2',
   employees: 'cong-no.sales-employees.v2',
@@ -356,6 +356,20 @@ function upgradeSchema(database, currentVersion) {
       database.exec('PRAGMA user_version = 15;');
     });
   }
+  if (currentVersion < 16) {
+    // Bỏ số dư đầu kỳ nhập tay. Số dư đã nhập (nếu có) được cất nguyên văn sang bảng riêng để tra lại.
+    withTransaction(database, () => {
+      if (database.prepare('PRAGMA table_info(customers)').all().some(({ name }) => name === 'opening_balance_json')) {
+        database.exec(`CREATE TABLE IF NOT EXISTS legacy_opening_balances (customer_id TEXT PRIMARY KEY,
+          misa_code TEXT NOT NULL, name TEXT NOT NULL, payload_json TEXT NOT NULL, kept_at TEXT NOT NULL)`);
+        database.prepare(`INSERT OR REPLACE INTO legacy_opening_balances
+          SELECT id, misa_code, name, opening_balance_json, ? FROM customers WHERE opening_balance_json IS NOT NULL`)
+          .run(new Date().toISOString());
+        database.exec('ALTER TABLE customers DROP COLUMN opening_balance_json;');
+      }
+      database.exec('PRAGMA user_version = 16;');
+    });
+  }
 }
 
 function withTransaction(database, action) {
@@ -383,11 +397,10 @@ function readVersion(database, key) {
 
 function writeCustomers(database, version, customers) {
     database.exec('DELETE FROM customer_assignments; DELETE FROM customers;');
-    const customerStatement = database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const customerStatement = database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const assignmentStatement = database.prepare('INSERT INTO customer_assignments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     customers.forEach((customer, customerIndex) => {
-      customerStatement.run(customer.id, customer.misaCode, customer.name, customer.group, customer.taxCode, customer.province, customer.address, customer.status, customer.createdAt, customer.updatedAt, customerIndex,
-        customer.openingBalance ? JSON.stringify(customer.openingBalance) : null);
+      customerStatement.run(customer.id, customer.misaCode, customer.name, customer.group, customer.taxCode, customer.province, customer.address, customer.status, customer.createdAt, customer.updatedAt, customerIndex);
       customer.assignments.forEach((assignment, index) => assignmentStatement.run(assignment.id, customer.id, assignment.employeeId, assignment.employeeName, assignment.province, assignment.source, assignment.effectiveFrom, assignment.effectiveTo, index));
     });
     writeVersion(database, DATASET_KEYS.customers, version);
@@ -410,7 +423,6 @@ function customerFromRow(customer, assignments) {
     assignments: assignments.map((item) => ({ id: item.id, employeeId: item.employee_id, employeeName: item.employee_name,
       province: item.province, source: item.source, effectiveFrom: item.effective_from, effectiveTo: item.effective_to })),
     createdAt: customer.created_at, updatedAt: customer.updated_at,
-    ...(customer.opening_balance_json ? { openingBalance: JSON.parse(customer.opening_balance_json) } : {}),
   };
 }
 
@@ -425,10 +437,6 @@ function readCustomer(database, id) {
   const row = database.prepare('SELECT * FROM customers WHERE id = ?').get(id);
   if (row) return customerFromRow(row, database.prepare(
     'SELECT * FROM customer_assignments WHERE customer_id = ? ORDER BY sort_order').all(id));
-}
-
-function hasAllocationForInvoice(database, id, invoiceId) {
-  return Boolean(database.prepare('SELECT 1 FROM allocation_lines WHERE customer_id = ? AND invoice_id = ? LIMIT 1').get(id, invoiceId));
 }
 
 function writeEmployees(database, version, employees) {
@@ -487,13 +495,8 @@ function directoryTransaction(database, work, transaction = true) {
     customerHasReceipts(id) {
       return Boolean(database.prepare('SELECT 1 FROM receipts WHERE customer_id = ? LIMIT 1').get(id));
     },
-    hasAllocationForInvoice: (id, invoiceId) => hasAllocationForInvoice(database, id, invoiceId),
-    setOpeningBalance(id, balance) {
-      database.prepare('UPDATE customers SET opening_balance_json = ? WHERE id = ?').run(balance ? JSON.stringify(balance) : null, id);
-      touchCustomer(id);
-    },
     insertCustomer(item, order) {
-      database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)').run(
+      database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
         item.id, item.misaCode, item.name, item.group, item.taxCode, item.province, item.address,
         item.status, item.createdAt, item.updatedAt, order);
       writeVersion(database, DATASET_KEYS.customers, 2);
@@ -778,7 +781,6 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
       return changeBusinessData(database, change, companyId, expected, onChange);
     },
     changeDirectory(work) { return directoryTransaction(database, work); },
-    hasAllocationForInvoice(id, invoiceId) { return hasAllocationForInvoice(database, id, invoiceId); },
     writeAccounts(expected, accounts) {
       return withTransaction(database, () => {
         if (JSON.stringify(accountStore.readAccounts(database)) !== JSON.stringify(expected)) return false;

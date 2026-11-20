@@ -65,6 +65,40 @@ test('SQLite tạo bản sao trước khi nâng cấp schema và nâng cấp l�
   }
 });
 
+test('v16 bỏ số dư đầu kỳ nhập tay và cất nguyên văn số dư cũ', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cong-no-sqlite-v16-'));
+  const databasePath = path.join(directory, 'test.sqlite');
+  const time = '2026-01-01T00:00:00.000Z';
+  const customer = { id: 'c-1', misaCode: 'KH1', name: 'Khách 1', group: 'unknown', taxCode: '', province: '',
+    address: '', status: 'active', createdAt: time, updatedAt: time, assignments: [] };
+  try {
+    const created = openDatabase(databasePath);
+    created.writeDataset(DATASET_KEYS.customers, 2, [customer, { ...customer, id: 'c-2', misaCode: 'KH2' }]);
+    created.close();
+    // Giả lập kho của bản 0.1.4 (schema 15) có số dư đầu kỳ cho một khách.
+    const raw = new DatabaseSync(databasePath);
+    raw.exec('ALTER TABLE customers ADD COLUMN opening_balance_json TEXT; PRAGMA user_version = 15;');
+    raw.prepare("UPDATE customers SET opening_balance_json = ? WHERE id = 'c-1'")
+      .run(JSON.stringify({ amount: 900, date: '2026-01-06' }));
+    raw.close();
+
+    const upgraded = openDatabase(databasePath);
+    assert.equal(upgraded.status().schemaVersion, SCHEMA_VERSION);
+    assert.deepEqual(upgraded.readDataset(DATASET_KEYS.customers).data.map(({ id, openingBalance }) => [id, openingBalance]),
+      [['c-1', undefined], ['c-2', undefined]]);
+    upgraded.writeDataset(DATASET_KEYS.customers, 2, [customer]);
+    upgraded.close();
+
+    const check = new DatabaseSync(databasePath, { readOnly: true });
+    assert.equal(check.prepare('PRAGMA table_info(customers)').all().some(({ name }) => name === 'opening_balance_json'), false);
+    assert.deepEqual(check.prepare('SELECT customer_id, misa_code, payload_json FROM legacy_opening_balances').all()
+      .map((row) => ({ ...row })), [{ customer_id: 'c-1', misa_code: 'KH1', payload_json: '{"amount":900,"date":"2026-01-06"}' }]);
+    check.close();
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('SQLite đổi dấu thay đổi sau mỗi lần ghi sổ, kể cả ghi liên tiếp', () => withDatabase((database) => {
   const key = 'cong-no.misa-sales-book.v1';
   assert.equal(database.datasetStamp(key), null);

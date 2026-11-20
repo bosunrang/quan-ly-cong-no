@@ -15,80 +15,8 @@ import { api } from "../src/shared/api/client";
 import { accountingChanged } from "../src/shared/hooks/useServerData";
 import { receivablesView } from "./fixtures/receivables-view";
 import { SalesReceivablesPage } from "../src/features/receivables/SalesReceivablesPage";
-import { OpeningBalancePanel } from "../src/features/receivables/OpeningBalancePanel";
 
 vi.mock("../src/shared/api/client", () => ({ api: vi.fn() }));
-
-it("nhập và lưu số dư đầu kỳ trong chi tiết khách hàng", async () => {
-	const saved = { amount: 2500000, date: "2026-01-01" };
-	const resource = "receivables/opening-balances/CUS-001";
-	let balance: typeof saved | null = null;
-	vi.mocked(api).mockImplementation(async (method) => {
-		if (method === "PUT") balance = saved;
-		return { balance, locked: false } as never;
-	});
-	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-	const container = document.createElement("div");
-	document.body.append(container);
-	const root = createRoot(container);
-	try {
-		await act(async () =>
-			root.render(
-				createElement(OpeningBalancePanel, {
-					customerId: "CUS-001",
-					canEdit: true,
-				}),
-			),
-		);
-		const amount = container.querySelector<HTMLInputElement>(
-			"input[placeholder='0']",
-		);
-		const date = container.querySelector<HTMLInputElement>(
-			"input[aria-label='Ngày chốt số dư']",
-		);
-		const save = container.querySelector<HTMLButtonElement>(
-			"button[type='submit']",
-		);
-		if (!amount || !date || !save)
-			throw new Error("Thiếu ô nhập số dư đầu kỳ.");
-		expect(save.disabled).toBe(true);
-		const enter = (input: HTMLInputElement, value: string) => {
-			Object.getOwnPropertyDescriptor(
-				HTMLInputElement.prototype,
-				"value",
-			)?.set?.call(input, value);
-			input.dispatchEvent(new Event("input", { bubbles: true }));
-		};
-		await act(async () => {
-			enter(amount, "2.500.000");
-			date.focus();
-			enter(date, "01/01/2026");
-		});
-		await act(async () => date.blur());
-		expect(save.disabled).toBe(false);
-		await act(async () => save.click());
-		expect(api).toHaveBeenCalledWith("PUT", resource, {
-			expected: null,
-			...saved,
-		});
-		expect(container.textContent).toContain("Đã lưu số dư đầu kỳ.");
-		await act(async () =>
-			root.render(
-				createElement(OpeningBalancePanel, {
-					customerId: "CUS-001",
-					canEdit: false,
-				}),
-			),
-		);
-		expect(container.querySelector("form")).toBeNull();
-		expect(container.textContent).toContain("2.500.000");
-	} finally {
-		await act(async () => root.unmount());
-		container.remove();
-		vi.clearAllMocks();
-		vi.unstubAllGlobals();
-	}
-});
 
 const customer = {
 	...seedCustomers[0],

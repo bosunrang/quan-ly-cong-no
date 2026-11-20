@@ -101,9 +101,10 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   assert.equal((await read('one', 'receivables?employee=e-two')).value.rows.total, 0);
   assert.equal((await read('empty', 'receivables')).value.rows.total, 0);
   assert.equal((await read('one', 'reports/statements/c-one?' + period)).status, 200);
-  assert.equal((await write('two', 'PUT', 'receivables/opening-balances/c-two', {
+  // Số dư đầu kỳ nhập tay đã bỏ khỏi nghiệp vụ: không còn route ghi số dư.
+  assert.equal((await write('admin', 'PUT', 'receivables/opening-balances/c-two', {
     expected: null, amount: 450, date: '2026-01-01',
-  })).status, 403);
+  })).status, 404);
   const ownInvoices = (await read('one', 'receivables/catalog%3Ac-one/invoices')).value.items;
   assert.equal(ownInvoices.length, 1);
   assert.equal((await read('one', 'receivables/catalog%3Ac-one/invoices/' + encodeURIComponent(ownInvoices[0].id))).status, 200);
@@ -194,52 +195,4 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   })).status, 200);
   assert.equal((await read('two', 'session')).status, 401);
   assert.equal((await login('two')).status, 403);
-
-  // Số dư nhập tay là nguồn công nợ riêng, kể cả khi khách chưa có chứng từ MISA.
-  assert.equal((await write('admin', 'DELETE', 'business-data', { groups: ['salesBook', 'ledger'] })).status, 200);
-  cookies.one = (await login('one')).cookie;
-  const availableForOpening = (await read('admin', 'customers')).value.find(({ id }) => id === 'c-unassigned');
-  assert.equal((await write('one', 'PUT', 'receivables/opening-balances/c-unassigned', {
-    expected: null, amount: 900, date: '2026-01-06',
-  })).status, 404);
-  assert.equal((await write('admin', 'POST', 'assignments', { employeeId: 'e-one', employeeName: 'one',
-    effectiveFrom: '2026-01-05', customers: [{ id: availableForOpening.id, expected: availableForOpening.updatedAt }] })).status, 200);
-  const search = (await read('one', 'receivables?q=unassigned')).value;
-  assert.equal(search.hasBook, false);
-  const openingCustomer = search.rows.items[0];
-  assert.equal(openingCustomer.customerId, 'c-unassigned');
-  const invoiceList = 'receivables/' + encodeURIComponent(openingCustomer.id) + '/invoices';
-  assert.equal((await read('one', invoiceList)).value.total, 0);
-  const openingRoute = 'receivables/opening-balances/c-unassigned';
-  const balance = { amount: 900, date: '2026-01-06' };
-  assert.equal((await write('one', 'PUT', openingRoute, { expected: null, ...balance, date: '2026-02-30' })).status, 400);
-  assert.deepEqual((await write('one', 'PUT', openingRoute, { expected: null, ...balance })).value, { balance, locked: false });
-  assert.equal((await write('one', 'PUT', openingRoute, { expected: null, ...balance, amount: 1000 })).status, 409);
-  const openingDocument = (await read('one', invoiceList)).value.items[0];
-  assert.equal(openingDocument.openingBalance, true);
-  assert.equal(openingDocument.balance.remaining, 900);
-  assert.equal((await read('one', 'dashboard?from=2026-01-01&through=2026-01-05')).value.remaining, 0);
-  assert.equal((await read('one', 'dashboard?' + period)).value.remaining, 900);
-  assert.equal((await read('one', 'receivables')).value.rows.items[0].balance.remaining, 900);
-  const statementRoute = 'reports/statements/c-unassigned?from=2026-01-07&through=2026-12-31';
-  assert.equal((await read('one', statementRoute)).value.opening, 900);
-  const receiptRoute = 'receipts/opening-payment';
-  assert.equal((await write('one', 'POST', 'receipts', { id: 'opening-payment', customerId: 'c-unassigned',
-    customerCode: 'unassigned', date: '2026-01-07', amount: 250, reference: '' })).status, 200);
-  const openedReceipt = (await read('one', receiptRoute)).value;
-  assert.equal(openedReceipt.hasInvoices, true);
-  const { invoice } = (await read('one', receiptRoute + '/candidates')).value.items[0];
-  assert.equal(invoice.amount, 900);
-  assert.equal((await write('one', 'POST', receiptRoute + '/allocations', { revision: openedReceipt.revision,
-    bookStamp: openedReceipt.bookStamp, date: '2026-01-07', lines: [{ invoice, amount: 250 }] })).status, 200);
-  assert.equal((await read('one', 'dashboard?' + period)).value.remaining, 650);
-  assert.equal((await read('one', 'receivables')).value.rows.items[0].balance.remaining, 650);
-  const statement = (await read('one', statementRoute)).value;
-  assert.deepEqual([statement.opening, statement.payment, statement.closing], [900, 250, 650]);
-  assert.equal((await read('one', openingRoute)).value.locked, true);
-  assert.equal((await write('one', 'PUT', openingRoute, { expected: balance, amount: 0 })).status, 409);
-  const backup = (await read('admin', 'business-backup')).value;
-  assert.deepEqual(backup.data.customers.find(({ id }) => id === 'c-unassigned').openingBalance, balance);
-  assert.equal((await write('admin', 'POST', 'business-backup/restore', { backup })).status, 200);
-  assert.equal((await read('one', 'dashboard?' + period)).value.remaining, 650);
 });

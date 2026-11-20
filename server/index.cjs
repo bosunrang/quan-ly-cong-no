@@ -23,7 +23,7 @@ function createApi(tenant) {
   require('./routes/customers.cjs').register(router, db, directoryReaders);
   require('./routes/employees.cjs').register(router, db, directoryReaders);
   const state = createAccountingState(db);
-  for (const name of ['misa', 'dashboard', 'receivables', 'opening-balances', 'reports', 'payments'])
+  for (const name of ['misa', 'dashboard', 'receivables', 'reports', 'payments'])
     require('./routes/' + name + '.cjs').register(router, db, state);
   require('./routes/audit.cjs').register(router, tenant);
 

@@ -48,12 +48,10 @@ function createAccountingState(db) {
   const throughGroups = new Map();
   function groupsThrough(book, current, through) {
     const rows = domain.salesRowsThrough(book?.rows ?? [], through);
-    if (rows.length === (book?.rows.length ?? 0) &&
-        !current.directory.some(({ openingBalance }) => openingBalance && openingBalance.date > through))
-      return groupsFor(book, current);
+    if (rows.length === (book?.rows.length ?? 0)) return groupsFor(book, current);
     const cached = throughGroups.get(through);
     if (cached && cached.book === book && cached.key === current.key) return cached.groups;
-    const groups = domain.buildSalesReceivables(rows, current.directory, current.staff, { through });
+    const groups = domain.buildSalesReceivables(rows, current.directory, current.staff);
     throughGroups.delete(through);
     throughGroups.set(through, { book, key: current.key, groups });
     while (throughGroups.size > 6) throughGroups.delete(throughGroups.keys().next().value);

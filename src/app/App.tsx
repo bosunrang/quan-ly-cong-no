@@ -289,7 +289,6 @@ function App() {
 			return (
 				<SalesReceivablesPage
 					showEmployeeFilter={role === "admin"}
-					canEditOpeningBalance={role !== "viewer"}
 					onOpenMisa={openMisa}
 					onOpenCustomers={openCustomers}
 				/>
