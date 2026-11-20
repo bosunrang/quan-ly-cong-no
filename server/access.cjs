@@ -310,6 +310,15 @@ function createAccess(db, company, tls, tunnelOrigin) {
         const { proof: _proof, ...account } = changed;
         return { account, ...profilesFor(db, admin) };
       }
+      if (operation === 'delete-account') {
+        const admin = administrator(req);
+        const target = accountsOf(db).find(({ id }) => id === payload.id);
+        if (!target) fail(404, 'Tài khoản không còn trong danh sách.');
+        if (target.role === 'admin') fail(400, 'Không thể xóa tài khoản quản trị.');
+        const entry = activityEntry(admin, 'accounts', 'Xóa tài khoản', target.username);
+        if (!db.deleteStaffAccount(target.id, entry)) fail(409, 'Tài khoản vừa thay đổi. Hãy tải lại danh sách.');
+        return profilesFor(db, admin);
+      }
       fail(404, 'Chức năng không tồn tại.');
     },
   };

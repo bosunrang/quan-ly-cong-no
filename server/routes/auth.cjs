@@ -13,6 +13,7 @@ function register(router, { access }) {
   router.post('/api/accounts', auth('save-account', ({ draft }) => ({ draft })), pages(['users'], SMALL));
   router.patch('/api/accounts/:id', auth('save-account', (body, { id }) => ({ ...body, id })), pages(['users'], SMALL));
   router.patch('/api/accounts/:id/status', auth('account-status', (body, { id }) => ({ ...body, id })), pages(['users'], SMALL));
+  router.delete('/api/accounts/:id', auth('delete-account', (_body, { id }) => ({ id })), pages(['users']));
 }
 
 module.exports = { register };

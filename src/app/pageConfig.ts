@@ -36,7 +36,7 @@ export const pageMeta: Record<PageId, PageMeta> = {
 	},
 	users: {
 		title: "Người dùng & phân quyền",
-		subtitle: "Quản lý vai trò nhập liệu, tra cứu dữ liệu và quản trị",
+		subtitle: "Quản lý quyền truy cập theo vai trò",
 	},
 	audit: {
 		title: "Nhật ký sử dụng",

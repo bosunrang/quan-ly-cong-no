@@ -230,7 +230,9 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
     expected: unlinkedEmployee, employee: { ...unlinkedEmployee, linkedAccountId: 'one' },
   })).status, 200);
   assert.equal((await read('one', 'session')).status, 401);
-  assert.equal((await login('one')).status, 200);
+  const restoredOne = await login('one');
+  assert.equal(restoredOne.status, 200);
+  cookies.one = restoredOne.cookie;
   const empty = (await read('admin', 'employees')).value.find(({ id }) => id === 'e-empty');
   assert.equal((await write('admin', 'PATCH', 'employees/e-empty', {
     expected: empty, employee: { ...empty, status: 'inactive' },
@@ -242,4 +244,18 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   })).status, 200);
   assert.equal((await read('two', 'session')).status, 401);
   assert.equal((await login('two')).status, 403);
+
+  const before = (await read('admin', 'customers')).value;
+  assert.equal((await write('one', 'DELETE', 'accounts/one')).status, 403);
+  assert.equal((await write('admin', 'DELETE', 'accounts/' + admin.id)).status, 400);
+  const removed = await write('admin', 'DELETE', 'accounts/one');
+  assert.equal(removed.status, 200);
+  assert.equal(removed.value.accounts.some(({ id }) => id === 'one'), false);
+  assert.equal((await read('one', 'session')).status, 401);
+  assert.equal((await login('one')).status, 401);
+  assert.equal((await write('admin', 'DELETE', 'accounts/one')).status, 404);
+  const formerLink = (await read('admin', 'employees')).value.find(({ id }) => id === 'e-one');
+  assert.deepEqual(formerLink, unlinkedEmployee);
+  assert.deepEqual((await read('admin', 'customers')).value, before);
+  assert.ok((await read('admin', 'activities')).value.some(({ action, detail }) => action === 'Xóa tài khoản' && detail === 'one'));
 });

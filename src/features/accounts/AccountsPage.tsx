@@ -2,6 +2,7 @@ import {
 	LockKeyhole,
 	type LucideIcon,
 	ShieldCheck,
+	Trash2,
 	UserPlus,
 	Users,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import {
 	type AccountDraft,
 	type AccountSession,
 	changeAccountStatus,
+	deleteAccount,
 	saveAccount,
 } from "../../domain/access/accounts.repository";
 import {
@@ -39,6 +41,8 @@ type PageOption = {
 	icon: LucideIcon;
 };
 
+type AccountAction = "status" | "delete";
+
 export function AccountsPage({
 	accounts,
 	pageOptions,
@@ -51,10 +55,29 @@ export function AccountsPage({
 	onSignIn: (account: AccountProfile) => void;
 }) {
 	const [editor, setEditor] = useState<AccountProfile | "create">();
-	const [statusTarget, setStatusTarget] = useState<AccountProfile>();
+	const [confirmation, setConfirmation] = useState<{
+		account: AccountProfile;
+		kind: AccountAction;
+	}>();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const pagination = usePagination(accounts);
+	const deleting = confirmation?.kind === "delete";
+	const actionLabel = deleting
+		? "Xóa"
+		: confirmation?.account.active
+			? "Khóa"
+			: "Mở khóa";
+	const ActionIcon = deleting ? Trash2 : LockKeyhole;
+
+	function openConfirmation(account: AccountProfile, kind: AccountAction) {
+		setError("");
+		setConfirmation({ account, kind });
+	}
+
+	function closeConfirmation() {
+		setConfirmation(undefined);
+	}
 
 	async function save(draft: AccountDraft) {
 		if (busy || !editor) return;
@@ -75,18 +98,20 @@ export function AccountsPage({
 		}
 	}
 
-	async function toggleStatus() {
-		if (busy || !statusTarget) return;
+	async function confirmAction() {
+		if (busy || !confirmation) return;
+		const { account, kind } = confirmation;
 		setBusy(true);
 		setError("");
 		try {
-			await changeAccountStatus(session, statusTarget.id, !statusTarget.active);
-			setStatusTarget(undefined);
+			if (kind === "delete") await deleteAccount(account.id);
+			else await changeAccountStatus(session, account.id, !account.active);
+			closeConfirmation();
 		} catch (reason) {
 			setError(
 				reason instanceof Error
 					? reason.message
-					: "Không thể thay đổi trạng thái.",
+					: `Không thể ${actionLabel.toLowerCase()} tài khoản.`,
 			);
 		} finally {
 			setBusy(false);
@@ -105,8 +130,8 @@ export function AccountsPage({
 				<div className="data-source-copy">
 					<h2 id="account-heading">Tài khoản người dùng</h2>
 					<p>
-						Tài khoản Nhập liệu và Chỉ xem cần được liên kết với nhân viên tại
-						mục Nhân viên &amp; khu vực trước khi đăng nhập.
+						Tài khoản {roleLabels.editor} và {roleLabels.viewer} cần được liên
+						kết với nhân viên tại mục Nhân viên &amp; khu vực trước khi đăng nhập.
 					</p>
 				</div>
 				<button
@@ -182,14 +207,20 @@ export function AccountsPage({
 													<button
 														className="button secondary"
 														type="button"
-														onClick={() => {
-															setError("");
-															setStatusTarget(account);
-														}}
+														onClick={() => openConfirmation(account, "status")}
 													>
 														{account.active ? "Khóa" : "Mở khóa"}
 													</button>
 												)}
+												{session &&
+													account.id !== session.id &&
+													account.role !== "admin" && (
+														<RowActionButton
+															action="delete"
+															label={`Xóa tài khoản ${account.name}`}
+															onClick={() => openConfirmation(account, "delete")}
+														/>
+													)}
 											</div>
 										</td>
 									</tr>
@@ -223,32 +254,32 @@ export function AccountsPage({
 					onClose={() => setEditor(undefined)}
 				/>
 			)}
-			{statusTarget && (
+			{confirmation && (
 				<Dialog
-					ariaLabelledBy="account-status-title"
+					ariaLabelledBy="account-action-title"
 					eyebrow="NGƯỜI DÙNG"
-					title={`${statusTarget.active ? "Khóa" : "Mở khóa"} tài khoản ${statusTarget.name}?`}
-					icon={<LockKeyhole className="icon-size-19" aria-hidden="true" />}
-					tone="warning"
+					title={`${actionLabel} tài khoản ${confirmation.account.name}?`}
+					icon={<ActionIcon className="icon-size-19" aria-hidden="true" />}
+					tone={deleting ? "danger" : "warning"}
 					disableClose={busy}
-					onClose={() => setStatusTarget(undefined)}
+					onClose={closeConfirmation}
 					footer={
 						<>
 							<button
 								className="button secondary"
 								type="button"
 								disabled={busy}
-								onClick={() => setStatusTarget(undefined)}
+								onClick={closeConfirmation}
 							>
 								Hủy
 							</button>
 							<button
-								className="button primary"
+								className={`button ${deleting ? "danger" : "primary"}`}
 								type="button"
 								disabled={busy}
-								onClick={() => void toggleStatus()}
+								onClick={() => void confirmAction()}
 							>
-								{statusTarget.active ? "Khóa tài khoản" : "Mở khóa tài khoản"}
+								{actionLabel} tài khoản
 							</button>
 						</>
 					}
@@ -258,9 +289,15 @@ export function AccountsPage({
 							<Notice tone="danger" announce>
 								{error}
 							</Notice>
+						) : deleting ? (
+							<p>
+								Tài khoản <strong>{confirmation.account.username}</strong> sẽ bị
+								xóa vĩnh viễn và các phiên đăng nhập sẽ kết thúc. Hồ sơ nhân
+								viên và phân công khách hàng được giữ lại.
+							</p>
 						) : (
 							<p>
-								{statusTarget.active
+								{confirmation.account.active
 									? "Tài khoản sẽ mất quyền truy cập cho đến khi được mở khóa."
 									: "Tài khoản có thể đăng nhập lại bằng mật khẩu hiện tại."}
 							</p>

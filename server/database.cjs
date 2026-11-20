@@ -437,6 +437,11 @@ function readVersion(database, key) {
   return database.prepare('SELECT version FROM dataset_versions WHERE dataset_key = ?').get(key);
 }
 
+function appendActivity(database, entry) {
+  database.prepare('INSERT INTO activity_log VALUES (?, ?, ?)').run(entry.id, entry.time, JSON.stringify(entry));
+  return true;
+}
+
 function writeCustomers(database, version, customers) {
     database.exec('DELETE FROM customer_assignments; DELETE FROM customers;');
     const customerStatement = database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -836,6 +841,15 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
         return true;
       });
     },
+    deleteStaffAccount(id, activity) {
+      return withTransaction(database, () => {
+        const removed = database.prepare("DELETE FROM users WHERE id = ? AND role IN ('editor', 'viewer')").run(id);
+        if (!removed.changes) return false;
+        const unlinked = database.prepare('UPDATE sales_employees SET linked_account_id = NULL WHERE linked_account_id = ?').run(id);
+        if (unlinked.changes) writeVersion(database, DATASET_KEYS.employees, 2);
+        return appendActivity(database, activity);
+      });
+    },
     saveSession(tokenHash, userId, sessionVersion, expiresAt) {
       accountStore.saveSession(database, tokenHash, userId, sessionVersion, expiresAt);
     },
@@ -900,11 +914,7 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
       });
     },
     clearAllData(branding) { return clearAllData(database, branding); },
-    appendActivity(entry) {
-      database.prepare('INSERT INTO activity_log VALUES (?, ?, ?)')
-        .run(entry.id, entry.time, JSON.stringify(entry));
-      return true;
-    },
+    appendActivity(entry) { return appendActivity(database, entry); },
     readActivities() {
       return database.prepare('SELECT payload_json FROM activity_log ORDER BY occurred_at DESC, id DESC')
         .all().map((row) => JSON.parse(row.payload_json));

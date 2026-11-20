@@ -190,3 +190,11 @@ export async function changeAccountStatus(
 		active,
 	});
 }
+
+export async function deleteAccount(id: string) {
+	const result = await api<LanAccountSnapshot>(
+		"DELETE",
+		`accounts/${encodeURIComponent(id)}`,
+	);
+	updateLanAccounts(result.accounts);
+}

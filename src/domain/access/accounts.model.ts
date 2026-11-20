@@ -3,7 +3,7 @@ import { canOpen, grantablePages } from "./permissions.mjs";
 
 export const roleLabels = {
 	admin: "Quản trị",
-	editor: "Nhập liệu",
+	editor: "Nhân viên",
 	viewer: "Chỉ xem",
 } as const;
 

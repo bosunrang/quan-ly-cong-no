@@ -232,7 +232,7 @@ Trong **Dữ liệu MISA**, chọn file Excel **Sổ chi tiết bán hàng**, ki
 
 ## Người dùng và nhật ký sử dụng
 
-Với bản desktop cục bộ hoặc LAN, app tự tạo quản trị đầu tiên `admin` / `admin` khi kho chưa có tài khoản và bắt đổi mật khẩu ở lần đăng nhập đầu. Với máy chủ chạy bằng lệnh, dùng `lan:init-admin`. Kho phát triển có `dev:init-admin` để tạo tài khoản thủ công khi kho còn trống. **Quản trị** có quyền truy cập toàn bộ thẻ. Khi tạo hoặc sửa tài khoản **Nhập liệu** hay **Chỉ xem**, chọn từng thẻ trong giới hạn của vai trò. Tài khoản cũ chưa có danh sách thẻ riêng dùng quyền mặc định của vai trò. Khóa tài khoản, đổi quyền truy cập hoặc đổi mật khẩu sẽ vô hiệu hóa phiên cũ của tài khoản đó.
+Với bản desktop cục bộ hoặc LAN, app tự tạo quản trị đầu tiên `admin` / `admin` khi kho chưa có tài khoản và bắt đổi mật khẩu ở lần đăng nhập đầu. Với máy chủ chạy bằng lệnh, dùng `lan:init-admin`. Kho phát triển có `dev:init-admin` để tạo tài khoản thủ công khi kho còn trống. **Quản trị** có quyền truy cập toàn bộ thẻ. Khi tạo hoặc sửa tài khoản **Nhân viên** hay **Chỉ xem**, chọn từng thẻ trong giới hạn của vai trò. Tài khoản cũ chưa có danh sách thẻ riêng dùng quyền mặc định của vai trò. Khóa tài khoản, đổi quyền truy cập hoặc đổi mật khẩu sẽ vô hiệu hóa phiên cũ của tài khoản đó.
 
 Mật khẩu quản trị cấp khi tạo hoặc đặt lại cho người khác là mật khẩu tạm thời. Người dùng đăng nhập bằng mật khẩu đó, đặt mật khẩu riêng rồi mới vào các thẻ được cấp. Nhật ký ghi việc đổi mật khẩu mà không lưu nội dung mật khẩu.
 

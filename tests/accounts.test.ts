@@ -2,6 +2,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../src/app/App";
+import { useLocalAccounts } from "../src/app/useLocalAccounts";
 import { canOpenPage } from "../src/domain/access/accounts.model";
 import {
 	accountAwaitingPassword,
@@ -150,7 +151,7 @@ describe("Tài khoản qua máy chủ, kể cả desktop", () => {
 			canOpenPage({ role: "viewer", pages: ["reports"] }, "payments"),
 		).toBe(false);
 	}, 15_000);
-	it("chỉnh thẻ trong hộp thoại và lưu tài khoản qua HTTP", async () => {
+	it("chỉnh thẻ và xác nhận xóa tài khoản qua HTTP", async () => {
 		const admin = await administrator();
 		const session = accountSession(admin);
 		const viewer = await saveAccount(session, draft);
@@ -158,20 +159,20 @@ describe("Tài khoản qua máy chủ, kể cả desktop", () => {
 		const container = document.createElement("div");
 		document.body.append(container);
 		const root = createRoot(container);
+		function AccountList() {
+			const { accounts } = useLocalAccounts();
+			return createElement(AccountsPage, {
+				accounts,
+				session,
+				pageOptions: navItems.map((item) => ({
+					...item,
+					description: pageMeta[item.id].subtitle,
+				})),
+				onSignIn: vi.fn(),
+			});
+		}
 		try {
-			await act(async () =>
-				root.render(
-					createElement(AccountsPage, {
-						accounts: [admin, viewer],
-						session,
-						pageOptions: navItems.map((item) => ({
-							...item,
-							description: pageMeta[item.id].subtitle,
-						})),
-						onSignIn: vi.fn(),
-					}),
-				),
-			);
+			await act(async () => root.render(createElement(AccountList)));
 			await act(async () =>
 				container
 					.querySelector<HTMLButtonElement>(
@@ -205,6 +206,33 @@ describe("Tài khoản qua máy chủ, kể cả desktop", () => {
 				);
 			});
 			expect(container.querySelector("form[role=dialog]")).toBeNull();
+			expect(
+				container.querySelector(`[aria-label="Xóa tài khoản ${admin.name}"]`),
+			).toBeNull();
+			const remove = container.querySelector<HTMLButtonElement>(
+				`[aria-label="Xóa tài khoản ${viewer.name}"]`,
+			);
+			expect(remove).not.toBeNull();
+			await act(async () => remove?.click());
+			const dialog = container.querySelector('[role="alertdialog"]');
+			expect(dialog?.textContent).toContain(viewer.username);
+			await act(async () =>
+				dialog?.querySelector<HTMLButtonElement>(".button.secondary")?.click(),
+			);
+			expect(readAccounts().some(({ id }) => id === viewer.id)).toBe(true);
+			await act(async () => remove?.click());
+			await act(async () => {
+				container
+					.querySelector<HTMLButtonElement>(
+						'[role="alertdialog"] .button.danger',
+					)
+					?.click();
+				await vi.waitFor(() =>
+					expect(readAccounts().map(({ id }) => id)).toEqual([admin.id]),
+				);
+			});
+			expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+			expect(container.contains(remove)).toBe(false);
 		} finally {
 			await act(async () => root.unmount());
 			container.remove();
