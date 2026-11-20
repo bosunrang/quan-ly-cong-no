@@ -324,25 +324,28 @@ export function Dashboard({
 							}
 						>
 							<div className="panel-header">
-								<div>
-									<h3 id="dashboard-detail-title">
-										{isReceivables
-											? "Công nợ theo khách hàng"
-											: view === "period"
-												? "Khoản thu trong kỳ"
-												: "Khoản thu còn tiền chờ phân bổ"}
-									</h3>
-									{!isReceivables && (
-										<p>
-											{view === "period"
-												? `${formatDateOnly(from)} – ${formatDateOnly(through)}`
-												: `Tại ngày ${formatDateOnly(through)}`}{" "}
-											· VND
-										</p>
-									)}
-									{coverageNote && (
-										<p id="dashboard-detail-coverage">{coverageNote}</p>
-									)}
+								<div className="dashboard-detail-heading">
+									{detailsOpen && closeDetails}
+									<div className="dashboard-detail-title-group">
+										<h3 id="dashboard-detail-title">
+											{isReceivables
+												? "Công nợ theo khách hàng"
+												: view === "period"
+													? "Khoản thu trong kỳ"
+													: "Khoản thu còn tiền chờ phân bổ"}
+										</h3>
+										{!isReceivables && (
+											<p>
+												{view === "period"
+													? `${formatDateOnly(from)} – ${formatDateOnly(through)}`
+													: `Tại ngày ${formatDateOnly(through)}`}{" "}
+												· VND
+											</p>
+										)}
+										{coverageNote && (
+											<p id="dashboard-detail-coverage">{coverageNote}</p>
+										)}
+									</div>
 								</div>
 								{isReceivables ? (
 									<label className="table-search dashboard-customer-search">
@@ -367,7 +370,6 @@ export function Dashboard({
 										</button>
 									)
 								)}
-								{detailsOpen && closeDetails}
 							</div>
 							{error && !searchPending ? (
 								<div className="dashboard-load-error">

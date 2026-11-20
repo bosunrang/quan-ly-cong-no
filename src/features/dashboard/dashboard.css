@@ -297,6 +297,30 @@
 	flex-wrap: wrap;
 }
 
+.dashboard-detail-heading,
+.dashboard-detail-title-group {
+	display: flex;
+	gap: var(--space-4) var(--space-12);
+	min-width: 0;
+}
+
+.dashboard-detail-heading {
+	align-items: center;
+}
+
+.dashboard-detail-heading > .button {
+	flex: none;
+}
+
+.dashboard-detail-title-group {
+	flex-wrap: wrap;
+	align-items: baseline;
+}
+
+.panel-header .dashboard-detail-title-group > p {
+	margin: 0;
+}
+
 .dashboard-table {
 	max-height: 56vh;
 }
