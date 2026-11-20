@@ -24,7 +24,8 @@
 
 :where(.sidebar) { --active-focus-ring: var(--focus-ring-on-dark); }
 .is-collapsed .sidebar-toggle { --active-focus-ring: var(--focus-ring); }
-:is(.nav-item, .sidebar-toggle, .period-filter, .icon-button) { transition: var(--transition-control-paint); }
+.nav-item { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease; }
+:is(.sidebar-toggle, .period-filter, .icon-button) { transition: var(--transition-control-paint); }
 .nav-item:not(:disabled, [aria-current="page"]):hover { background-color: var(--sidebar-surface); color: var(--on-accent); }
 .sidebar-toggle:not(:disabled):hover { background-color: var(--sidebar-surface-strong); color: var(--on-accent); }
 :is(:where(.is-collapsed) .sidebar-toggle, .period-filter, .icon-button):not(:disabled):hover { background-color: var(--surface-accent-hover); color: var(--teal); }
