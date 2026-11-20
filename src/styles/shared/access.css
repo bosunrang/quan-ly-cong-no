@@ -127,6 +127,10 @@
 	gap: var(--space-8);
 }
 
+.access-row-actions > .button {
+	height: var(--control-height-compact);
+}
+
 .access-table-footer {
 	display: flex;
 	justify-content: space-between;
