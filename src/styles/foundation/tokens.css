@@ -169,6 +169,13 @@
   --shadow-segment:0 1px 3px rgba(20,36,46,.09);
   --chart-warning:#dd8b1f;
   --chart-revenue-bar:#6f91ad;
+  /* Tuổi nợ: một sắc cam, nhạt (chưa quá hạn) đến đậm (trên 90 ngày); đã kiểm tra bằng validate_palette --ordinal. */
+  --chart-aging-current:#f0a07c;
+  --chart-aging-30:#e8784a;
+  --chart-aging-60:#cf5521;
+  --chart-aging-90:#9e3d16;
+  --chart-aging-over:#682810;
+  --chart-aging-none:#aeaca6;
   --sidebar-brand-start:#0f8c92;
   --sidebar-text:#b9c7cd;
   --sidebar-text-muted:#aab9c1;

@@ -179,6 +179,64 @@ export function matchesCustomerAging(
 		: summary.amounts[filter] > 0;
 }
 
+export interface AgingPortfolio<T> {
+	amounts: AgingAmounts;
+	reductionAmount: number;
+	/** Nợ quá hạn đã trừ giảm trừ chung của từng khách. */
+	overdueAmount: number;
+	overdueCount: number;
+	/** Số khách còn hóa đơn chưa có hạn thanh toán. */
+	noDueDateCount: number;
+	/** Khách còn nợ quá hạn, nợ quá hạn nhiều nhất trước, rồi quá hạn lâu nhất. */
+	overdue: (T & { overdueAmount: number; maxOverdueDays: number | null })[];
+}
+
+/** Tuổi nợ của nhiều khách: cộng các nhóm rồi trừ giảm trừ thì bằng tổng còn phải thu. */
+export function summarizeAgingPortfolio<
+	T extends { customerId?: string; documents: readonly ReceivableDocument[] },
+>(
+	rows: readonly T[],
+	ageFor: (
+		customerId: string | undefined,
+	) => (document: ReceivableDocument) => InvoiceAging,
+): AgingPortfolio<T> {
+	const amounts = emptyAgingAmounts();
+	let reductionAmount = 0;
+	let overdueAmount = 0;
+	let noDueDateCount = 0;
+	const overdue: AgingPortfolio<T>["overdue"] = [];
+	for (const row of rows) {
+		const summary = summarizeCustomerAging(
+			row.documents,
+			ageFor(row.customerId),
+		);
+		for (const bucket of agingBuckets)
+			amounts[bucket] += summary.amounts[bucket];
+		reductionAmount += summary.reductionAmount;
+		overdueAmount += summary.overdueAmount;
+		if (summary.amounts["no-due-date"] > 0) noDueDateCount += 1;
+		if (summary.overdueAmount > 0)
+			overdue.push({
+				...row,
+				overdueAmount: summary.overdueAmount,
+				maxOverdueDays: summary.maxOverdueDays,
+			});
+	}
+	overdue.sort(
+		(a, b) =>
+			b.overdueAmount - a.overdueAmount ||
+			(b.maxOverdueDays ?? 0) - (a.maxOverdueDays ?? 0),
+	);
+	return {
+		amounts,
+		reductionAmount,
+		overdueAmount,
+		overdueCount: overdue.length,
+		noDueDateCount,
+		overdue,
+	};
+}
+
 /** Tiền khách đã trả nhưng chưa phân bổ vào hóa đơn, theo mã khách trong danh mục. */
 export function unallocatedByCustomer(ledger: ReceiptLedger) {
 	const allocated = totalsByReceipt(ledger);

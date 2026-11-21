@@ -10,6 +10,7 @@ vi.mock("../src/shared/api/client", () => ({ api: vi.fn() }));
 it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ trang đầu", async () => {
 	const customer = {
 		id: "hospital",
+		customerId: "c-hospital",
 		name: "Bệnh viện Ánh Dương",
 		customerCode: "BVAD",
 		employeeName: "",
@@ -49,6 +50,22 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 		periodCount: 2,
 		unallocatedCount: 0,
 		topDebtors: [customer],
+		topOverdue: [{ ...customer, overdueAmount: 40, maxOverdueDays: 12 }],
+		aging: {
+			asOf: "2026-11-02",
+			amounts: {
+				current: 60,
+				"1-30": 40,
+				"31-60": 0,
+				"61-90": 0,
+				"90+": 0,
+				"no-due-date": 0,
+			},
+			reductionAmount: 0,
+			overdueAmount: 40,
+			overdueCount: 1,
+			noDueDateCount: 0,
+		},
 		provinceOptions: ["Hà Nội", "TP Hồ Chí Minh"],
 		rows: { items: [customer], total: 13, page: 1, limit: 10 },
 	};
@@ -95,6 +112,22 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 			"Tìm nhanh khách hàng",
 		]);
 		expect(container.querySelector("#dashboard-employee")).toBeNull();
+		// Tuổi nợ tại ngày chốt: chỉ tiêu Nợ quá hạn, thanh tuổi nợ và danh sách quá hạn.
+		const metrics = [
+			...container.querySelectorAll(".dashboard-metric-copy"),
+		].map((item) => item.textContent);
+		expect(metrics[1]).toContain("Nợ quá hạn40");
+		expect(metrics[1]).toContain("1 khách hàng · 40% tổng còn phải thu");
+		expect(
+			container
+				.querySelector(".dashboard-aging-bar")
+				?.getAttribute("aria-label"),
+		).toBe(
+			"Tuổi nợ theo nhóm: Chưa quá hạn 60 (60%); Quá hạn 1–30 ngày 40 (40%)",
+		);
+		expect(
+			container.querySelector(".dashboard-overdue-list")?.textContent,
+		).toContain("Quá hạn tối đa 12 ngày");
 		await act(async () =>
 			root.render(
 				createElement(Dashboard, {

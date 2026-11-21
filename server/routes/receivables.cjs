@@ -13,18 +13,8 @@ function agingFilter(query) {
 }
 
 function register(router, db, state) {
-  const { sales, ledger, projected, catalog, customers, dashboardScope, summary } = state;
-  function ageForCustomer(asOf) {
-    // Read the hot-reloadable exports once per request, outside the invoice loop.
-    const { dueDateMap, invoiceAging } = domain;
-    const terms = new Map(customers().map(({ id, paymentTermDays }) => [id, paymentTermDays]));
-    const overrides = dueDateMap(db.readInvoiceDueDates());
-    return (customerId) => {
-      const termDays = terms.get(customerId);
-      const customerOverrides = overrides.get(customerId);
-      return (document) => invoiceAging(document, termDays, customerOverrides?.get(document.id), asOf);
-    };
-  }
+  const { sales, ledger, projected, catalog, dashboardScope, summary } = state;
+  const ageForCustomer = state.agingFor;
 
   router.get('/api/receivables', ({ query, scope }) => {
     const book = sales();

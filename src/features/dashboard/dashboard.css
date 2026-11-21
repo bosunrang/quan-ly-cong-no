@@ -267,6 +267,112 @@
 	background: var(--teal);
 }
 
+/* Tuổi nợ: thanh tỷ trọng mảnh 8px, khe 2px màu nền giữa các phần; số liệu ở danh sách. */
+.dashboard-aging-bar {
+	display: flex;
+	gap: var(--space-2);
+	height: var(--space-8);
+	border-radius: var(--radius-full);
+	overflow: hidden;
+}
+
+.dashboard-aging-bar span {
+	flex-basis: 0;
+	min-width: var(--space-2);
+}
+
+.dashboard-aging-current {
+	background: var(--chart-aging-current);
+}
+.dashboard-aging-30 {
+	background: var(--chart-aging-30);
+}
+.dashboard-aging-60 {
+	background: var(--chart-aging-60);
+}
+.dashboard-aging-90 {
+	background: var(--chart-aging-90);
+}
+.dashboard-aging-over {
+	background: var(--chart-aging-over);
+}
+.dashboard-aging-none {
+	background: var(--chart-aging-none);
+}
+
+.dashboard-aging-list {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+}
+
+.dashboard-aging-list > div {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: var(--space-12);
+	padding: var(--space-5) 0;
+	border-bottom: var(--border-width) solid var(--line);
+}
+
+.dashboard-aging-list dt {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	color: var(--text-body);
+}
+
+.dashboard-aging-list dd {
+	margin: 0;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.dashboard-aging-list dd span {
+	display: inline-block;
+	min-width: var(--space-48);
+	margin-left: var(--space-8);
+	color: var(--muted);
+	font-weight: 400;
+	text-align: right;
+}
+
+.dashboard-aging-swatch {
+	flex: none;
+	width: var(--space-10);
+	height: var(--space-10);
+	border-radius: var(--radius-2);
+}
+
+.dashboard-aging-total {
+	border-bottom: 0 !important;
+}
+
+.dashboard-aging-total dt {
+	font-weight: 700;
+}
+
+.dashboard-aging-note {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.dashboard-overdue-list .dashboard-debtor-name small {
+	display: block;
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.dashboard-overdue-list .dashboard-debtor-track span {
+	background: var(--chart-aging-90);
+}
+
+.dashboard-overdue-amount small {
+	font-weight: 400;
+}
+
 @media (max-width: 1080px) {
 	.dashboard-insights {
 		grid-template-columns: minmax(0, 1fr);

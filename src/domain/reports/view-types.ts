@@ -16,6 +16,7 @@ import type {
 import type {
 	AgingAmounts,
 	AgingBucket,
+	AgingPortfolio,
 	InvoiceAging,
 } from "../payments/receivable-aging";
 import type {
@@ -76,8 +77,18 @@ type Summary = ReturnType<typeof buildDashboardSummary>;
 type DashboardCustomer = Omit<Summary["receivables"][number], "documents"> & {
 	documentCount: number;
 };
+/** Khách còn nợ quá hạn tại ngày chốt (danh sách quá hạn của Dashboard). */
+export type DashboardOverdueCustomer = DashboardCustomer & {
+	overdueAmount: number;
+	maxOverdueDays: number | null;
+};
+export type DashboardAging = Omit<
+	AgingPortfolio<DashboardCustomer>,
+	"overdue"
+> & { asOf: string };
 export type DashboardRow =
 	| DashboardCustomer
+	| DashboardOverdueCustomer
 	| Summary["periodReceipts"][number];
 export type DashboardView = Omit<
 	Summary,
@@ -85,6 +96,8 @@ export type DashboardView = Omit<
 > & {
 	rows: Page<DashboardRow>;
 	topDebtors: DashboardCustomer[];
+	topOverdue: DashboardOverdueCustomer[];
+	aging: DashboardAging;
 	provinceOptions: string[];
 	receivablesCount: number;
 	periodCount: number;

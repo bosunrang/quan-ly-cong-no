@@ -1,6 +1,7 @@
 import {
 	ArrowLeft,
 	ArrowRight,
+	CalendarClock,
 	CircleDollarSign,
 	ReceiptText,
 	Search,
@@ -31,10 +32,15 @@ import { DashboardCustomerSearch } from "./DashboardCustomerSearch";
 import { DashboardInsights } from "./DashboardInsights";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
+const percent = new Intl.NumberFormat("vi-VN", {
+	style: "percent",
+	maximumFractionDigits: 1,
+});
 const searchDelay = 250;
 
 const views = [
 	{ id: "receivables", title: "Còn phải thu", icon: Wallet },
+	{ id: "overdue", title: "Nợ quá hạn", icon: CalendarClock },
 	{ id: "period", title: "Tiền thu trong kỳ", icon: ReceiptText },
 	{ id: "unallocated", title: "Thu chưa phân bổ", icon: CircleDollarSign },
 ] as const;
@@ -86,8 +92,10 @@ export function Dashboard({
 	const invalidDates =
 		!isIsoDate(from) || !isIsoDate(through) || from > through;
 	const isReceivables = view === "receivables";
+	// Hai danh sách theo khách (còn phải thu, nợ quá hạn) dùng chung ô tìm khách hàng.
+	const isCustomerView = isReceivables || view === "overdue";
 	const customerSearch = customerQuery.trim();
-	const searchPending = isReceivables && !invalidDates && customerSearch !== q;
+	const searchPending = isCustomerView && !invalidDates && customerSearch !== q;
 	const periodScope = {
 		from,
 		through,
@@ -99,7 +107,7 @@ export function Dashboard({
 		? undefined
 		: resourceWithQuery("dashboard", {
 				...viewScope,
-				q: isReceivables ? q : undefined,
+				q: isCustomerView ? q : undefined,
 				page,
 			});
 	const response = useServerData<DashboardView>(resource);
@@ -153,6 +161,7 @@ export function Dashboard({
 
 	const amounts = {
 		receivables: summary?.hasVerifiedDocuments ? summary.remaining : null,
+		overdue: summary?.hasVerifiedDocuments ? summary.aging.overdueAmount : null,
 		period: summary?.periodReceived,
 		unallocated: summary?.unallocated,
 	};
@@ -162,6 +171,11 @@ export function Dashboard({
 			: summary.salesRowCount
 				? "Chưa có chứng từ đủ điều kiện"
 				: "Chưa có dữ liệu MISA tại ngày chốt",
+		overdue: !summary.hasVerifiedDocuments
+			? "Chưa có chứng từ đủ điều kiện"
+			: summary.aging.overdueCount
+				? `${number.format(summary.aging.overdueCount)} khách hàng · ${percent.format(summary.remaining > 0 ? summary.aging.overdueAmount / summary.remaining : 0)} tổng còn phải thu`
+				: "Chưa có khách hàng quá hạn",
 		period: `${number.format(summary.periodCount - summary.periodReversalCount)} khoản thu trong kỳ${
 			summary.periodReversalCount
 				? ` · trừ ${number.format(summary.periodReversalCount)} khoản kỳ trước bị hủy`
@@ -177,7 +191,21 @@ export function Dashboard({
 				"Chứng từ còn nợ",
 				"Còn phải thu",
 			]
-		: ["Chứng từ thu", "Ngày thu", "Khách hàng", "Số tiền thu", "Chưa phân bổ"];
+		: view === "overdue"
+			? [
+					"Khách hàng",
+					"Nhân viên phụ trách",
+					"Khu vực",
+					"Quá hạn tối đa",
+					"Nợ quá hạn",
+				]
+			: [
+					"Chứng từ thu",
+					"Ngày thu",
+					"Khách hàng",
+					"Số tiền thu",
+					"Chưa phân bổ",
+				];
 	const coverageNote =
 		isReceivables && summary
 			? [
@@ -334,15 +362,19 @@ export function Dashboard({
 										<h3 id="dashboard-detail-title">
 											{isReceivables
 												? "Công nợ theo khách hàng"
-												: view === "period"
-													? "Khoản thu trong kỳ"
-													: "Khoản thu còn tiền chờ phân bổ"}
+												: view === "overdue"
+													? "Nợ quá hạn theo khách hàng"
+													: view === "period"
+														? "Khoản thu trong kỳ"
+														: "Khoản thu còn tiền chờ phân bổ"}
 										</h3>
 										{!isReceivables && (
 											<p>
 												{view === "period"
 													? `${formatDateOnly(from)} – ${formatDateOnly(through)}`
 													: `Tại ngày ${formatDateOnly(through)}`}{" "}
+												{view === "overdue" &&
+													"· Đã trừ hàng bán trả lại và giảm giá "}
 												· VND
 											</p>
 										)}
@@ -351,7 +383,7 @@ export function Dashboard({
 										)}
 									</div>
 								</div>
-								{isReceivables ? (
+								{isCustomerView ? (
 									<label className="table-search dashboard-customer-search">
 										<Search className="icon-size-16" aria-hidden="true" />
 										<input
@@ -410,7 +442,38 @@ export function Dashboard({
 											</thead>
 											<tbody>
 												{rows.map((row) =>
-													"remaining" in row ? (
+													"overdueAmount" in row ? (
+														<tr key={row.id}>
+															<td>
+																<button
+																	className="text-button dashboard-customer-link table-customer-name"
+																	type="button"
+																	aria-haspopup="dialog"
+																	onClick={() => setOpenedCustomer(row)}
+																>
+																	{row.name}
+																</button>
+																{row.customerCode && (
+																	<small className="cell-meta">
+																		{row.customerCode}
+																	</small>
+																)}
+															</td>
+															<td>{row.employeeName || "—"}</td>
+															<td>{row.province || "—"}</td>
+															<td>
+																{row.maxOverdueDays === null
+																	? "—"
+																	: `${number.format(row.maxOverdueDays)} ngày`}
+															</td>
+															<td className="strong-number dashboard-overdue-amount">
+																{number.format(row.overdueAmount)}
+																<small className="cell-meta">
+																	Còn phải thu {number.format(row.remaining)}
+																</small>
+															</td>
+														</tr>
+													) : "remaining" in row ? (
 														<tr key={row.id}>
 															<td>
 																<button
@@ -470,7 +533,7 @@ export function Dashboard({
 											{number.format(pagination.firstVisible)}–
 											{number.format(pagination.lastVisible)} /{" "}
 											{number.format(total)}{" "}
-											{isReceivables ? "khách hàng" : "khoản thu"}
+											{isCustomerView ? "khách hàng" : "khoản thu"}
 										</span>
 										<PaginationControls
 											currentPage={currentPage}
@@ -488,15 +551,23 @@ export function Dashboard({
 								</p>
 							) : (
 								<div className="empty-state">
-									{isReceivables
-										? q && (summary?.receivablesCount ?? 0) > 0
+									{view === "overdue"
+										? q && (summary?.aging.overdueCount ?? 0) > 0
 											? "Không tìm thấy khách hàng phù hợp."
-											: summary?.salesRowCount
-												? "Chưa có khách hàng còn phải thu theo dữ liệu đủ điều kiện."
-												: "Chưa có dòng bán hàng MISA tại ngày chốt."
-										: view === "period"
-											? "Chưa có khoản thu trong kỳ đã chọn."
-											: "Chưa có khoản thu chờ phân bổ tại ngày chốt."}
+											: `Chưa có khách hàng nợ quá hạn tại ngày chốt.${
+													summary?.aging.noDueDateCount
+														? ` ${number.format(summary.aging.noDueDateCount)} khách hàng còn hóa đơn chưa có hạn thanh toán.`
+														: ""
+												}`
+										: isReceivables
+											? q && (summary?.receivablesCount ?? 0) > 0
+												? "Không tìm thấy khách hàng phù hợp."
+												: summary?.salesRowCount
+													? "Chưa có khách hàng còn phải thu theo dữ liệu đủ điều kiện."
+													: "Chưa có dòng bán hàng MISA tại ngày chốt."
+											: view === "period"
+												? "Chưa có khoản thu trong kỳ đã chọn."
+												: "Chưa có khoản thu chờ phân bổ tại ngày chốt."}
 								</div>
 							)}
 						</section>

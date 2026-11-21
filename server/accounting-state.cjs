@@ -119,13 +119,25 @@ function createAccountingState(db) {
     return result;
   }
 
+  // Tuổi nợ của từng chứng từ tại một ngày: kỳ hạn của khách và hạn sửa tay đọc một lần cho mỗi yêu cầu.
+  function agingFor(asOf) {
+    const { dueDateMap, invoiceAging } = domain;
+    const terms = new Map(customers().map(({ id, paymentTermDays }) => [id, paymentTermDays]));
+    const overrides = dueDateMap(db.readInvoiceDueDates());
+    return (customerId) => {
+      const termDays = customerId ? terms.get(customerId) : undefined;
+      const customerOverrides = customerId ? overrides.get(customerId) : undefined;
+      return (document) => invoiceAging(document, termDays, customerOverrides?.get(document.id), asOf);
+    };
+  }
+
   // Dựng sẵn sổ theo khách và Dashboard mặc định (đầu tháng đến hôm nay) để người mở đầu tiên
   // sau khi khởi động không phải chờ dựng toàn bộ sổ.
   function warm() {
     const through = domain.todayLocal();
     summary(new URLSearchParams({ from: through.slice(0, 8) + '01', through }));
   }
-  return { sales, ledger, customers, employees, catalog, groupsFor, sourcesFor, projected, dashboardScope, summary, warm };
+  return { sales, ledger, customers, employees, catalog, groupsFor, sourcesFor, projected, dashboardScope, summary, agingFor, warm };
 }
 
 module.exports = { createAccountingState };

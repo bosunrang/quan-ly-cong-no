@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	type InvoiceAging,
 	matchesCustomerAging,
+	summarizeAgingPortfolio,
 	summarizeCustomerAging,
 	unallocatedByCustomer,
 } from "../src/domain/payments/receivable-aging";
@@ -106,6 +107,48 @@ describe("tuổi nợ theo khách", () => {
 		);
 		expect(summary.overdueAmount).toBe(0);
 		expect(summary.maxOverdueDays).toBeNull();
+	});
+});
+
+describe("tuổi nợ của nhiều khách cho Dashboard", () => {
+	it("cộng các nhóm, trừ giảm trừ và xếp khách quá hạn nhiều nhất lên đầu", () => {
+		const rows = [
+			{
+				id: "a",
+				customerId: "a",
+				documents: [
+					document("late", 3_000_000),
+					document("return", -1_000_000, { reduction: true }),
+				],
+			},
+			{ id: "b", customerId: "b", documents: [document("old", 4_000_000)] },
+			{
+				id: "c",
+				customerId: undefined,
+				documents: [document("open", 500_000)],
+			},
+		];
+		const seen: (string | undefined)[] = [];
+		const portfolio = summarizeAgingPortfolio(rows, (customerId) => {
+			seen.push(customerId);
+			return ageOf;
+		});
+		expect(seen).toEqual(["a", "b", undefined]);
+		const gross = Object.values(portfolio.amounts).reduce((a, b) => a + b, 0);
+		expect(gross - portfolio.reductionAmount).toBe(6_500_000);
+		expect(portfolio.overdueAmount).toBe(2_000_000 + 4_000_000);
+		expect(portfolio.overdueCount).toBe(2);
+		expect(portfolio.noDueDateCount).toBe(1);
+		expect(
+			portfolio.overdue.map(({ id, overdueAmount, maxOverdueDays }) => [
+				id,
+				overdueAmount,
+				maxOverdueDays,
+			]),
+		).toEqual([
+			["b", 4_000_000, 120],
+			["a", 2_000_000, 31],
+		]);
 	});
 });
 

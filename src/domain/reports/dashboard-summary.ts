@@ -97,6 +97,7 @@ export function buildDashboardSummary(
 	const receivables = projected.customers
 		.map((customer) => ({
 			id: customer.id,
+			customerId: customer.customerId,
 			name: customer.name,
 			customerCode: customer.customerCode,
 			employeeName: customer.employeeName,
