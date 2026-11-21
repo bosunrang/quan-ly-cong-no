@@ -15,6 +15,7 @@ import {
 	useServerData,
 } from "../../shared/hooks/useServerData";
 import { formatDateOnly } from "../../shared/lib/date";
+import { AgingSwatch } from "../../shared/ui/AgingSwatch/AgingSwatch";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { SalesInvoiceDrawer } from "./SalesInvoiceDrawer";
@@ -198,7 +199,10 @@ export function SalesReceivablesPage({
 									}))
 								}
 							>
-								<span>{agingLabels[filter]}</span>
+								<span className="receivable-aging-card-label">
+									<AgingSwatch bucket={filter} />
+									{agingLabels[filter]}
+								</span>
 								<strong>{number.format(agingCardAmount(data, filter))}</strong>
 								<span className="cell-meta">
 									{count === undefined ? "—" : number.format(count)} khách hàng

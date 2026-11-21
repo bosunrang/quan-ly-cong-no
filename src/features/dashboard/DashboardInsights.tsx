@@ -15,6 +15,10 @@ import type {
 	InvoiceCustomer,
 } from "../../domain/reports/view-types";
 import { formatDateOnly } from "../../shared/lib/date";
+import {
+	AgingSwatch,
+	agingColor,
+} from "../../shared/ui/AgingSwatch/AgingSwatch";
 
 const money = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat("vi-VN", {
@@ -113,16 +117,6 @@ const agingLabels: Record<AgingBucket, string> = {
 	"no-due-date": "Chưa có hạn",
 };
 
-// Hậu tố lớp CSS theo token màu (--chart-aging-*); tên nhóm có ký tự "+" không dùng được làm lớp.
-const agingTone: Record<AgingBucket, string> = {
-	current: "current",
-	"1-30": "30",
-	"31-60": "60",
-	"61-90": "90",
-	"90+": "over",
-	"no-due-date": "none",
-};
-
 /** Tỷ trọng: phần rất nhỏ nhưng khác 0 ghi "<0,1%" thay vì "0%". */
 function shareLabel(value: number) {
 	return value > 0 && value < 0.001 ? "<0,1%" : percent.format(value);
@@ -169,9 +163,11 @@ function AgingOverview({ summary }: { summary: DashboardView }) {
 							aging.amounts[bucket] > 0 ? (
 								<span
 									key={bucket}
-									className={`dashboard-aging-${agingTone[bucket]}`}
 									title={`${agingLabels[bucket]}: ${money.format(aging.amounts[bucket])} · ${shareLabel(share(aging.amounts[bucket]))}`}
-									style={{ flexGrow: aging.amounts[bucket] }}
+									style={{
+										flexGrow: aging.amounts[bucket],
+										background: agingColor(bucket),
+									}}
 								/>
 							) : null,
 						)}
@@ -180,10 +176,7 @@ function AgingOverview({ summary }: { summary: DashboardView }) {
 						{agingBuckets.map((bucket) => (
 							<div key={bucket}>
 								<dt>
-									<span
-										className={`dashboard-aging-swatch dashboard-aging-${agingTone[bucket]}`}
-										aria-hidden="true"
-									/>
+									<AgingSwatch bucket={bucket} />
 									{agingLabels[bucket]}
 								</dt>
 								<dd>

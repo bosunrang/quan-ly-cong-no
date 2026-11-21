@@ -1,0 +1,7 @@
+.aging-swatch {
+	display: inline-block;
+	flex: none;
+	width: var(--space-10);
+	height: var(--space-10);
+	border-radius: var(--radius-2);
+}
