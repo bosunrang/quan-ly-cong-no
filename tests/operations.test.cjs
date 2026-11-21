@@ -104,16 +104,17 @@ test('tự đăng nhập dev cần khóa nội bộ, cấp phiên quản trị v
   } finally { await dev.stop(); }
 });
 
-test('Default tunnel routing secures public sessions without configuring a hostname', async (t) => {
+test('Default HTTP server serves the LAN and secures public tunnel sessions', async (t) => {
   const directory = workspace(t);
   mkdirSync(join(directory, 'ui'));
   writeFileSync(join(directory, 'ui', 'index.html'), '<head></head><body>Quản lý công nợ</body>');
   const company = { id: 'local', name: 'Kiểm thử' };
-  const settings = lanOptions(['--tunnel'], directory);
-  assert.equal(settings.host, '127.0.0.1');
+  const settings = lanOptions(['--data-dir=' + directory], directory);
+  assert.equal(settings.host, '0.0.0.0');
   assert.equal(settings.tls, undefined);
   const startup = loginItem(company, settings, 'app.exe');
-  assert.ok(startup.args.includes('--tunnel'));
+  assert.ok(!startup.args.includes('--tunnel'));
+  assert.ok(!startup.args.includes('--require-tls'));
   assert.equal(lanOptions(startup.args, 'unused').host, settings.host);
   const server = createLanServer({ ...settings, company, staticRoot: join(directory, 'ui') });
   await listenLanServer(server, 0, settings.host);
@@ -153,6 +154,31 @@ test('Default tunnel routing secures public sessions without configuring a hostn
   assert.match(log, /server\.started/);
   assert.match(log, /server\.stopped/);
   assert.doesNotMatch(log, /tunnel-test-password|2001:db8|congno\.example/);
+});
+
+test('Stored certificates only enable LAN HTTPS when explicitly requested', (t) => {
+  const directory = workspace(t);
+  const paths = {
+    CONG_NO_LAN_TLS_KEY: join(directory, 'key.pem'),
+    CONG_NO_LAN_TLS_CERT: join(directory, 'cert.pem'),
+  };
+  for (const [name, path] of Object.entries(paths)) {
+    const previous = process.env[name];
+    t.after(() => {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    });
+    writeFileSync(path, name);
+    process.env[name] = path;
+  }
+  assert.equal(lanOptions([], directory).tls, undefined);
+  assert.deepEqual(lanOptions(['--require-tls'], directory).tls, {
+    key: Buffer.from('CONG_NO_LAN_TLS_KEY'),
+    cert: Buffer.from('CONG_NO_LAN_TLS_CERT'),
+  });
+  const legacyTunnel = lanOptions(['--tunnel'], directory);
+  assert.equal(legacyTunnel.host, '127.0.0.1');
+  assert.equal(legacyTunnel.tls, undefined);
 });
 
 test('Only company servers trust local Cloudflare headers and honor an optional fixed hostname', () => {

@@ -104,7 +104,7 @@ Mỗi địa chỉ mở thẳng công ty tương ứng. Thêm `--loopback` sau l
 
 Để chạy thử giao diện máy chủ dưới khay từ mã nguồn, dùng `pnpm desktop:lan --company=nam-hung-viet --loopback` sau khi build. Thoát máy chủ đang dùng cùng cổng trước khi đổi cách chạy.
 
-Giữ tiến trình máy chủ chạy trong thời gian sử dụng. Các máy trạm dùng cùng IP của máy chủ qua LAN. Nếu Windows Firewall chặn kết nối, cho phép cổng TCP cần dùng trên mạng **Private**, giới hạn trong mạng nội bộ. Nếu dùng HTTPS, đặt `CONG_NO_LAN_TLS_KEY` và `CONG_NO_LAN_TLS_CERT` thành đường dẫn tệp PEM của khóa và chứng chỉ được máy trạm tin cậy, rồi dùng `https://` với cùng cổng và đường dẫn.
+Giữ tiến trình máy chủ chạy trong thời gian sử dụng. Máy trạm trong LAN dùng HTTP với IP và cổng của máy chủ. Nếu Windows Firewall chặn kết nối, cho phép cổng TCP cần dùng trên mạng **Private**, giới hạn trong mạng nội bộ. Nếu muốn dùng HTTPS trực tiếp trong LAN, mở máy chủ với `--require-tls` và đặt `CONG_NO_LAN_TLS_KEY` cùng `CONG_NO_LAN_TLS_CERT` thành đường dẫn tệp PEM của khóa và chứng chỉ được máy trạm tin cậy.
 
 Mỗi kho chứa riêng sổ MISA, công nợ, khoản thu, phân bổ, khách hàng, phân công, cài đặt, tài khoản và nhật ký. Kho LAN bắt đầu trống. Dữ liệu đã nhập ở cổng `5176` hoặc trong bản desktop vẫn nằm tại kho cũ. Nhập sổ MISA đúng công ty sau khi đăng nhập vào kho tương ứng.
 
@@ -145,15 +145,14 @@ sau tên tệp `.exe`. Từ mã nguồn, dùng `pnpm start --client`.
 
 ## Truy cập từ xa qua Cloudflare Tunnel
 
-1. Mở app ở chế độ **Máy chủ** cho đúng công ty. Nếu chỉ truy cập qua tunnel, mở bản cài Windows
-   với `--company=nam-hung-viet --tunnel`, hoặc dùng `pnpm lan --company=nam-hung-viet --tunnel`.
-   Cờ `--tunnel` phục vụ HTTP trên `127.0.0.1` ngay cả khi đã đặt chứng chỉ nội bộ.
-   Khi chuyển từ cấu hình HTTPS nội bộ sang chế độ này, thay `--require-tls` bằng `--tunnel` trong lệnh mở app.
-   Các máy khác kết nối qua tên miền HTTPS của công ty khi dùng chế độ này.
+1. Mở app ở chế độ **Máy chủ** cho đúng công ty. Máy chủ mặc định dùng HTTP cho cả LAN và connector
+   Cloudflare, kể cả khi máy vẫn còn đường dẫn chứng chỉ nội bộ. Nếu shortcut hoặc tùy chọn khởi động
+   cũ có `--tunnel`, `--loopback` hoặc `--require-tls`, bỏ cờ đó để dùng HTTP cho cả LAN và tunnel.
+   Chọn `--loopback` nếu muốn cổng HTTP chỉ mở trên máy chủ.
 2. Chạy `cloudflared` trên cùng máy. Thêm một hostname công khai cho mỗi công ty, giữ **Additional settings**
    mặc định và trỏ **Service** về `http://127.0.0.1:3300` đối với Nam Hưng Việt, hoặc cổng của công ty tương ứng.
-   Với máy chủ HTTP mặc định phục vụ cả LAN, vẫn dùng URL này và giới hạn cổng trong firewall.
-   Nếu giữ cấu hình HTTPS nội bộ, dùng Service `https://` và cấu hình để connector tin chứng chỉ của máy chủ.
+   Giới hạn cổng HTTP trong firewall để máy trạm truy cập từ LAN. Nếu mở máy chủ với `--require-tls`,
+   dùng Service `https://` và cấu hình để connector tin chứng chỉ của máy chủ.
    Tùy chọn cũ `--tunnel-origin` vẫn dùng được để giới hạn tunnel vào một tên miền cụ thể.
 3. Bật chuyển hướng HTTP sang HTTPS ở Cloudflare. Thiết lập Cloudflare Access cho nhân viên được phép truy cập
    nếu cần lớp xác thực bên ngoài. Nếu Access chuyển qua tên miền của nhà cung cấp danh tính,

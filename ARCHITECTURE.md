@@ -109,7 +109,8 @@ Mọi chế độ đều đăng nhập bằng cookie HttpOnly và được máy 
 - **Máy trạm Electron:** tải giao diện và API từ cùng địa chỉ đã lưu trong `userData/workstation/server.json`.
   Kho SQLite và các tác vụ sao lưu thuộc máy chủ từ xa. Trình duyệt có thể mở cùng địa chỉ.
 - **Cloudflare Tunnel:** hostname HTTPS được cấu hình trên Cloudflare. Connector chạy cùng máy và
-  chuyển tới cổng của công ty qua loopback. Cờ `--tunnel` mở riêng HTTP trên `127.0.0.1`.
+  chuyển tới cổng HTTP mà máy chủ công ty cũng dùng cho LAN. Máy chủ chỉ nạp chứng chỉ TLS khi có
+  `--require-tls`; `--loopback` giới hạn cổng trên máy chủ.
 - **Phát triển:** `pnpm dev` tự mở máy chủ loopback, Vite chuyển tiếp `/api/` cùng nguồn.
   Dữ liệu phát triển ở `data/dev/cong-no.sqlite`. Vite cục bộ ở cổng 5176 có thể cấp phiên quản trị
   khi chưa có phiên. Vite chỉ gửi khóa nội bộ cho yêu cầu cùng nguồn từ loopback.

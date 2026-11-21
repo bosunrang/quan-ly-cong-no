@@ -11,15 +11,17 @@ function lanOptions(argv, defaultDirectory) {
     : resolve(dataArgument?.slice('--data-dir='.length) ||
       process.env.CONG_NO_LAN_DATA_DIR || defaultDirectory);
   const tunnelOnly = argv.includes('--tunnel');
-  if (tunnelOnly && argv.includes('--require-tls')) {
+  const requireTls = argv.includes('--require-tls');
+  if (tunnelOnly && requireTls) {
     throw new Error('Chọn --tunnel cho HTTP trên máy này hoặc --require-tls cho HTTPS nội bộ.');
   }
-  const key = tunnelOnly ? undefined : process.env.CONG_NO_LAN_TLS_KEY;
-  const cert = tunnelOnly ? undefined : process.env.CONG_NO_LAN_TLS_CERT;
-  if (Boolean(key) !== Boolean(cert) || (!key && argv.includes('--require-tls'))) {
-    throw new Error('Cần cung cấp cả khóa và chứng chỉ HTTPS.');
+  let tls;
+  if (requireTls) {
+    const key = process.env.CONG_NO_LAN_TLS_KEY;
+    const cert = process.env.CONG_NO_LAN_TLS_CERT;
+    if (!key || !cert) throw new Error('Cần cung cấp cả khóa và chứng chỉ HTTPS.');
+    tls = { key: readFileSync(key), cert: readFileSync(cert) };
   }
-  const tls = key ? { key: readFileSync(key), cert: readFileSync(cert) } : undefined;
   const loopback = tunnelOnly || argv.includes('--loopback');
   const tunnel = argv.find((arg) => arg.startsWith('--tunnel-origin='));
   return {
