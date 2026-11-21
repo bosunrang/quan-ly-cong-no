@@ -463,6 +463,7 @@ export function allocateReceipt(
 	receiptId: string,
 	date: string,
 	lines: AllocationLine[],
+	{ allowAdvance = false }: { allowAdvance?: boolean } = {},
 ) {
 	checkDate(date, "Ngày phân bổ");
 	const receipt = ledger.receipts.find((item) => item.id === receiptId);
@@ -470,6 +471,15 @@ export function allocateReceipt(
 	if (!receipt) throw new Error("Khoản thu không còn trong sổ.");
 	if (date < receipt.date)
 		throw new InputError("Ngày phân bổ phải từ ngày hạch toán khoản thu.");
+	// Tiền thu trả cho chứng từ đã phát sinh đến ngày thu. Chứng từ sau ngày thu chỉ nhận
+	// phân bổ khi người dùng xác nhận khách trả trước.
+	if (
+		!allowAdvance &&
+		lines.some(({ invoice }) => invoice?.date > receipt.date)
+	)
+		throw new InputError(
+			"Chứng từ sau ngày hạch toán khoản thu chỉ phân bổ được khi khách trả trước.",
+		);
 	if (
 		!lines.length ||
 		new Set(lines.map(({ invoice }) => invoice.id)).size !== lines.length

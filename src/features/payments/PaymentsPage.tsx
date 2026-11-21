@@ -464,7 +464,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 					busy={busy}
 					error={error}
 					onClose={closeAction}
-					onSave={(date, lines) => {
+					onSave={(date, lines, advance) => {
 						const detail = selectedData.data;
 						if (detail)
 							void commit(
@@ -475,6 +475,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 										lines,
 										detail.revision,
 										detail.bookStamp,
+										advance,
 									),
 								"Đã lưu phân bổ.",
 							);

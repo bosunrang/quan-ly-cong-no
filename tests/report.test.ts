@@ -6,7 +6,7 @@ import type {
 	MisaSalesLine,
 } from "../src/domain/misa/misa.sales-book";
 import {
-	allocateReceipt,
+	allocateReceipt as allocateReceiptOnLedger,
 	emptyReceiptLedger,
 	getReceiptInvoices,
 	recordReceipt,
@@ -19,6 +19,12 @@ import {
 	buildReceivableStatement,
 	statementSeller,
 } from "../src/features/reports/report.model";
+
+// Dữ liệu mẫu ghi khoản thu trước ngày chứng từ: đây là các ca khách trả trước.
+const allocateReceipt = (
+	...[ledger, receiptId, date, lines]: Parameters<typeof allocateReceiptOnLedger>
+) =>
+	allocateReceiptOnLedger(ledger, receiptId, date, lines, { allowAdvance: true });
 
 const customer = {
 	...seedCustomers[0],

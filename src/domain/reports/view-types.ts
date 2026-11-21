@@ -24,6 +24,10 @@ export interface Page<T> {
 	page: number;
 	limit: number;
 }
+/** Danh sách chứng từ phân bổ: `later` là số chứng từ còn mở có ngày sau ngày thu. */
+export interface CandidatePage extends Page<AllocationCandidate> {
+	later: number;
+}
 export type InvoiceCustomer = {
 	id: string;
 	customerCode: string;

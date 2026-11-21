@@ -9,7 +9,7 @@ import type { ReceivableDocument } from "../../domain/payments/receipt-receivabl
 import type {
 	AllocationCandidate,
 	CandidateMatches,
-	Page,
+	CandidatePage,
 } from "../../domain/reports/view-types";
 import {
 	pageControls,
@@ -59,9 +59,13 @@ export function ReceiptAllocationDialog({
 	onSave: (
 		date: string,
 		lines: { invoice: ReceiptInvoice; amount: number }[],
+		advance: boolean,
 	) => void;
 }) {
 	const [date, setDate] = useState(todayLocal);
+	// Mặc định chỉ chứng từ đến ngày hạch toán khoản thu; bật khi khách trả trước.
+	const [advance, setAdvance] = useState(false);
+	const isLater = (invoice: ReceiptInvoice) => invoice.date > receipt.date;
 	const [query, setQuery] = useState("");
 	const [amounts, setAmounts] = useState<Record<string, string>>({});
 	const [verified, setVerified] = useState(false);
@@ -75,15 +79,17 @@ export function ReceiptAllocationDialog({
 	const validDate = date >= receipt.date && date <= today;
 	const search = useDeferredValue(query);
 	const base = `receipts/${encodeURIComponent(receipt.id)}/candidates`;
-	const listing = useServerData<Page<AllocationCandidate>>(
-		resourceWithQuery(base, { q: search, page }),
+	const advanceQuery = advance ? "1" : undefined;
+	const listing = useServerData<CandidatePage>(
+		resourceWithQuery(base, { q: search, page, advance: advanceQuery }),
 	);
 	const visible = listing.data?.items ?? [];
 	const totalRows = listing.data?.total ?? 0;
+	const laterRows = listing.data?.later ?? 0;
 	const pagination = pageControls(listing.data?.page ?? page, 20, totalRows);
 	const matchResult = useServerData<CandidateMatches>(
 		showMatches && validDate && remaining > 0
-			? resourceWithQuery(`${base}/matches`, { date })
+			? resourceWithQuery(`${base}/matches`, { date, advance: advanceQuery })
 			: undefined,
 	);
 	const matches = matchResult.data;
@@ -118,7 +124,8 @@ export function ReceiptAllocationDialog({
 			!Number.isSafeInteger(row.amount) ||
 			row.amount <= 0 ||
 			row.amount > row.remaining ||
-			row.invoice.date > date,
+			row.invoice.date > date ||
+			(!advance && isLater(row.invoice)),
 	);
 	const canSave =
 		verified &&
@@ -165,6 +172,7 @@ export function ReceiptAllocationDialog({
 					onSave(
 						date,
 						selected.map(({ invoice, amount }) => ({ invoice, amount })),
+						advance,
 					);
 			}}
 			footer={
@@ -215,12 +223,26 @@ export function ReceiptAllocationDialog({
 						{error || listing.error || matchResult.error || detail.error}
 					</Notice>
 				)}
-				{!listing.loading && !totalRows && !query && (
+				{!listing.loading && !totalRows && !query && !laterRows && (
 					<Notice tone="info">
 						Chưa có chứng từ phù hợp theo mã khách hàng trong sổ bán hàng MISA.
 					</Notice>
 				)}
 				<div className="payment-toolbar payment-allocation-tools">
+					{/* Chỉ để xem: mốc chặn chứng từ sau ngày thu, không sửa ở đây. */}
+					<label
+						className="ui-field payment-date"
+						htmlFor="receipt-posting-date"
+					>
+						<span className="ui-field-label">Ngày hạch toán</span>
+						<DateInput
+							id="receipt-posting-date"
+							ariaLabel="Ngày hạch toán khoản thu"
+							value={receipt.date}
+							onChange={() => {}}
+							disabled
+						/>
+					</label>
 					<label
 						className="ui-field payment-date"
 						htmlFor="receipt-allocation-date"
@@ -267,6 +289,63 @@ export function ReceiptAllocationDialog({
 						{showMatches ? "Ẩn nhóm khớp số tiền" : "Tìm nhóm khớp số tiền"}
 					</button>
 				</div>
+				<div className="payment-advance">
+					<label className="payment-verify">
+						<input
+							type="checkbox"
+							checked={advance}
+							onChange={(event) => {
+								const next = event.target.checked;
+								setAdvance(next);
+								setPage(1);
+								setGroupIndex(0);
+								setVerified(false);
+								if (!next) {
+									// Tắt trả trước: bỏ số đã nhập cho chứng từ sau ngày thu.
+									const later = Object.values(chosen)
+										.filter(({ invoice }) => isLater(invoice))
+										.map(({ invoice }) => invoice.id);
+									setChosen((current) =>
+										Object.fromEntries(
+											Object.entries(current).filter(
+												([id]) => !later.includes(id),
+											),
+										),
+									);
+									setAmounts((current) =>
+										Object.fromEntries(
+											Object.entries(current).filter(
+												([id]) => !later.includes(id),
+											),
+										),
+									);
+								}
+							}}
+							disabled={busy}
+						/>
+						Khách trả trước: gồm cả chứng từ sau ngày thu{" "}
+						{formatDateOnly(receipt.date)}
+						{laterRows > 0 && ` (${laterRows} chứng từ)`}
+					</label>
+				</div>
+				{advance ? (
+					<Notice tone="warning">
+						Đang gồm cả chứng từ có ngày sau ngày hạch toán khoản thu (
+						{formatDateOnly(receipt.date)}). Chỉ phân bổ vào các chứng từ này
+						khi khách thực sự trả trước cho hóa đơn xuất sau.
+					</Notice>
+				) : (
+					!listing.loading &&
+					!totalRows &&
+					!query &&
+					laterRows > 0 && (
+						<Notice tone="info">
+							Không có chứng từ còn nợ đến ngày thu{" "}
+							{formatDateOnly(receipt.date)}. Có {laterRows} chứng từ sau ngày
+							thu; chỉ chọn khi khách trả trước.
+						</Notice>
+					)
+				)}
 				{showMatches && (
 					<section
 						id="receipt-matches"
@@ -418,6 +497,9 @@ export function ReceiptAllocationDialog({
 											{suggested && (
 												<small className="cell-meta">Khớp tham chiếu</small>
 											)}
+											{isLater(invoice) && (
+												<small className="cell-meta">Sau ngày thu</small>
+											)}
 										</td>
 										<td>
 											{invoice.invoiceNumber
@@ -442,7 +524,8 @@ export function ReceiptAllocationDialog({
 													) ||
 														parseVnd(amounts[invoice.id]) <= 0 ||
 														parseVnd(amounts[invoice.id]) > remaining ||
-														invoice.date > date)
+														invoice.date > date ||
+														(!advance && isLater(invoice)))
 												}
 												value={amounts[invoice.id] ?? ""}
 												onValueChange={(value) => {

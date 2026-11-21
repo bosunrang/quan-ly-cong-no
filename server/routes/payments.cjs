@@ -52,13 +52,18 @@ function register(router, db, state) {
   }
   const candidatePath = '/api/receipts/:id/candidates';
   const withoutDocument = ({ document, ...item }) => item;
+  // Mặc định chỉ chứng từ đến ngày hạch toán khoản thu; advance=1 khi người dùng xác nhận khách trả trước.
+  const advanceOf = (query) => query.get('advance') === '1';
   router.get(candidatePath, ({ query, params, scope }) => {
-    const { rows } = candidates(params.id, scope);
+    const { receipt, rows } = candidates(params.id, scope);
     const q = search(query);
-    const list = rows.filter(({ invoice, remaining, changed }) => (remaining > 0 || changed) &&
+    const advance = advanceOf(query);
+    const open = rows.filter(({ remaining, changed }) => remaining > 0 || changed);
+    const list = open.filter(({ invoice }) => (advance || invoice.date <= receipt.date) &&
       normalize([invoice.invoiceNumber, invoice.invoiceSeries, invoice.documentNumber].join(' ')).includes(q))
       .sort((a, b) => b.invoice.date.localeCompare(a.invoice.date) || docOrder.compare(b.invoice.documentNumber, a.invoice.documentNumber));
-    return pageOf(list.map(withoutDocument), query);
+    const later = open.filter(({ invoice }) => invoice.date > receipt.date).length;
+    return { ...pageOf(list.map(withoutDocument), query), later };
   }, opts(['payments']));
   router.get(candidatePath + '/matches', ({ query, params, scope }) => {
     const { data, receipt, rows } = candidates(params.id, scope);
@@ -68,8 +73,9 @@ function register(router, db, state) {
     const remaining = receipt.amount - domain.receiptAllocated(data, receipt.id);
     if (date < today && domain.receiptAvailableOn(data, receipt, date) < remaining)
       return { unavailable: true, matches: [], incomplete: false };
+    const lastInvoiceDate = advanceOf(query) ? date : receipt.date;
     const list = rows.filter((item) => !item.changed && item.remaining > 0 && item.remaining <= remaining &&
-      item.invoice.date <= date && (date === today || domain.invoiceAvailableOn(data, item.invoice, date) >= item.remaining))
+      item.invoice.date <= lastInvoiceDate && (date === today || domain.invoiceAvailableOn(data, item.invoice, date) >= item.remaining))
       .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.invoice.date.localeCompare(b.invoice.date));
     const groups = domain.findReceiptMatches(list.map(withoutDocument), remaining);
     return { ...groups, unavailable: false };
@@ -114,8 +120,10 @@ function register(router, db, state) {
     });
   }, opts(['payments'], small));
   router.post('/api/receipts/:id/allocations', ({ body, params, account, scope }) => {
-    if (!Array.isArray(body.lines) || !body.lines.length || body.lines.some((line) => typeof line?.invoice?.id !== 'string'))
+    if (!Array.isArray(body.lines) || !body.lines.length || body.lines.some((line) => typeof line?.invoice?.id !== 'string') ||
+        (body.advance !== undefined && typeof body.advance !== 'boolean'))
       fail(400, 'Danh sách phân bổ không hợp lệ.');
+    const allowAdvance = body.advance === true;
     return apply(account, 'Lưu phân bổ', (current) => {
       const receipt = scope.receipt(current, params.id);
       const book = sales();
@@ -127,8 +135,10 @@ function register(router, db, state) {
         if (!candidate || !domain.sameInvoice(candidate, invoice)) fail(409, 'Chứng từ MISA đã thay đổi.');
         return { invoice: candidate, amount };
       });
-      return { after: domain.allocateReceipt(current, receipt.id, body.date, lines),
-        detail: receipt.number + ' · ' + lines.length + ' chứng từ' };
+      const advanceLines = lines.filter(({ invoice }) => invoice.date > receipt.date).length;
+      return { after: domain.allocateReceipt(current, receipt.id, body.date, lines, { allowAdvance }),
+        detail: receipt.number + ' · ' + lines.length + ' chứng từ' +
+          (advanceLines ? ' · trả trước ' + advanceLines + ' chứng từ sau ngày thu' : '') };
     });
   }, opts(['payments'], 1024 * 1024));
   for (const [path, label, change] of [

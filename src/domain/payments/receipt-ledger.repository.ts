@@ -16,12 +16,14 @@ export function saveAllocation(
 	lines: { invoice: ReceiptInvoice; amount: number }[],
 	revision: string,
 	bookStamp: string | null,
+	advance: boolean,
 ) {
 	return api<string>("POST", `receipts/${encodeURIComponent(id)}/allocations`, {
 		date,
 		lines,
 		revision,
 		bookStamp,
+		advance,
 	});
 }
 

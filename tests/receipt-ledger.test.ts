@@ -3,7 +3,7 @@ import type { Customer } from "../src/domain/customers/customer.model";
 import type { MisaSalesLine } from "../src/domain/misa/misa.sales-book";
 import { buildSalesReceivables } from "../src/domain/misa/misa.sales-receivables";
 import {
-	allocateReceipt,
+	allocateReceipt as allocateReceiptOnLedger,
 	emptyReceiptLedger,
 	getReceiptInvoices,
 	invoiceBalance,
@@ -16,6 +16,12 @@ import {
 import { projectReceiptReceivables } from "../src/domain/payments/receipt-receivables";
 import { buildDashboardSummary } from "../src/features/dashboard/dashboard.summary";
 import { buildReceivableStatement } from "../src/domain/reports/statement";
+
+// Dữ liệu mẫu ghi khoản thu trước ngày chứng từ: đây là các ca khách trả trước.
+const allocateReceipt = (
+	...[ledger, receiptId, date, lines]: Parameters<typeof allocateReceiptOnLedger>
+) =>
+	allocateReceiptOnLedger(ledger, receiptId, date, lines, { allowAdvance: true });
 
 const customer: Customer = {
 	id: "customer-a",
@@ -355,6 +361,37 @@ describe("Sổ đối soát khoản thu", () => {
 			[{ invoice: second, amount: 200 }],
 		);
 		expect(invoiceBalance(applied, second).remaining).toBe(150);
+	});
+
+	it("chỉ phân bổ vào chứng từ sau ngày thu khi xác nhận khách trả trước", () => {
+		const ledger = record();
+		const receipt = ledger.receipts[0];
+		const [invoice] = invoices();
+		expect(invoice.date > receipt.date).toBe(true);
+		expect(() =>
+			allocateReceiptOnLedger(ledger, receipt.id, "2024-06-03", [
+				{ invoice, amount: 100 },
+			]),
+		).toThrow("khách trả trước");
+		const advance = allocateReceiptOnLedger(
+			ledger,
+			receipt.id,
+			"2024-06-03",
+			[{ invoice, amount: 100 }],
+			{ allowAdvance: true },
+		);
+		expect(receiptAllocated(advance, receipt.id)).toBe(100);
+		// Khoản thu từ ngày chứng từ trở đi phân bổ bình thường, không cần xác nhận.
+		const withSecond = recordReceipt(advance, customer, {
+			...draft,
+			number: "PT02",
+			date: invoice.date,
+		});
+		const onTime = withSecond.receipts[1];
+		const paid = allocateReceiptOnLedger(withSecond, onTime.id, invoice.date, [
+			{ invoice, amount: 100 },
+		]);
+		expect(receiptAllocated(paid, onTime.id)).toBe(100);
 	});
 
 	it("chặn trùng phiếu, phân bổ sai ngày và sử dụng hóa đơn đã đổi nội dung", () => {
