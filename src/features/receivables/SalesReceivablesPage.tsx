@@ -1,5 +1,9 @@
-import { ArrowRight, Database, FilterX, Search } from "lucide-react";
+import { ArrowRight, FilterX, Search } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+	agingBuckets,
+	type AgingFilter,
+} from "../../domain/payments/receivable-aging";
 import type {
 	InvoiceCustomer,
 	ReceivableRow,
@@ -10,6 +14,7 @@ import {
 	resourceWithQuery,
 	useServerData,
 } from "../../shared/hooks/useServerData";
+import { formatDateOnly } from "../../shared/lib/date";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { SalesInvoiceDrawer } from "./SalesInvoiceDrawer";
@@ -17,7 +22,44 @@ import { SalesInvoiceDrawer } from "./SalesInvoiceDrawer";
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 const missing = "?";
 const searchDelay = 250;
-const initialFilters = { q: "", employee: "", province: "", page: 1 };
+const initialFilters = {
+	q: "",
+	employee: "",
+	province: "",
+	aging: "" as AgingFilter,
+	page: 1,
+};
+// Hàng trên: tổng và trạng thái; hàng dưới: bốn nhóm quá hạn.
+const agingCards: AgingFilter[] = [
+	"",
+	"overdue",
+	"current",
+	"no-due-date",
+	"1-30",
+	"31-60",
+	"61-90",
+	"90+",
+];
+const agingLabels: Record<AgingFilter, string> = {
+	"": "Tất cả",
+	overdue: "Nợ quá hạn",
+	current: "Chưa quá hạn",
+	"1-30": "Quá hạn 1–30 ngày",
+	"31-60": "Quá hạn 31–60 ngày",
+	"61-90": "Quá hạn 61–90 ngày",
+	"90+": "Quá hạn trên 90 ngày",
+	"no-due-date": "Chưa có hạn",
+};
+
+/** Số tiền của thẻ: "Tất cả" là tổng còn phải thu, "Nợ quá hạn" đã trừ giảm trừ chung. */
+function agingCardAmount(data: ReceivablesView, filter: AgingFilter) {
+	if (filter === "overdue") return data.agingOverdueAmount;
+	if (filter) return data.agingAmounts[filter];
+	return (
+		agingBuckets.reduce((sum, bucket) => sum + data.agingAmounts[bucket], 0) -
+		data.agingReductionAmount
+	);
+}
 
 function InvoiceCount({ row }: { row: ReceivableRow }) {
 	const unnumberedCount = row.documentCount - row.invoiceCount;
@@ -35,10 +77,12 @@ function InvoiceCount({ row }: { row: ReceivableRow }) {
 
 export function SalesReceivablesPage({
 	showEmployeeFilter,
+	canEditDueDates = false,
 	onOpenMisa,
 	onOpenCustomers,
 }: {
 	showEmployeeFilter: boolean;
+	canEditDueDates?: boolean;
 	onOpenMisa?: () => void;
 	onOpenCustomers?: () => void;
 }) {
@@ -83,7 +127,7 @@ export function SalesReceivablesPage({
 			</p>
 		);
 	const { filterOptions, unmatchedAllocationCount, missingTotalCount } = data;
-	const { province } = filters;
+	const { province, aging } = filters;
 	const { page, limit, total, items } = data.rows;
 	const pagination = pageControls(page, limit, total);
 
@@ -125,22 +169,51 @@ export function SalesReceivablesPage({
 				</Notice>
 			)}
 			<section
-				className="panel data-source-card"
-				aria-labelledby="receivables-heading"
+				className="panel receivable-invoice-summary receivable-aging"
+				aria-labelledby="receivable-aging-title"
 			>
-				<div className="data-source-icon" aria-hidden="true">
-					<Database className="icon-size-22" />
+				<div>
+					<h2 id="receivable-aging-title">Tuổi nợ</h2>
+					<span>
+						Tính đến {formatDateOnly(data.agingAsOf)} · Sổ {data.fileName} · Số
+						dư đầu kỳ chưa được tính
+					</span>
 				</div>
-				<div className="data-source-copy">
-					<h2 id="receivables-heading">Hóa đơn theo khách hàng</h2>
-					<p>
-						<strong>{data.fileName}</strong>
-					</p>
-					<p>
-						Số đã thu lấy từ phân bổ đang hiệu lực. Số còn phải thu tính trên
-						chứng từ đủ điều kiện trong sổ này. Số dư đầu kỳ chưa được tính.
-					</p>
+				<div className="receivable-aging-cards">
+					{agingCards.map((filter) => {
+						const count = data.agingUnitCounts?.[filter || "all"];
+						return (
+							<button
+								key={filter}
+								className={`choice-card receivable-aging-card${filter === "overdue" ? " is-overdue" : ""}`}
+								type="button"
+								aria-pressed={aging === filter}
+								aria-controls="receivable-customer-table"
+								onClick={() =>
+									setFilters((current) => ({
+										...current,
+										q: searchQuery,
+										aging: filter,
+										page: 1,
+									}))
+								}
+							>
+								<span>{agingLabels[filter]}</span>
+								<strong>{number.format(agingCardAmount(data, filter))}</strong>
+								<span className="cell-meta">
+									{count === undefined ? "—" : number.format(count)} khách hàng
+								</span>
+							</button>
+						);
+					})}
 				</div>
+				<p>
+					Mỗi hóa đơn thuộc một nhóm; một khách có thể nằm ở nhiều nhóm.
+					{data.agingReductionAmount > 0 &&
+						` Giảm trừ chưa trừ vào hóa đơn −${number.format(data.agingReductionAmount)}, đã trừ vào Tất cả và Nợ quá hạn.`}{" "}
+					Thu chưa phân bổ {number.format(data.agingUnallocatedAmount)}, chưa
+					trừ vào tuổi nợ.
+				</p>
 			</section>
 			<section className="panel data-panel">
 				<div className="panel-header receivable-toolbar">
@@ -210,7 +283,7 @@ export function SalesReceivablesPage({
 						type="button"
 						aria-label="Xóa bộ lọc"
 						title="Xóa bộ lọc"
-						disabled={!query && !employee && !province}
+						disabled={!query && !employee && !province && !aging}
 						onClick={() => {
 							setQuery("");
 							setFilters(initialFilters);
@@ -221,6 +294,7 @@ export function SalesReceivablesPage({
 				</div>
 				<section
 					className="table-scroll receivable-table"
+					id="receivable-customer-table"
 					ref={tableViewport}
 					aria-busy={loading}
 					aria-label="Vùng cuộn bảng khách hàng"
@@ -243,6 +317,11 @@ export function SalesReceivablesPage({
 								<th scope="col" className="receivable-amount-column">
 									Còn phải thu
 								</th>
+								<th scope="col" className="receivable-amount-column">
+									Nợ quá hạn
+								</th>
+								<th scope="col">Hạn thanh toán sớm nhất</th>
+								<th scope="col">Số ngày quá hạn tối đa</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -295,6 +374,27 @@ export function SalesReceivablesPage({
 											</span>
 										)}
 									</td>
+									<td className="receivable-number">
+										{group.overdueAmount > 0 ? (
+											<strong className="receivable-overdue">
+												{number.format(group.overdueAmount)}
+											</strong>
+										) : (
+											"—"
+										)}
+										{group.unallocatedAmount > 0 && (
+											<span className="cell-meta receivable-unallocated">
+												Còn {number.format(group.unallocatedAmount)} thu chưa
+												phân bổ
+											</span>
+										)}
+									</td>
+									<td>{formatDateOnly(group.earliestDueDate)}</td>
+									<td>
+										{group.maxOverdueDays === null
+											? "—"
+											: `${number.format(group.maxOverdueDays)} ngày`}
+									</td>
 								</tr>
 							))}
 						</tbody>
@@ -331,6 +431,8 @@ export function SalesReceivablesPage({
 				<SalesInvoiceDrawer
 					key={opened.id}
 					customer={opened}
+					agingFilter={aging}
+					canEditDueDates={canEditDueDates}
 					onClose={() => setOpened(undefined)}
 				/>
 			)}

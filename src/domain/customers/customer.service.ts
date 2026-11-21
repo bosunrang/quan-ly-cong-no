@@ -14,6 +14,7 @@ export function customerToDraft(customer?: Customer): CustomerDraft {
 		province: customer?.province ?? "",
 		address: customer?.address ?? "",
 		status: customer?.status ?? "active",
+		paymentTermDays: customer?.paymentTermDays ?? null,
 	};
 }
 
@@ -28,6 +29,9 @@ export function createCustomerFromDraft(draft: CustomerDraft): Customer {
 		province: draft.province,
 		address: draft.address.trim(),
 		status: draft.status,
+		...(draft.paymentTermDays == null
+			? {}
+			: { paymentTermDays: draft.paymentTermDays }),
 		assignments: [],
 		createdAt: now,
 		updatedAt: now,
@@ -64,6 +68,9 @@ export function updateCustomerFromDraft(
 		province: draft.province,
 		address: draft.address.trim(),
 		status: draft.status,
+		...(draft.paymentTermDays === undefined
+			? {}
+			: { paymentTermDays: draft.paymentTermDays ?? undefined }),
 		assignments: customer.assignments,
 		updatedAt: new Date().toISOString(),
 	};

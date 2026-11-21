@@ -2,6 +2,7 @@ import type { Customer } from "../customers/customer.model";
 import type { SalesEmployee } from "../employees/employee.model";
 import type { MisaSalesBook } from "../misa/misa.sales-book";
 import type { ReceiptLedger } from "../payments/receipt-ledger";
+import type { InvoiceDueDate } from "../payments/receivable-aging";
 import type { AppSettings } from "./settings.model";
 
 export interface BusinessData {
@@ -10,9 +11,13 @@ export interface BusinessData {
 	salesBook: MisaSalesBook | null;
 	ledger: ReceiptLedger | null;
 	settings: AppSettings | null;
+	invoiceDueDates?: InvoiceDueDate[];
 }
 
-export type BusinessGroup = Exclude<keyof BusinessData, "settings">;
+export type BusinessGroup = Exclude<
+	keyof BusinessData,
+	"settings" | "invoiceDueDates"
+>;
 
 export interface BusinessBackup {
 	format: "cong-no-backup";

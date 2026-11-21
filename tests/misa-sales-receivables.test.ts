@@ -5,6 +5,11 @@ import { seedCustomers } from "./fixtures/seed-customers";
 import type { MisaSalesLine } from "../src/domain/misa/misa.sales-book";
 import { buildSalesReceivables } from "../src/domain/misa/misa.sales-receivables";
 import {
+	invoiceAging,
+	invoiceDueDateFromTerm,
+} from "../src/domain/payments/receivable-aging";
+import { projectReceiptReceivables } from "../src/domain/payments/receipt-receivables";
+import {
 	allocateReceipt,
 	emptyReceiptLedger,
 	getReceiptInvoices,
@@ -15,6 +20,7 @@ import { api } from "../src/shared/api/client";
 import { accountingChanged } from "../src/shared/hooks/useServerData";
 import { receivablesView } from "./fixtures/receivables-view";
 import { SalesReceivablesPage } from "../src/features/receivables/SalesReceivablesPage";
+import { InvoiceDueDateDialog } from "../src/features/receivables/InvoiceDueDateDialog";
 
 vi.mock("../src/shared/api/client", () => ({ api: vi.fn() }));
 
@@ -36,6 +42,146 @@ const line: MisaSalesLine = {
 	salesAmount: 100,
 	paymentTotal: 110,
 };
+
+it("chọn kỳ hạn nhanh để tự điền và lưu hạn thanh toán", async () => {
+	const groups = buildSalesReceivables(
+		[
+			{
+				...line,
+				source: {
+					customerCode: customer.misaCode,
+					invoiceSeries: "A",
+					invoiceDate: "2026-05-31",
+				},
+			},
+		],
+		[customer],
+		[],
+	);
+	const [invoice] = projectReceiptReceivables(
+		groups,
+		"sổ.xlsx",
+		emptyReceiptLedger,
+	).customers[0].documents;
+	const container = document.createElement("div");
+	document.body.append(container);
+	const root = createRoot(container);
+	const onClose = vi.fn();
+	const resource = "receivables/customer/invoices/invoice/due-date";
+	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+	vi.mocked(api).mockResolvedValueOnce(true);
+	try {
+		await act(async () =>
+			root.render(
+				createElement(InvoiceDueDateDialog, { invoice, resource, onClose }),
+			),
+		);
+		const options = [
+			...container.querySelectorAll<HTMLButtonElement>(
+				".invoice-term-options button",
+			),
+		];
+		expect(options.map((button) => button.textContent)).toEqual([
+			"30 ngày",
+			"45 ngày",
+			"60 ngày",
+			"90 ngày",
+			"120 ngày",
+		]);
+		await act(async () => options[1].click());
+		expect(options[1].getAttribute("aria-pressed")).toBe("true");
+		const dateInput = container.querySelector<HTMLInputElement>(
+			'input[aria-label="Hạn thanh toán"]',
+		);
+		expect(dateInput?.value).toBe("15/07/2026");
+		expect(dateInput?.placeholder).toBe("dd/mm/yyyy");
+		await act(async () =>
+			container
+				.querySelector<HTMLButtonElement>('button[aria-label="Chọn ngày"]')
+				?.click(),
+		);
+		const calendar = document.querySelector(
+			'.vn-date-picker[aria-label="Chọn ngày"]',
+		);
+		expect(
+			calendar?.querySelector(".vn-date-grid .selected")?.textContent,
+		).toBe("15");
+		const day = Array.from(
+			calendar?.querySelectorAll<HTMLButtonElement>(".vn-date-grid button") ??
+				[],
+		).find((button) => button.textContent === "18");
+		expect(day).toBeDefined();
+		await act(async () => day?.click());
+		expect(dateInput?.value).toBe("18/07/2026");
+		await act(async () =>
+			container
+				.querySelector<HTMLButtonElement>('button[type="submit"]')
+				?.click(),
+		);
+		expect(api).toHaveBeenLastCalledWith("PATCH", resource, {
+			dueDate: "2026-07-18",
+			expected: null,
+		});
+		expect(onClose).toHaveBeenCalledTimes(1);
+	} finally {
+		await act(async () => root.unmount());
+		container.remove();
+		vi.unstubAllGlobals();
+	}
+});
+
+it("tính tuổi nợ theo hạn kể từ ngày hóa đơn và loại khoản đã thu đủ", () => {
+	expect(
+		invoiceDueDateFromTerm({ invoiceDate: "", firstDate: "2026-06-01" }, 120),
+	).toBe("2026-09-29");
+	const groups = buildSalesReceivables(
+		[
+			{
+				...line,
+				source: {
+					customerCode: customer.misaCode,
+					invoiceSeries: "A",
+					invoiceDate: "2026-05-31",
+				},
+			},
+		],
+		[customer],
+		[],
+	);
+	const [document] = projectReceiptReceivables(
+		groups,
+		"sổ.xlsx",
+		emptyReceiptLedger,
+	).customers[0].documents;
+	expect(invoiceAging(document, 30, undefined, "2026-06-30")).toMatchObject({
+		dueDate: "2026-06-30",
+		daysOverdue: 0,
+		bucket: "current",
+	});
+	for (const [asOf, daysOverdue, bucket] of [
+		["2026-07-01", 1, "1-30"],
+		["2026-07-30", 30, "1-30"],
+		["2026-07-31", 31, "31-60"],
+		["2026-08-29", 60, "31-60"],
+		["2026-08-30", 61, "61-90"],
+		["2026-09-28", 90, "61-90"],
+		["2026-09-29", 91, "90+"],
+	] as const) {
+		expect(invoiceAging(document, 30, undefined, asOf)).toMatchObject({
+			daysOverdue,
+			bucket,
+		});
+	}
+	const paid = {
+		...document,
+		balance: { received: 110, remaining: 0, allocations: [] },
+	};
+	expect(invoiceAging(paid, 30, undefined, "2026-09-29")).toMatchObject({
+		dueDate: "2026-06-30",
+		daysOverdue: null,
+		bucket: null,
+	});
+});
 
 describe("nhóm sổ bán hàng cho màn công nợ", () => {
 	it("cộng nhiều dòng cùng hóa đơn, giữ giá trị âm và giữ nhóm thiếu số hóa đơn", () => {
@@ -249,7 +395,11 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 		expect(
 			container.querySelector('select[aria-label="Lọc theo khu vực"]'),
 		).not.toBeNull();
-		expect(amounts(".receivable-table tbody td")).toEqual(["0", "110"]);
+		const tableBalances = (table: string, column = 6) =>
+			amounts(
+				`${table} tbody td:nth-child(${column}), ${table} tbody td:nth-child(${column + 1})`,
+			);
+		expect(tableBalances(".receivable-table")).toEqual(["0", "110"]);
 		await click(".receivable-customer-link");
 		await click(".receivable-invoice-link");
 		expect(amounts(".invoice-lines-balances dd")).toEqual(["0", "110"]);
@@ -258,8 +408,8 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 		await act(async () => {
 			refresh();
 		});
-		expect(amounts(".receivable-table tbody td")).toEqual(["25", "85"]);
-		expect(amounts(".receivable-invoice-table tbody td")).toEqual(["25", "85"]);
+		expect(tableBalances(".receivable-table")).toEqual(["25", "85"]);
+		expect(tableBalances(".receivable-invoice-table", 5)).toEqual(["25", "85"]);
 		expect(amounts(".invoice-lines-balances dd")).toEqual(["25", "85"]);
 		await click(".invoice-lines-dialog footer button");
 		const paidLink = container.querySelector<HTMLButtonElement>(
@@ -370,7 +520,7 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 			receivablesView(
 				resource,
 				testBook,
-				[customer, secondCustomer],
+				[{ ...customer, paymentTermDays: 0 }, secondCustomer],
 				emptyReceiptLedger,
 			) as never,
 	);
@@ -388,6 +538,15 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 			field.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 	};
+	const ageCard = (label: string) => {
+		const button = [
+			...container.querySelectorAll<HTMLButtonElement>(
+				".receivable-aging-card",
+			),
+		].find((item) => item.firstElementChild?.textContent === label);
+		if (!button) throw new Error(`Thiếu thẻ ${label}`);
+		return button;
+	};
 	try {
 		await act(async () =>
 			root.render(
@@ -401,6 +560,24 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 		const customerRows = () =>
 			container.querySelector("table tbody")?.textContent;
 		expect(customerRows()).toContain(secondCustomer.name);
+		const allCard = ageCard("Tất cả");
+		const overdueCard = ageCard("Quá hạn 1–30 ngày");
+		expect(allCard.textContent).toContain("2 khách hàng");
+		expect(overdueCard.textContent).toContain("1 khách hàng");
+		// Thẻ hiện số tiền làm số chính; "Nợ quá hạn" gom mọi nhóm quá hạn.
+		const totalOverdue = ageCard("Nợ quá hạn");
+		expect(totalOverdue.querySelector("strong")?.textContent).toBe(
+			overdueCard.querySelector("strong")?.textContent,
+		);
+		expect(totalOverdue.textContent).toContain("1 khách hàng");
+		expect(ageCard("Chưa quá hạn").textContent).toContain("khách hàng");
+		await act(async () => overdueCard.click());
+		expect(overdueCard.getAttribute("aria-pressed")).toBe("true");
+		expect(customerRows()).toContain(customer.name);
+		expect(customerRows()).not.toContain(secondCustomer.name);
+		await act(async () => allCard.click());
+		expect(allCard.getAttribute("aria-pressed")).toBe("true");
+		expect(customerRows()).toContain(secondCustomer.name);
 		await select(
 			"Lọc theo nhân viên phụ trách",
 			customer.assignments[0].employeeId,
@@ -412,12 +589,26 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 			"Không tìm thấy khách hàng phù hợp",
 		);
 		await select("Lọc theo khu vực", customer.province);
+		await act(async () => overdueCard.click());
+		expect(api).toHaveBeenLastCalledWith(
+			"GET",
+			expect.stringContaining("aging=1-30"),
+		);
 		const customerLink = [...container.querySelectorAll("button")].find(
 			(button) => button.textContent?.trim() === customer.name,
 		);
 		expect(customerLink).toBeDefined();
 		await act(async () => customerLink?.click());
+		expect(api).toHaveBeenLastCalledWith(
+			"GET",
+			expect.stringContaining("invoices?aging=1-30"),
+		);
 		const invoice = container.querySelector('[role="dialog"]');
+		expect(invoice?.textContent).toContain("Hạn thanh toán");
+		expect(invoice?.textContent).toContain("Số ngày quá hạn");
+		expect(invoice?.querySelector("thead")?.textContent).not.toContain(
+			"Dòng hàng",
+		);
 		expect(invoice?.textContent).toContain("000020");
 		expect(invoice?.textContent).toContain("BH-01");
 

@@ -39,7 +39,7 @@
 }
 
 .receivable-table table {
-	min-width: var(--layout-975);
+	min-width: var(--layout-1180);
 }
 
 :is(.receivable-table, .receivable-invoice-table) table {
@@ -47,11 +47,11 @@
 }
 
 .receivable-table th:first-child {
-	width: 32%;
+	width: 24%;
 }
 
 .receivable-table .receivable-amount-column {
-	width: 13%;
+	width: 10%;
 }
 
 :is(.receivable-table, .receivable-invoice-table) :is(th, td:not(.receivable-number), .cell-meta) {
@@ -109,6 +109,10 @@
 	width: min(var(--drawer-width-receivables), 100vw);
 }
 
+.customer-drawer.receivable-invoice-drawer.has-aging {
+	width: min(var(--drawer-width-receivables-aging), 100vw);
+}
+
 .receivable-invoice-drawer .data-panel {
 	display: flex;
 	flex: 1;
@@ -158,6 +162,88 @@
 	font-size: var(--type-caption);
 }
 
+.receivable-aging > div:first-child {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-8) var(--space-16);
+	margin-block-end: var(--space-12);
+}
+
+.receivable-aging h2 {
+	margin: 0;
+	font-size: var(--type-heading-sm);
+}
+
+.receivable-aging > div:first-child > span {
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.receivable-aging-cards {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--space-8);
+}
+
+.receivable-aging-card {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--space-6);
+	padding: var(--space-9) var(--space-11);
+	border: var(--border-width) solid var(--line);
+	border-radius: var(--control-radius);
+	background: var(--panel);
+	color: var(--text-body);
+	text-align: left;
+	font-size: var(--type-body-sm);
+	cursor: pointer;
+}
+
+.receivable-aging-card[aria-pressed="true"] {
+	border-color: var(--teal-border);
+	background: var(--teal-soft);
+	color: var(--text-accent);
+}
+
+.receivable-aging-card strong {
+	font-size: var(--type-heading-sm);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.receivable-aging-card .cell-meta {
+	margin: 0;
+}
+
+.receivable-aging-card.is-overdue {
+	border-color: var(--status-danger-border);
+}
+
+.receivable-aging-card.is-overdue strong {
+	color: var(--danger-action);
+}
+
+.receivable-aging-card.is-overdue[aria-pressed="true"] {
+	border-color: var(--danger-action);
+	background: var(--status-danger-bg);
+	color: var(--status-danger-text);
+}
+
+@media (max-width: 720px) {
+	.receivable-aging-cards {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+.receivable-aging > p {
+	margin: var(--space-10) 0 0;
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
 .receivable-invoice-table {
 	flex: 1;
 	min-height: 0;
@@ -169,6 +255,31 @@
 
 .receivable-invoice-table .receivable-amount-column {
 	width: 15%;
+}
+
+.receivable-invoice-drawer.has-aging .receivable-invoice-table table {
+	min-width: var(--layout-800);
+}
+
+.receivable-invoice-drawer.has-aging .receivable-amount-column {
+	width: 14%;
+}
+
+.receivable-unallocated {
+	color: var(--status-warning-text);
+}
+
+.receivable-overdue {
+	color: var(--danger-action);
+	font-weight: 700;
+}
+
+.invoice-term-options {
+	flex-wrap: wrap;
+}
+
+.invoice-term-options button {
+	flex: 1 0 auto;
 }
 
 .receivable-invoice-table .receivable-invoice-link {

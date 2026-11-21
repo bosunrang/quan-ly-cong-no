@@ -8,7 +8,7 @@ const { deleteBusinessGroups, makeBusinessBackup, restoreBusinessData } = requir
 const books = require('./books.cjs');
 const accountStore = require('./account-store.cjs');
 const { normalizeVietnamese } = require('../src/domain/customers/vietnamese-text.mjs');
-const SCHEMA_VERSION = 17;
+const SCHEMA_VERSION = 18;
 const DATASET_KEYS = {
   customers: 'cong-no.customers.v2',
   employees: 'cong-no.sales-employees.v2',
@@ -392,6 +392,22 @@ function upgradeSchema(database, currentVersion) {
       `);
     });
   }
+  if (currentVersion < 18) {
+    withTransaction(database, () => {
+      if (!database.prepare('PRAGMA table_info(customers)').all().some(({ name }) => name === 'payment_term_days'))
+        database.exec(`ALTER TABLE customers ADD COLUMN payment_term_days INTEGER
+          CHECK (payment_term_days IS NULL OR payment_term_days >= 0)`);
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS invoice_due_dates (
+          customer_id TEXT NOT NULL,
+          document_id TEXT NOT NULL,
+          due_date TEXT NOT NULL,
+          PRIMARY KEY (customer_id, document_id)
+        );
+        PRAGMA user_version = 18;
+      `);
+    });
+  }
 }
 
 // Trạng thái giao dịch theo từng kết nối: bộ đệm danh mục không dùng khi đang trong giao dịch
@@ -502,14 +518,25 @@ function appendActivity(database, entry) {
   return true;
 }
 
+function customerInsert(database) {
+  const statement = database.prepare(`INSERT INTO customers
+    (id, misa_code, name, customer_group, tax_code, province, address, status,
+      created_at, updated_at, sort_order, payment_term_days)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  return (item, order) => statement.run(item.id, item.misaCode, item.name, item.group,
+    item.taxCode, item.province, item.address, item.status, item.createdAt, item.updatedAt,
+    order, item.paymentTermDays ?? null);
+}
+
 function writeCustomers(database, version, customers) {
     database.exec('DELETE FROM customer_assignments; DELETE FROM customers;');
-    const customerStatement = database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insert = customerInsert(database);
     const assignmentStatement = database.prepare('INSERT INTO customer_assignments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     customers.forEach((customer, customerIndex) => {
-      customerStatement.run(customer.id, customer.misaCode, customer.name, customer.group, customer.taxCode, customer.province, customer.address, customer.status, customer.createdAt, customer.updatedAt, customerIndex);
+      insert(customer, customerIndex);
       customer.assignments.forEach((assignment, index) => assignmentStatement.run(assignment.id, customer.id, assignment.employeeId, assignment.employeeName, assignment.province, assignment.source, assignment.effectiveFrom, assignment.effectiveTo, index));
     });
+    database.exec('DELETE FROM invoice_due_dates WHERE customer_id NOT IN (SELECT id FROM customers)');
     writeVersion(database, DATASET_KEYS.customers, version);
 }
 
@@ -527,6 +554,7 @@ function customerFromRow(customer, assignments) {
   return {
     id: customer.id, misaCode: customer.misa_code, name: customer.name, group: customer.customer_group,
     taxCode: customer.tax_code, province: customer.province, address: customer.address, status: customer.status,
+    ...(customer.payment_term_days == null ? {} : { paymentTermDays: customer.payment_term_days }),
     assignments: assignments.map((item) => ({ id: item.id, employeeId: item.employee_id, employeeName: item.employee_name,
       province: item.province, source: item.source, effectiveFrom: item.effective_from, effectiveTo: item.effective_to })),
     createdAt: customer.created_at, updatedAt: customer.updated_at,
@@ -603,9 +631,7 @@ function directoryTransaction(database, work, transaction = true) {
       return Boolean(database.prepare('SELECT 1 FROM receipts WHERE customer_id = ? LIMIT 1').get(id));
     },
     insertCustomer(item, order) {
-      database.prepare('INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-        item.id, item.misaCode, item.name, item.group, item.taxCode, item.province, item.address,
-        item.status, item.createdAt, item.updatedAt, order);
+      customerInsert(database)(item, order);
       writeVersion(database, DATASET_KEYS.customers, 2);
     },
     customerCodes() {
@@ -620,10 +646,12 @@ function directoryTransaction(database, work, transaction = true) {
     },
     updateCustomer(item) {
       database.prepare(`UPDATE customers SET misa_code=?, name=?, customer_group=?, tax_code=?,
-        province=?, address=?, status=?, updated_at=? WHERE id=?`).run(
-        item.misaCode, item.name, item.group, item.taxCode, item.province, item.address, item.status, item.updatedAt, item.id);
+        province=?, address=?, status=?, updated_at=?, payment_term_days=? WHERE id=?`).run(
+        item.misaCode, item.name, item.group, item.taxCode, item.province, item.address, item.status,
+        item.updatedAt, item.paymentTermDays ?? null, item.id);
     },
     deleteCustomer(id) {
+      database.prepare('DELETE FROM invoice_due_dates WHERE customer_id = ?').run(id);
       database.prepare('DELETE FROM customers WHERE id = ?').run(id);
     },
     saveEmployee(item) {
@@ -746,6 +774,7 @@ function clearAllData(database, branding) {
   return withTransaction(database, () => {
     database.exec(`
       DELETE FROM customer_assignments;
+      DELETE FROM invoice_due_dates;
       DELETE FROM customers;
       DELETE FROM sales_employees;
       DELETE FROM app_settings;
@@ -765,17 +794,29 @@ function clearAllData(database, branding) {
   });
 }
 
+function readInvoiceDueDates(database) {
+  return database.prepare(`SELECT customer_id AS customerId, document_id AS documentId, due_date AS dueDate
+    FROM invoice_due_dates ORDER BY customer_id, document_id`).all();
+}
+
+function upsertInvoiceDueDate(database) {
+  return database.prepare(`INSERT INTO invoice_due_dates (customer_id, document_id, due_date) VALUES (?, ?, ?)
+    ON CONFLICT(customer_id, document_id) DO UPDATE SET due_date = excluded.due_date`);
+}
+
 function readBusinessData(database) {
   function directory(key, read, fallback) {
     const version = readVersion(database, key);
     return version ? read(database, version.version).data : fallback;
   }
+  const invoiceDueDates = readInvoiceDueDates(database);
   return {
     customers: directory(DATASET_KEYS.customers, readCustomers, []),
     employees: directory(DATASET_KEYS.employees, readEmployees, []),
     salesBook: books.readSales(database) ?? null,
     ledger: books.readLedger(database) ?? null,
     settings: directory(DATASET_KEYS.settings, readSettings, null),
+    ...(invoiceDueDates.length ? { invoiceDueDates } : {}),
   };
 }
 
@@ -795,6 +836,13 @@ function changeBusinessData(database, change, companyId, expected, onChange) {
       throw Object.assign(new Error('Thao tác dữ liệu không hợp lệ.'), { status: 400 });
     }
     if (next.customers !== current.customers) writeCustomers(database, 2, next.customers);
+    if (next.invoiceDueDates !== current.invoiceDueDates) {
+      database.exec('DELETE FROM invoice_due_dates');
+      if (next.invoiceDueDates?.length) {
+        const insert = upsertInvoiceDueDate(database);
+        for (const item of next.invoiceDueDates) insert.run(item.customerId, item.documentId, item.dueDate);
+      }
+    }
     if (next.employees !== current.employees) writeEmployees(database, 2, next.employees);
     if (next.salesBook !== current.salesBook) {
       if (next.salesBook === null) books.clearSales(database);
@@ -894,6 +942,19 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
       return changeBusinessData(database, change, companyId, expected, onChange);
     },
     changeDirectory(work) { return directoryTransaction(database, work); },
+    readInvoiceDueDates() { return readInvoiceDueDates(database); },
+    setInvoiceDueDate(customerId, documentId, dueDate, expected, activity) {
+      return withTransaction(database, () => {
+        const row = database.prepare('SELECT due_date FROM invoice_due_dates WHERE customer_id = ? AND document_id = ?')
+          .get(customerId, documentId);
+        if ((row?.due_date ?? null) !== expected) return false;
+        if (dueDate === null)
+          database.prepare('DELETE FROM invoice_due_dates WHERE customer_id = ? AND document_id = ?').run(customerId, documentId);
+        else upsertInvoiceDueDate(database).run(customerId, documentId, dueDate);
+        appendActivity(database, activity);
+        return true;
+      });
+    },
     writeAccounts(expected, accounts) {
       return withTransaction(database, () => {
         if (JSON.stringify(accountStore.readAccounts(database)) !== JSON.stringify(expected)) return false;

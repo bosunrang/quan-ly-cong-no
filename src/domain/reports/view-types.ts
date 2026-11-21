@@ -14,6 +14,11 @@ import type {
 	ReceivableDocument,
 } from "../payments/receipt-receivables";
 import type {
+	AgingAmounts,
+	AgingBucket,
+	InvoiceAging,
+} from "../payments/receivable-aging";
+import type {
 	buildDashboardSummary,
 	CustomerInvoiceTotals,
 } from "./dashboard-summary";
@@ -33,16 +38,33 @@ export type InvoiceCustomer = {
 	customerCode: string;
 	name: string;
 };
-export type InvoiceRow = Omit<ReceivableDocument, "lines">;
+export type InvoiceRow = Omit<ReceivableDocument, "lines"> & {
+	aging?: InvoiceAging;
+};
 export type InvoicePage = Page<InvoiceRow> & { totals?: CustomerInvoiceTotals };
 export type ReceivableRow = Omit<CustomerReceivables, "documents"> & {
 	documentCount: number;
+	earliestDueDate: string | null;
+	maxOverdueDays: number | null;
+	/** Nợ quá hạn đã trừ giảm trừ chung. */
+	overdueAmount: number;
+	reductionAmount: number;
+	/** Tiền đã thu nhưng chưa phân bổ vào hóa đơn. */
+	unallocatedAmount: number;
 };
 export interface ReceivablesView {
 	hasBook: boolean;
 	fileName: string;
 	unmatchedAllocationCount: number;
 	missingTotalCount: number;
+	agingAsOf: string;
+	agingUnitCounts: Record<AgingBucket | "all" | "overdue", number>;
+	agingAmounts: AgingAmounts;
+	/** Giảm trừ chung chưa trừ vào hóa đơn (số dương): các nhóm trừ số này bằng tổng còn phải thu. */
+	agingReductionAmount: number;
+	agingUnallocatedAmount: number;
+	/** Tổng nợ quá hạn của các khách, đã trừ giảm trừ chung của từng khách. */
+	agingOverdueAmount: number;
 	filterOptions: {
 		employees: [string, string][];
 		provinces: string[];

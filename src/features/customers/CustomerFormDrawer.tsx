@@ -51,6 +51,14 @@ export function CustomerFormDrawer({
 			setError("Vui lòng nhập mã MISA, tên khách hàng và tỉnh/thành.");
 			return;
 		}
+		if (
+			draft.paymentTermDays != null &&
+			(!Number.isSafeInteger(draft.paymentTermDays) ||
+				draft.paymentTermDays < 0)
+		) {
+			setError("Kỳ hạn thanh toán phải là số ngày nguyên từ 0 trở lên.");
+			return;
+		}
 		const duplicate = customers.some(
 			(item) =>
 				item.id !== customer?.id &&
@@ -175,6 +183,27 @@ export function CustomerFormDrawer({
 								onChange={(event) => update("address", event.target.value)}
 								placeholder="Nhập địa chỉ giao dịch"
 							/>
+						</label>
+						<label>
+							Kỳ hạn thanh toán (ngày)
+							<input
+								type="number"
+								min={0}
+								step={1}
+								value={draft.paymentTermDays ?? ""}
+								onChange={(event) =>
+									update(
+										"paymentTermDays",
+										event.target.value === ""
+											? null
+											: event.target.valueAsNumber,
+									)
+								}
+								placeholder="Chưa có kỳ hạn"
+							/>
+							<small className="cell-meta">
+								Tính từ ngày hóa đơn hoặc ngày chứng từ.
+							</small>
 						</label>
 					</div>
 				</section>

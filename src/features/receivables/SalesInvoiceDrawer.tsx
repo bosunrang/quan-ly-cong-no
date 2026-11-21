@@ -3,7 +3,9 @@ import { useDeferredValue, useState } from "react";
 import type {
 	InvoiceCustomer,
 	InvoicePage,
+	InvoiceRow,
 } from "../../domain/reports/view-types";
+import type { AgingFilter } from "../../domain/payments/receivable-aging";
 import type { ReceivableDocument } from "../../domain/payments/receipt-receivables";
 import {
 	pageControls,
@@ -16,6 +18,7 @@ import { Drawer } from "../../shared/ui/Dialog/Drawer";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { SalesInvoiceLinesDialog } from "../../shared/ui/SalesInvoiceLinesDialog";
 import { InvoiceReceiptAllocationsDialog } from "./InvoiceReceiptAllocationsDialog";
+import { InvoiceDueDateDialog } from "./InvoiceDueDateDialog";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 
@@ -25,6 +28,8 @@ export function SalesInvoiceDrawer({
 	from,
 	employee,
 	province,
+	agingFilter,
+	canEditDueDates = false,
 	onClose,
 }: {
 	customer: InvoiceCustomer;
@@ -32,6 +37,8 @@ export function SalesInvoiceDrawer({
 	employee?: string;
 	province?: string;
 	asOfDate?: string;
+	agingFilter?: AgingFilter;
+	canEditDueDates?: boolean;
 	onClose: () => void;
 }) {
 	const [query, setQuery] = useState("");
@@ -40,11 +47,17 @@ export function SalesInvoiceDrawer({
 		kind: "lines" | "allocations";
 	}>();
 	const [page, setPage] = useState(1);
+	const [editingDueDate, setEditingDueDate] = useState<InvoiceRow>();
 	const search = useDeferredValue(query);
 	const base = `receivables/${encodeURIComponent(customer.id)}/invoices`;
 	const periodScope = { through: asOfDate, from, employee, province };
 	const response = useServerData<InvoicePage>(
-		resourceWithQuery(base, { ...periodScope, q: search, page }),
+		resourceWithQuery(base, {
+			...periodScope,
+			aging: agingFilter || undefined,
+			q: search,
+			page,
+		}),
 	);
 	const sameScope = response.previousResource?.startsWith(
 		`${resourceWithQuery(base, periodScope)}&`,
@@ -80,7 +93,7 @@ export function SalesInvoiceDrawer({
 		<>
 			<Drawer
 				ariaLabelledBy="sales-invoice-title"
-				className="customer-drawer receivable-invoice-drawer"
+				className={`customer-drawer receivable-invoice-drawer${asOfDate ? "" : " has-aging"}`}
 				onClose={onClose}
 			>
 				<header className="customer-drawer-head">
@@ -168,7 +181,7 @@ export function SalesInvoiceDrawer({
 										<th scope="col">Ngày chứng từ</th>
 										<th scope="col">Số hóa đơn</th>
 										<th scope="col">Số chứng từ</th>
-										<th scope="col">Dòng hàng</th>
+										{asOfDate && <th scope="col">Dòng hàng</th>}
 										<th scope="col" className="receivable-amount-column">
 											Giá trị
 										</th>
@@ -178,6 +191,12 @@ export function SalesInvoiceDrawer({
 										<th scope="col" className="receivable-amount-column">
 											Còn phải thu
 										</th>
+										{!asOfDate && (
+											<>
+												<th scope="col">Hạn thanh toán</th>
+												<th scope="col">Số ngày quá hạn</th>
+											</>
+										)}
 									</tr>
 								</thead>
 								<tbody>
@@ -229,9 +248,11 @@ export function SalesInvoiceDrawer({
 													</button>
 												)}
 											</td>
-											<td className="receivable-number">
-												{number.format(document.lineCount)}
-											</td>
+											{asOfDate && (
+												<td className="receivable-number">
+													{number.format(document.lineCount)}
+												</td>
+											)}
 											<td className="receivable-number strong-number">
 												{document.paymentTotal === null
 													? "—"
@@ -270,6 +291,44 @@ export function SalesInvoiceDrawer({
 													<span className="cell-meta">Cần đối chiếu</span>
 												)}
 											</td>
+											{!asOfDate && (
+												<>
+													<td>
+														{canEditDueDates &&
+														document.balance &&
+														!document.reduction ? (
+															<button
+																className="text-button receivable-invoice-link"
+																type="button"
+																aria-haspopup="dialog"
+																aria-label={`Sửa hạn thanh toán · ${document.invoiceNumber || document.documentNumbers.join(", ")}`}
+																onClick={() => setEditingDueDate(document)}
+															>
+																{formatDateOnly(
+																	document.aging?.dueDate,
+																	"Đặt hạn",
+																)}
+															</button>
+														) : (
+															formatDateOnly(document.aging?.dueDate)
+														)}
+														{document.aging?.overrideDueDate && (
+															<span className="cell-meta">Hạn riêng</span>
+														)}
+													</td>
+													<td
+														className={
+															document.aging?.daysOverdue
+																? "receivable-overdue receivable-number"
+																: "receivable-number"
+														}
+													>
+														{document.aging?.daysOverdue == null
+															? "—"
+															: number.format(document.aging.daysOverdue)}
+													</td>
+												</>
+											)}
 										</tr>
 									))}
 								</tbody>
@@ -299,6 +358,13 @@ export function SalesInvoiceDrawer({
 					</section>
 				</div>
 			</Drawer>
+			{editingDueDate && (
+				<InvoiceDueDateDialog
+					invoice={editingDueDate}
+					resource={`${base}/${encodeURIComponent(editingDueDate.id)}/due-date`}
+					onClose={() => setEditingDueDate(undefined)}
+				/>
+			)}
 			{detail?.kind === "lines" && openedDocument && (
 				<SalesInvoiceLinesDialog
 					document={openedDocument}

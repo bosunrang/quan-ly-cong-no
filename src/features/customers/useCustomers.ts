@@ -12,6 +12,7 @@ import {
 } from "../../domain/customers/customer.repository";
 import { readDirectory } from "../../domain/customers/directory.repository";
 import { useAsyncData } from "../../shared/hooks/useAsyncData";
+import { accountingChanged } from "../../shared/hooks/useServerData";
 
 const empty = { customers: [], employees: [] };
 
@@ -39,6 +40,7 @@ export function useCustomers() {
 					? list.map((item) => (item.id === saved.id ? saved : item))
 					: [saved, ...list],
 			);
+			accountingChanged();
 			return true;
 		},
 		async importCustomers(drafts: CustomerImportDraft[]) {

@@ -3,6 +3,8 @@ const record = (value) => !!value && typeof value === "object" && !Array.isArray
 const fields = (value, names) => record(value) && names.every((name) => text(value[name]));
 const optional = (value, check) => value === undefined || check(value);
 const date = (value) => text(value) && /^\d{4}-\d{2}-\d{2}$/.test(value);
+const calendarDate = (value) => date(value) && value >= "1000-01-01" &&
+  Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const timestamp = (value) => text(value) && Number.isFinite(Date.parse(value));
 const money = (value) => value === null || Number.isFinite(value);
 const positive = (value) => Number.isSafeInteger(value) && value > 0;
@@ -15,6 +17,7 @@ const customer = (value) =>
   fields(value, ["id", "misaCode", "name", "taxCode", "province", "address"]) &&
   ["unknown", "state", "private"].includes(value.group) &&
   ["active", "paused"].includes(value.status) &&
+  optional(value.paymentTermDays, (days) => Number.isSafeInteger(days) && days >= 0) &&
   timestamp(value.createdAt) && timestamp(value.updatedAt) &&
   Array.isArray(value.assignments) && value.assignments.every(assignment);
 const employee = (value) =>
@@ -58,6 +61,14 @@ const unique = (values) => new Set(values).size === values.length;
 const list = (values, check, key = "id") =>
   Array.isArray(values) && values.every(check) && unique(values.map((value) => value[key]));
 
+function validInvoiceDueDates(values, customers) {
+  const ids = new Set(customers.map(({ id }) => id));
+  return Array.isArray(values) && values.every((item) =>
+    fields(item, ["customerId", "documentId", "dueDate"]) &&
+    ids.has(item.customerId) && item.documentId.length > 0 && calendarDate(item.dueDate)) &&
+    unique(values.map(({ customerId, documentId }) => JSON.stringify([customerId, documentId])));
+}
+
 /** Kiểm tra dữ liệu ghi qua máy chủ LAN bằng cùng quy tắc với bản sao lưu. */
 export const isValidCustomerList = (value) => list(value, customer);
 export const isValidEmployeeList = (value) => list(value, employee);
@@ -91,6 +102,7 @@ export function validateBusinessBackup(backup) {
   }
   const data = backup.data;
   if (!record(data) || !list(data.customers, customer) || !list(data.employees, employee) ||
+    !optional(data.invoiceDueDates, (items) => validInvoiceDueDates(items, data.customers)) ||
     !unique(data.customers.map(({ misaCode }) => misaCode)) ||
     !unique(data.employees.map(({ code }) => code)) ||
     !unique(data.employees.flatMap(({ linkedAccountId }) => linkedAccountId ? [linkedAccountId] : [])) ||
@@ -118,6 +130,7 @@ export function restoreBusinessData(backup, current, companyId, accountIds) {
     salesBook: data.salesBook ? { ...data.salesBook, importedAt: restoredAt.toISOString() } : null,
     ledger: data.ledger ? { ...data.ledger, revision: restoredAt.toISOString() + "-" + globalThis.crypto.getRandomValues(new Uint32Array(2)).join("-") } : null,
     settings: data.settings,
+    ...(data.invoiceDueDates?.length ? { invoiceDueDates: data.invoiceDueDates } : {}),
   };
 }
 
@@ -135,8 +148,11 @@ export function deleteBusinessGroups(current, groups) {
   const now = new Date();
   const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, "0")).join("-");
   const employees = new Set(current.employees.map(({ id }) => id));
+  const { invoiceDueDates, ...data } = current;
   return {
-    ...current,
+    ...data,
+    ...(!selected.has("salesBook") && !selected.has("customers") && invoiceDueDates
+      ? { invoiceDueDates } : {}),
     salesBook: selected.has("salesBook") ? null : current.salesBook,
     ledger: selected.has("ledger") ? null : current.ledger,
     employees: selected.has("employees") ? [] : current.employees,

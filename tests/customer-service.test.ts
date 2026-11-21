@@ -56,8 +56,9 @@ describe("customer service", () => {
 			province: "",
 			address: "",
 			status: "active",
+			paymentTermDays: null,
 		});
-		expect(customerToDraft(existing)).toEqual({
+		expect(customerToDraft({ ...existing, paymentTermDays: 30 })).toEqual({
 			misaCode: "KH-001",
 			name: "Khách hàng A",
 			group: "state",
@@ -65,6 +66,7 @@ describe("customer service", () => {
 			province: "Hà Nội",
 			address: "Số 1",
 			status: "active",
+			paymentTermDays: 30,
 		});
 	});
 

@@ -28,6 +28,7 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   const customers = ['one', 'two', 'unassigned', 'ended'].map((id) => ({
     id: 'c-' + id, misaCode: id, name: 'Khách ' + id, group: 'unknown', taxCode: '', address: '',
     province: id, status: 'active', createdAt: time, updatedAt: time,
+    ...(id === 'one' ? { paymentTermDays: 30 } : {}),
     assignments: id === 'unassigned' ? [] : [{ id: 'a-' + id, employeeId: 'e-' + (id === 'ended' ? 'one' : id),
       employeeName: id, province: id, source: 'direct', effectiveFrom: '2026-01-01',
       effectiveTo: id === 'ended' ? '2026-01-02' : null }],
@@ -37,7 +38,8 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   const rows = [...customers, { name: 'Khách chưa có danh mục', misaCode: 'missing' }].map((customer, index) => ({
     rowNumber: index + 1, date: '2026-01-02', documentNumber: 'BH-' + index, invoiceNumber: String(index + 1),
     customerName: customer.name, productName: 'Hàng', unit: 'Hộp', quantity: 1, unitPrice: 200,
-    salesAmount: 200, paymentTotal: 200, source: { customerCode: customer.misaCode },
+    salesAmount: 200, paymentTotal: 200,
+    source: { customerCode: customer.misaCode, invoiceSeries: '', invoiceDate: '' },
   }));
   db.writeDataset(SALE, 1, { fileName: 'scope.xlsx', importedAt: time, rows });
   db.close();
@@ -77,6 +79,59 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
       lines: [{ invoice: candidate.invoice, amount: 50 }],
     })).status, 200);
   }
+  const ownInvoicePath = 'receivables/catalog%3Ac-one/invoices';
+  const ownInvoice = (await read('one', ownInvoicePath)).value.items[0];
+  assert.equal(ownInvoice.aging.dueDate, '2026-02-01');
+  const otherInvoices = 'receivables/catalog%3Ac-two/invoices';
+  const otherInvoice = (await read('two', otherInvoices)).value.items[0];
+  assert.equal(otherInvoice.aging.bucket, 'no-due-date');
+  const ownDueDate = ownInvoicePath + '/' + encodeURIComponent(ownInvoice.id) + '/due-date';
+  const otherDueDate = otherInvoices + '/' + encodeURIComponent(otherInvoice.id) + '/due-date';
+  const asOf = (await read('one', 'receivables')).value.agingAsOf;
+  const dueDate = new Date(Date.parse(asOf) - 31 * 86_400_000).toISOString().slice(0, 10);
+  assert.equal((await write('two', 'PATCH', otherDueDate, { dueDate, expected: null })).status, 403);
+  assert.equal((await write('one', 'PATCH', otherDueDate, { dueDate, expected: null })).status, 404);
+  assert.equal((await write('one', 'PATCH', ownDueDate, { dueDate: '2026-02-30', expected: null })).status, 400);
+  assert.equal((await write('one', 'PATCH', ownDueDate, { dueDate, expected: null })).status, 200);
+  assert.equal((await write('one', 'PATCH', ownDueDate, { dueDate: asOf, expected: null })).status, 409);
+  const aged = (await read('one', 'receivables?aging=overdue')).value;
+  assert.equal(aged.agingAmounts['31-60'], 150);
+  assert.deepEqual(aged.agingUnitCounts, {
+    all: 1, overdue: 1, current: 0, '1-30': 0, '31-60': 1, '61-90': 0, '90+': 0, 'no-due-date': 0,
+  });
+  assert.equal(aged.rows.items[0].earliestDueDate, dueDate);
+  assert.equal(aged.rows.items[0].maxOverdueDays, 31);
+  assert.equal(aged.rows.items[0].overdueAmount, 150);
+  const otherAging = (await read('two', 'receivables?aging=overdue')).value;
+  assert.equal(otherAging.rows.total, 0);
+  assert.equal(otherAging.agingUnitCounts.overdue, 0);
+  assert.equal(otherAging.agingUnitCounts['no-due-date'], 1);
+  assert.equal(otherAging.agingUnitCounts.all, 1);
+  assert.equal((await read('one', 'receivables?aging=overdue&province=two')).value.agingUnitCounts.all, 0);
+  assert.equal((await read('two', 'receivables?aging=no-due-date')).value.agingAmounts['no-due-date'], 150);
+  const agedInvoice = (await read('one', ownInvoicePath + '?aging=31-60')).value.items[0];
+  assert.deepEqual(agedInvoice.aging, { dueDate, overrideDueDate: dueDate, daysOverdue: 31, bucket: '31-60' });
+  assert.equal((await read('one', ownInvoicePath + '?aging=1-30')).value.total, 0);
+  const backup = (await read('admin', 'business-backup')).value;
+  const restored = openDatabase(':memory:');
+  try {
+    restored.changeBusinessData({ type: 'restore', backup });
+    assert.equal(restored.readDataset(DATASET_KEYS.customers).data[0].paymentTermDays, 30);
+    assert.equal(restored.readInvoiceDueDates()[0].dueDate, dueDate);
+  } finally {
+    restored.close();
+  }
+  const customer = (await read('admin', 'customers')).value.find(({ id }) => id === 'c-one');
+  const patchTerm = (current, days) => write('admin', 'PATCH', 'customers/' + current.id,
+    { expected: current.updatedAt, customer: { ...current, paymentTermDays: days } });
+  assert.equal((await patchTerm(customer, -1)).status, 400);
+  const changed = await patchTerm(customer, 0);
+  assert.equal(changed.value.paymentTermDays, 0);
+  assert.equal((await read('one', ownInvoicePath)).value.items[0].aging.dueDate, dueDate);
+  assert.equal((await write('one', 'PATCH', ownDueDate, { dueDate: null, expected: dueDate })).status, 200);
+  assert.equal((await read('one', ownInvoicePath)).value.items[0].aging.dueDate, '2026-01-02');
+  assert.equal((await patchTerm(changed.value, null)).status, 200);
+  assert.equal((await read('one', ownInvoicePath)).value.items[0].aging.bucket, 'no-due-date');
   // Xen kẽ quản trị và các nhân viên cùng kỳ: bộ nhớ đệm không được làm lộ tổng của người khác.
   for (const user of ['admin', 'one', 'two', 'empty', 'admin', 'two', 'one']) {
     const result = await read(user, 'dashboard?' + period);

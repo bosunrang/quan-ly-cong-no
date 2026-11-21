@@ -2,6 +2,14 @@ import type { Customer } from "../../src/domain/customers/customer.model";
 import type { SalesEmployee } from "../../src/domain/employees/employee.model";
 import type { MisaSalesBook } from "../../src/domain/misa/misa.sales-book";
 import { buildSalesReceivables } from "../../src/domain/misa/misa.sales-receivables";
+import {
+	agingBuckets,
+	type AgingFilter,
+	emptyAgingAmounts,
+	invoiceAging,
+	matchesCustomerAging,
+	summarizeCustomerAging,
+} from "../../src/domain/payments/receivable-aging";
 import type { ReceiptLedger } from "../../src/domain/payments/receipt-ledger";
 import { projectReceiptReceivables } from "../../src/domain/payments/receipt-receivables";
 
@@ -40,12 +48,57 @@ export function receivablesView(
 			(!employee || (item.employeeId || "?") === employee) &&
 			(!province || (item.province || "?") === province),
 	);
+	const agingAsOf = "2026-06-01";
+	const agingFilter = (url.searchParams.get("aging") || "") as AgingFilter;
+	const terms = new Map(
+		customers.map(({ id, paymentTermDays }) => [id, paymentTermDays]),
+	);
+	const summaries = filtered.map((item) => ({
+		item,
+		aging: summarizeCustomerAging(item.documents, (document) =>
+			invoiceAging(
+				document,
+				item.customerId ? terms.get(item.customerId) : undefined,
+				undefined,
+				agingAsOf,
+			),
+		),
+	}));
+	const agingUnitCounts = {
+		...emptyAgingAmounts(),
+		all: summaries.length,
+		overdue: 0,
+	};
+	for (const filter of ["overdue", ...agingBuckets] as const) {
+		agingUnitCounts[filter] = summaries.filter(({ aging }) =>
+			matchesCustomerAging(aging, filter),
+		).length;
+	}
+	const agingAmounts = emptyAgingAmounts();
+	for (const { aging } of summaries)
+		for (const bucket of agingBuckets)
+			agingAmounts[bucket] += aging.amounts[bucket];
+	const visible = summaries.filter(({ aging }) =>
+		matchesCustomerAging(aging, agingFilter),
+	);
 	return {
 		hasBook: book.rows.length > 0,
 		fileName: book.fileName,
 		unmatchedAllocationCount: group.unmatchedCount,
 		missingTotalCount: filtered.reduce(
 			(sum, item) => sum + item.missingTotalCount,
+			0,
+		),
+		agingAsOf,
+		agingUnitCounts,
+		agingAmounts,
+		agingReductionAmount: summaries.reduce(
+			(sum, { aging }) => sum + aging.reductionAmount,
+			0,
+		),
+		agingUnallocatedAmount: 0,
+		agingOverdueAmount: summaries.reduce(
+			(sum, { aging }) => sum + aging.overdueAmount,
 			0,
 		),
 		filterOptions: {
@@ -65,9 +118,14 @@ export function receivablesView(
 				.length,
 		},
 		rows: paging(
-			filtered.map(({ documents, ...item }) => ({
+			visible.map(({ item: { documents, ...item } }) => ({
 				...item,
 				documentCount: documents.length,
+				earliestDueDate: null,
+				maxOverdueDays: null,
+				overdueAmount: 0,
+				reductionAmount: 0,
+				unallocatedAmount: 0,
 			})),
 		),
 	};

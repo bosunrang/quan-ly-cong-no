@@ -57,6 +57,10 @@ function customerData(input, current) {
   const next = { id: current?.id ?? randomUUID(), createdAt: current?.createdAt ?? new Date(now).toISOString(),
     updatedAt: new Date(Math.max(now, current ? Date.parse(current.updatedAt) + 1 : 0)).toISOString(),
     assignments: current?.assignments ?? [], ...pick(input, customerFields) };
+  if (input.paymentTermDays !== null) {
+    const days = input.paymentTermDays ?? current?.paymentTermDays;
+    if (days !== undefined) next.paymentTermDays = days;
+  }
   if (!isValidCustomerList([next]) || !next.misaCode.trim() || !next.name.trim())
     fail(400, 'Thông tin khách hàng không hợp lệ.');
   return { ...next, misaCode: next.misaCode.trim(), name: next.name.trim(), taxCode: next.taxCode.trim(),

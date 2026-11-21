@@ -22,6 +22,7 @@ export interface Customer {
 	province: string;
 	address: string;
 	status: CustomerStatus;
+	paymentTermDays?: number;
 	assignments: SalesAssignment[];
 	createdAt: string;
 	updatedAt: string;
@@ -35,6 +36,7 @@ export interface CustomerDraft {
 	province: string;
 	address: string;
 	status: CustomerStatus;
+	paymentTermDays?: number | null;
 }
 
 export interface CustomerImportDraft {
@@ -85,6 +87,10 @@ export function isCustomer(value: unknown): value is Customer {
 		typeof value.province === "string" &&
 		typeof value.address === "string" &&
 		(value.status === "active" || value.status === "paused") &&
+		(value.paymentTermDays === undefined ||
+			(typeof value.paymentTermDays === "number" &&
+				Number.isSafeInteger(value.paymentTermDays) &&
+				value.paymentTermDays >= 0)) &&
 		Array.isArray(value.assignments) &&
 		value.assignments.every(isSalesAssignment) &&
 		isIsoTimestamp(value.createdAt) &&

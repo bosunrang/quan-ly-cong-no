@@ -289,6 +289,7 @@ function App() {
 			return (
 				<SalesReceivablesPage
 					showEmployeeFilter={role === "admin"}
+					canEditDueDates={role === "admin" || role === "editor"}
 					onOpenMisa={openMisa}
 					onOpenCustomers={openCustomers}
 				/>
