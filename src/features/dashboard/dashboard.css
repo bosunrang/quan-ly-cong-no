@@ -90,6 +90,8 @@
 .dashboard-insights {
 	display: grid;
 	grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+	/* Mọi hàng cao bằng hàng cao nhất: hai khối trên luôn bằng hai khối dưới. */
+	grid-auto-rows: 1fr;
 	gap: var(--space-16);
 }
 
@@ -376,6 +378,7 @@
 @media (max-width: 1080px) {
 	.dashboard-insights {
 		grid-template-columns: minmax(0, 1fr);
+		grid-auto-rows: auto;
 	}
 }
 

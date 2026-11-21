@@ -4,6 +4,8 @@ const { opts, pageOf, customerSummary, search, searchText, period } = require('.
 
 const nameText = (item) => searchText(item, 'name', ({ name }) => name);
 const codeText = (item) => searchText(item, 'code', ({ misaCode }) => misaCode);
+// Hai danh sách ngắn (nợ nhiều nhất, quá hạn nhiều nhất) cùng số dòng để các khối Dashboard cao bằng nhau.
+const topListSize = 6;
 const customerText = (item) => searchText(item, 'customer', ({ name, customerCode }) => name + ' ' + customerCode);
 
 function register(router, db, state) {
@@ -37,8 +39,8 @@ function register(router, db, state) {
     const page = pageOf(receipts ?? (q ? customers.filter((item) => customerText(item).includes(q)) : customers), query, 10);
     const rows = receipts ? page : { ...page, items: page.items.map(customerSummary) };
     return { ...totals, receivablesCount: receivables.length, periodCount: periodReceipts.length,
-      unallocatedCount: unallocatedReceipts.length, topDebtors: receivables.slice(0, 8).map(customerSummary), provinceOptions,
-      aging: { asOf: through, ...aging }, topOverdue: overdue.slice(0, 8).map(customerSummary),
+      unallocatedCount: unallocatedReceipts.length, topDebtors: receivables.slice(0, topListSize).map(customerSummary), provinceOptions,
+      aging: { asOf: through, ...aging }, topOverdue: overdue.slice(0, topListSize).map(customerSummary),
       rows };
   }, opts(['dashboard']));
 }
