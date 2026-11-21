@@ -15,6 +15,7 @@ const { readWorkstation, saveWorkstation, workstationOrigin } = require('../elec
 const { parseTunnelOrigin, requestPeer } = require('../server/client-address.cjs');
 const { createFileLog } = require('../server/file-log.cjs');
 const { createLanServer, listenLanServer, stopLanServer } = require('../server/lan.cjs');
+const { lanOptions } = require('../server/lan-options.cjs');
 const { startDevelopmentServer } = require('../server/development.cjs');
 const { openDatabase, DATASET_KEYS } = require('../server/database.cjs');
 const { createAccountingState } = require('../server/accounting-state.cjs');
@@ -103,22 +104,28 @@ test('tự đăng nhập dev cần khóa nội bộ, cấp phiên quản trị v
   } finally { await dev.stop(); }
 });
 
-test('Tunnel secures public sessions and preserves ordinary LAN sessions', async (t) => {
+test('Default tunnel routing secures public sessions without configuring a hostname', async (t) => {
   const directory = workspace(t);
   mkdirSync(join(directory, 'ui'));
   writeFileSync(join(directory, 'ui', 'index.html'), '<head></head><body>Quản lý công nợ</body>');
   const company = { id: 'local', name: 'Kiểm thử' };
-  const tunnelOrigin = parseTunnelOrigin('https://congno.example.test/');
-  const server = createLanServer({ company, directory, staticRoot: join(directory, 'ui'), tunnelOrigin });
-  await listenLanServer(server, 0, '127.0.0.1');
+  const settings = lanOptions(['--tunnel'], directory);
+  assert.equal(settings.host, '127.0.0.1');
+  assert.equal(settings.tls, undefined);
+  const startup = loginItem(company, settings, 'app.exe');
+  assert.ok(startup.args.includes('--tunnel'));
+  assert.equal(lanOptions(startup.args, 'unused').host, settings.host);
+  const server = createLanServer({ ...settings, company, staticRoot: join(directory, 'ui') });
+  await listenLanServer(server, 0, settings.host);
   try {
     const { port } = server.address();
     const body = { username: 'admin', password: 'tunnel-test-password' };
     await server.initializeAdministrator(body.password);
-    const viaTunnel = { Host: 'congno.example.test', Origin: tunnelOrigin, 'CF-Connecting-IP': '2001:db8::4', 'X-Forwarded-Proto': 'https' };
+    const viaTunnel = { Host: 'congno.example.test', Origin: 'https://congno.example.test',
+      'CF-Connecting-IP': '2001:db8::4', 'CF-Ray': 'example-SIN', 'X-Forwarded-Proto': 'https' };
     assert.equal((await http(port, viaTunnel)).status, 200);
     assert.equal((await http(port, { ...viaTunnel, 'X-Forwarded-Proto': 'http' })).status, 403);
-    assert.equal((await http(port, { Host: 'congno.example.test' })).status, 403);
+    assert.equal((await http(port, { ...viaTunnel, 'CF-Connecting-IP': 'invalid' })).status, 403);
     const legacy = await http(port, viaTunnel, { url: '/local/api/branding?view=summary' });
     assert.equal(legacy.status, 307);
     assert.equal(legacy.headers.location, '/api/branding?view=summary');
@@ -131,6 +138,7 @@ test('Tunnel secures public sessions and preserves ordinary LAN sessions', async
     const [cookie] = connected.headers['set-cookie'];
     assert.match(cookie, /; HttpOnly/);
     assert.match(cookie, /; Secure/);
+    assert.equal((await http(port, { ...viaTunnel, Cookie: cookie.split(';')[0] }, { url: '/api/session' })).status, 200);
     const closed = await http(port, { ...viaTunnel, Cookie: cookie.split(';')[0] }, { method: 'DELETE', url: '/api/session' });
     assert.equal(closed.status, 200);
     assert.match(closed.headers['set-cookie'][0], /; Secure/);
@@ -138,26 +146,32 @@ test('Tunnel secures public sessions and preserves ordinary LAN sessions', async
     const lan = await http(port, { Origin: 'http://127.0.0.1:' + port }, login);
     assert.equal(lan.status, 200);
     assert.doesNotMatch(lan.headers['set-cookie'][0], /; Secure/);
-    assert.ok(loginItem(company, { directory, tunnelOrigin }, 'app.exe').args.includes('--tunnel-origin=' + tunnelOrigin));
   } finally { await stopLanServer(server); }
 
   const logs = join(directory, 'logs', company.id);
   const log = readFileSync(join(logs, readdirSync(logs)[0]), 'utf8');
-  assert.match(log, /server\.tunnel\.enabled/);
+  assert.match(log, /server\.started/);
   assert.match(log, /server\.stopped/);
   assert.doesNotMatch(log, /tunnel-test-password|2001:db8|congno\.example/);
 });
 
-test('Cloudflare forwarding is scoped to loopback and the opted-in hostname', () => {
+test('Only company servers trust local Cloudflare headers and honor an optional fixed hostname', () => {
   const tunnelOrigin = 'https://congno.example.test';
   const headers = { host: 'congno.example.test', 'cf-connecting-ip': '198.51.100.7', 'x-forwarded-proto': 'https' };
   const req = { socket: { remoteAddress: '::ffff:127.0.0.1' }, headers };
-  assert.deepEqual(requestPeer(req, false, tunnelOrigin), { origin: tunnelOrigin, address: '198.51.100.7', secure: true });
+  const peer = { origin: tunnelOrigin, address: '198.51.100.7', secure: true };
+  const enabled = { allowTunnel: true };
+  const pinned = { ...enabled, tunnelOrigin };
+  assert.deepEqual(requestPeer(req, false, enabled), peer);
+  assert.deepEqual(requestPeer(req, false, pinned), peer);
   assert.throws(() => requestPeer(req, false), { status: 403 });
-  assert.throws(() => requestPeer({ ...req, socket: { remoteAddress: '192.168.1.7' } }, false, tunnelOrigin), { status: 403 });
+  assert.throws(() => requestPeer({ ...req, headers: { ...headers, host: 'other.example.test' } }, false, pinned), { status: 403 });
+  assert.throws(() => requestPeer({ ...req, headers: { ...headers, host: 'example.test/path' } }, false, enabled), { status: 403 });
+  assert.throws(() => requestPeer({ ...req, socket: { remoteAddress: '192.168.1.7' } }, false, pinned), { status: 403 });
   assert.deepEqual(requestPeer({
     socket: { remoteAddress: '192.168.1.7' }, headers: { ...headers, host: '192.168.1.20:3300' },
-  }, false, tunnelOrigin), { origin: 'http://192.168.1.20:3300', address: '192.168.1.7', secure: false });
+  }, false, enabled), { origin: 'http://192.168.1.20:3300', address: '192.168.1.7', secure: false });
+  assert.ok(loginItem({ id: 'local' }, { directory: tmpdir(), tunnelOrigin }, 'app.exe').args.includes('--tunnel-origin=' + tunnelOrigin));
   assert.throws(() => parseTunnelOrigin('https://congno.example.test/api'));
   assert.throws(() => parseTunnelOrigin('http://congno.example.test'));
 });

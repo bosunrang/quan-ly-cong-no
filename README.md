@@ -145,14 +145,16 @@ sau tên tệp `.exe`. Từ mã nguồn, dùng `pnpm start --client`.
 
 ## Truy cập từ xa qua Cloudflare Tunnel
 
-1. Trên máy chạy app, cấu hình một tiến trình cho đúng công ty và tên miền. Ví dụ `pnpm lan --company=nam-hung-viet --loopback --tunnel-origin=https://congno.example.com`.
-   Với bản cài Windows, dùng các đối số `--company=nam-hung-viet --loopback --tunnel-origin=https://congno.example.com` sau tên tệp `.exe`.
-   Nếu máy cũng phục vụ nhân viên trực tiếp trong LAN, bỏ `--loopback` và giới hạn cổng của app trong firewall.
-2. Chạy `cloudflared` trên cùng máy. Thêm hostname công khai `congno.example.com`, dịch vụ
-   `http://127.0.0.1:3300` (hoặc cổng của công ty) và đặt **HTTP Host Header** thành
-   `congno.example.com`. Ví dụ này dùng HTTP ở đoạn loopback. Nếu origin dùng HTTPS, dùng
-   URL `https://` và cấu hình để connector tin chứng thư của máy chủ. Dùng một hostname khác cho mỗi công ty.
-   [Thông số origin của Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/reference/origin-parameters/)
+1. Mở app ở chế độ **Máy chủ** cho đúng công ty. Nếu chỉ truy cập qua tunnel, mở bản cài Windows
+   với `--company=nam-hung-viet --tunnel`, hoặc dùng `pnpm lan --company=nam-hung-viet --tunnel`.
+   Cờ `--tunnel` phục vụ HTTP trên `127.0.0.1` ngay cả khi đã đặt chứng chỉ nội bộ.
+   Khi chuyển từ cấu hình HTTPS nội bộ sang chế độ này, thay `--require-tls` bằng `--tunnel` trong lệnh mở app.
+   Các máy khác kết nối qua tên miền HTTPS của công ty khi dùng chế độ này.
+2. Chạy `cloudflared` trên cùng máy. Thêm một hostname công khai cho mỗi công ty, giữ **Additional settings**
+   mặc định và trỏ **Service** về `http://127.0.0.1:3300` đối với Nam Hưng Việt, hoặc cổng của công ty tương ứng.
+   Với máy chủ HTTP mặc định phục vụ cả LAN, vẫn dùng URL này và giới hạn cổng trong firewall.
+   Nếu giữ cấu hình HTTPS nội bộ, dùng Service `https://` và cấu hình để connector tin chứng chỉ của máy chủ.
+   Tùy chọn cũ `--tunnel-origin` vẫn dùng được để giới hạn tunnel vào một tên miền cụ thể.
 3. Bật chuyển hướng HTTP sang HTTPS ở Cloudflare. Thiết lập Cloudflare Access cho nhân viên được phép truy cập
    nếu cần lớp xác thực bên ngoài. Nếu Access chuyển qua tên miền của nhà cung cấp danh tính,
    dùng trình duyệt để hoàn tất đăng nhập. Công nợ tiếp tục xác thực và kiểm tra quyền tại máy chủ.

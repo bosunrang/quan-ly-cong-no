@@ -139,7 +139,7 @@ async function developmentAdministrator(db) {
 // khởi động lại hay cập nhật máy chủ không làm người dùng bị đăng xuất.
 const tokenHash = (token) => createHash('sha256').update(token).digest('hex');
 
-function createAccess(db, company, tls, tunnelOrigin) {
+function createAccess(db, company, tls, proxy) {
   // Lần đăng nhập sai được đếm theo máy và theo tên đăng nhập. Đăng nhập đúng chỉ
   // xóa bộ đếm của chính tài khoản đó, nên không thể dùng tài khoản của mình để
   // đặt lại giới hạn rồi dò mật khẩu tài khoản khác.
@@ -180,7 +180,7 @@ function createAccess(db, company, tls, tunnelOrigin) {
       .find((part) => part.startsWith(`${cookie}=`))?.slice(cookie.length + 1);
   }
   function setCookie(req, res, value, age) {
-    const { secure } = requestPeer(req, tls, tunnelOrigin);
+    const { secure } = requestPeer(req, tls, proxy);
     res.setHeader('Set-Cookie', `${cookie}=${value}; Path=/api/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure ? '; Secure' : ''}`);
   }
   function createSession(req, res, account) {
@@ -228,7 +228,7 @@ function createAccess(db, company, tls, tunnelOrigin) {
       if (operation === 'login') {
         const now = Date.now();
         pruneFailures(now);
-        const { address } = requestPeer(req, tls, tunnelOrigin);
+        const { address } = requestPeer(req, tls, proxy);
         const password = payload.password;
         const username = typeof payload.username === 'string' ? payload.username.trim().toLowerCase() : '';
         checkLoginAllowed(address, username, now);

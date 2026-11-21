@@ -24,8 +24,8 @@ function openCompanyDatabase(directory, company) {
   return openDatabase(companyDatabasePath(directory, company));
 }
 
-function createLanServer({ company, directory, staticRoot, tls, tunnelOrigin, databasePath, log, devLoginKey }) {
-  tunnelOrigin = parseTunnelOrigin(tunnelOrigin);
+function createLanServer({ company, directory, staticRoot, tls, tunnelOrigin, allowTunnel, databasePath, log, devLoginKey }) {
+  const proxy = { tunnelOrigin: parseTunnelOrigin(tunnelOrigin), allowTunnel };
   const fileLog = log ?? createFileLog(join(directory, 'logs', company.id));
   const root = resolve(staticRoot);
   const index = readFileSync(resolve(root, 'index.html'), 'utf8')
@@ -41,13 +41,13 @@ function createLanServer({ company, directory, staticRoot, tls, tunnelOrigin, da
   }
   const backups = automaticBackups(source, directory, company, undefined, fileLog);
   const api = createApi({ company, db, backups, devLoginKey,
-    access: createAccess(db, company, Boolean(tls), tunnelOrigin) });
+    access: createAccess(db, company, Boolean(tls), proxy) });
   const respond = async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     const pathname = String(req.url).split('?')[0];
     try {
-      const peer = requestPeer(req, tls, tunnelOrigin);
+      const peer = requestPeer(req, tls, proxy);
       if (req.method === 'GET' &&
           [legacyPath, `${legacyPath}/`, `${legacyPath}/index.html`].includes(pathname)) {
         res.writeHead(302, { Location: '/', 'Cache-Control': 'no-store' });
@@ -90,7 +90,7 @@ function createLanServer({ company, directory, staticRoot, tls, tunnelOrigin, da
   server.initializeAdministrator = (password) => initializeAdministrator(db, password);
   server.initializeDefaultAdministrator = () => initializeDefaultAdministrator(db);
   server.once('listening', () => {
-    fileLog.write('INFO', tunnelOrigin ? 'server.tunnel.enabled' : 'server.started');
+    fileLog.write('INFO', proxy.tunnelOrigin ? 'server.tunnel.enabled' : 'server.started');
     backups.start();
   });
   server.on('error', (error) => fileLog.write('ERROR', 'server.listen.failed', error.code));

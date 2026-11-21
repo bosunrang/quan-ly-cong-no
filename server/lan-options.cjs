@@ -10,17 +10,23 @@ function lanOptions(argv, defaultDirectory) {
     ? fileURLToPath(dataUrl.slice('--data-dir-url='.length))
     : resolve(dataArgument?.slice('--data-dir='.length) ||
       process.env.CONG_NO_LAN_DATA_DIR || defaultDirectory);
-  const key = process.env.CONG_NO_LAN_TLS_KEY;
-  const cert = process.env.CONG_NO_LAN_TLS_CERT;
+  const tunnelOnly = argv.includes('--tunnel');
+  if (tunnelOnly && argv.includes('--require-tls')) {
+    throw new Error('Chọn --tunnel cho HTTP trên máy này hoặc --require-tls cho HTTPS nội bộ.');
+  }
+  const key = tunnelOnly ? undefined : process.env.CONG_NO_LAN_TLS_KEY;
+  const cert = tunnelOnly ? undefined : process.env.CONG_NO_LAN_TLS_CERT;
   if (Boolean(key) !== Boolean(cert) || (!key && argv.includes('--require-tls'))) {
     throw new Error('Cần cung cấp cả khóa và chứng chỉ HTTPS.');
   }
   const tls = key ? { key: readFileSync(key), cert: readFileSync(cert) } : undefined;
-  const loopback = argv.includes('--loopback');
+  const loopback = tunnelOnly || argv.includes('--loopback');
   const tunnel = argv.find((arg) => arg.startsWith('--tunnel-origin='));
   return {
     directory,
     tls,
+    tunnelOnly,
+    allowTunnel: true,
     tunnelOrigin: parseTunnelOrigin(tunnel?.slice('--tunnel-origin='.length)),
     loopback,
     host: loopback ? '127.0.0.1' : '0.0.0.0',

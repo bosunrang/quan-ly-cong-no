@@ -108,8 +108,8 @@ Mọi chế độ đều đăng nhập bằng cookie HttpOnly và được máy 
 - **Máy chủ LAN:** mỗi tiến trình desktop phục vụ một công ty và một cổng. Chế độ Node.js có thể phục vụ nhiều cổng.
 - **Máy trạm Electron:** tải giao diện và API từ cùng địa chỉ đã lưu trong `userData/workstation/server.json`.
   Kho SQLite và các tác vụ sao lưu thuộc máy chủ từ xa. Trình duyệt có thể mở cùng địa chỉ.
-- **Cloudflare Tunnel:** mỗi máy chủ công ty nhận một tên miền HTTPS đã cấu hình. Connector chạy cùng máy
-  và chuyển tới cổng loopback của công ty.
+- **Cloudflare Tunnel:** hostname HTTPS được cấu hình trên Cloudflare. Connector chạy cùng máy và
+  chuyển tới cổng của công ty qua loopback. Cờ `--tunnel` mở riêng HTTP trên `127.0.0.1`.
 - **Phát triển:** `pnpm dev` tự mở máy chủ loopback, Vite chuyển tiếp `/api/` cùng nguồn.
   Dữ liệu phát triển ở `data/dev/cong-no.sqlite`. Vite cục bộ ở cổng 5176 có thể cấp phiên quản trị
   khi chưa có phiên. Vite chỉ gửi khóa nội bộ cho yêu cầu cùng nguồn từ loopback.
@@ -190,8 +190,9 @@ hàng chỉ tải khi mở chứng từ. Các route báo cáo trả dữ liệu 
 - Khi dừng máy chủ (thoát hoặc cài cập nhật), yêu cầu đang dở có 3 giây để hoàn tất rồi mọi kết nối bị ngắt.
 - Electron bật sandbox và context isolation, chặn quyền trình duyệt, popup và điều hướng sang nguồn khác.
   Trang cấu hình máy trạm đóng gói cục bộ chỉ được đọc và lưu địa chỉ. Renderer nghiệp vụ tải từ HTTP không có preload.
-- Tên miền Tunnel phải khớp cài đặt của công ty. Máy chủ chỉ dùng `CF-Connecting-IP` cho yêu cầu từ
-  loopback có `Host` đã khai báo và `X-Forwarded-Proto: https`. Máy chạy connector là ranh giới tin cậy.
+- Máy chủ công ty chỉ dùng `CF-Connecting-IP` cho yêu cầu từ loopback có `Host` là tên miền hợp lệ
+  và `X-Forwarded-Proto: https`. App dùng `Host` để kiểm tra nguồn của yêu cầu API.
+  Khi có `--tunnel-origin`, `Host` phải khớp cấu hình. Máy chạy connector là ranh giới tin cậy.
   Cấu hình Cloudflare Access khi cần giới hạn danh tính bên ngoài. Giữ cổng HTTP gốc trong LAN hoặc trên loopback.
 - Nhật ký vận hành theo chế độ, ghi JSON Lines theo ngày UTC, giữ 30 ngày và tối đa 5 MB mỗi ngày.
   Chỉ ghi thời điểm, mức độ, mã sự kiện và mã lỗi. Nhật ký thao tác nghiệp vụ vẫn ở SQLite.
