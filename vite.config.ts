@@ -135,6 +135,20 @@ export default defineConfig(() => {
 		],
 		base: "./",
 		worker: { format: "es" },
-		server: { host: "127.0.0.1", port: 5176, strictPort: true },
+		server: {
+			host: "127.0.0.1",
+			port: 5176,
+			strictPort: true,
+			// Không theo dõi bộ cài, bản build và dữ liệu: watcher giữ handle thư mục làm electron-builder
+			// không đổi tên được release/win-unpacked.tmp khi đóng gói lúc dev server đang chạy.
+			watch: {
+				ignored: [
+					"**/release/**",
+					"**/dist/**",
+					"**/coverage/**",
+					"**/data/**",
+				],
+			},
+		},
 	};
 });
