@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import type { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
 
@@ -70,16 +71,18 @@ export default defineConfig(() => {
 							workerData: { devLoginKey },
 						},
 					);
+					// Gọi sự kiện qua EventEmitter: tùy bản @types/node, Worker có thể không khai báo on/once.
+					const events = worker as unknown as EventEmitter;
 					const exited = new Promise<void>((resolve) => {
-						worker.once("exit", () => resolve());
+						events.once("exit", () => resolve());
 					});
 					stopBackend = () => {
 						if (worker.threadId !== -1) worker.postMessage("stop");
 						return exited;
 					};
 					const target = await new Promise<string>((resolve, reject) => {
-						worker.once("message", resolve);
-						worker.on("error", (error) => {
+						events.once("message", resolve);
+						events.on("error", (error: unknown) => {
 							vite.config.logger.error(String(error));
 							reject(error);
 						});
