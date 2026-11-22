@@ -18,7 +18,7 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   const admin = { ...initial, mustChangePassword: false };
   const staff = ['one', 'two', 'empty', 'unlinked', 'inactive'].map((id) => ({ ...admin,
     id, username: id, role: id === 'two' ? 'viewer' : 'editor',
-    pages: id === 'two' ? ['dashboard', 'receivables', 'reports'] : ['dashboard', 'receivables', 'payments', 'reports', 'sales'],
+    pages: id === 'two' ? ['dashboard', 'receivables', 'reports'] : ['dashboard', 'receivables', 'payments', 'reports', 'sales', 'customers'],
   }));
   db.writeAccounts([initial], [admin, ...staff]);
   const employees = staff.filter(({ id }) => id !== 'unlinked').map(({ id }) => ({
@@ -200,6 +200,13 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   assert.deepEqual(filteredInvoices.items, []);
   assert.deepEqual(filteredInvoices.totals, { balance: { received: 50, remaining: 150 }, unverifiedCount: 0 });
   assert.deepEqual((await read('one', 'customers')).value.map(({ id }) => id), ['c-one']);
+  // Sửa, xóa khách ngoài phạm vi (chưa phân công hoặc của người khác) bị từ chối như khi đọc.
+  for (const other of (await read('admin', 'customers')).value.filter(({ id }) => id !== 'c-one')) {
+    assert.equal((await write('one', 'PATCH', 'customers/' + other.id,
+      { expected: other.updatedAt, customer: { ...other, name: 'Đổi trộm' } })).status, 404);
+    assert.equal((await write('one', 'DELETE', 'customers/' + other.id, { expected: other.updatedAt })).status, 404);
+  }
+  assert.ok((await read('admin', 'customers')).value.every(({ name }) => name !== 'Đổi trộm'));
   const receivables = (await read('one', 'receivables')).value;
   assert.equal(receivables.rows.total, 1);
   assert.deepEqual(receivables.filterOptions.provinces, ['one']);

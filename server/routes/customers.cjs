@@ -37,7 +37,9 @@ function register(router, db, readers) {
       fail(400, 'Danh sách nhập khách hàng không hợp lệ.');
     return addCustomers(body.customers, true, account, 'Nhập danh mục khách hàng', true);
   }, options(['customers'], BATCH));
-  router.patch(customers + '/:id', ({ body, params, account }) => change(db, (tx) => {
+  router.patch(customers + '/:id', ({ body, params, account, scope }) => change(db, (tx) => {
+    // Nhân viên chỉ sửa, xóa được khách đang được phân công cho mình, giống danh sách họ thấy.
+    scope.requireCustomer(params.id);
     const current = customerAt(tx, params.id, body.expected);
     const item = customerData(body.customer, current);
     const code = normalize(item.misaCode);
@@ -54,7 +56,8 @@ function register(router, db, readers) {
     log(account, 'Cập nhật khách hàng', `${item.misaCode} · ${item.name}`);
     return item;
   }), options(['customers'], FORM));
-  router.delete(customers + '/:id', ({ body, params, account }) => change(db, (tx) => {
+  router.delete(customers + '/:id', ({ body, params, account, scope }) => change(db, (tx) => {
+    scope.requireCustomer(params.id);
     const current = customerAt(tx, params.id, body.expected);
     if (tx.customerHasReceipts(current.id))
       fail(409, 'Khách hàng đã có chứng từ thu. Hãy chuyển sang trạng thái tạm dừng.');
