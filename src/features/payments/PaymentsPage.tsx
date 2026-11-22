@@ -525,9 +525,9 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 					busy={busy}
 					error={error}
 					onClose={closeAction}
-					onSave={(customer, fields) =>
+					onSave={(customer, fields, allowDuplicate) =>
 						void commit(
-							() => saveReceipt(customer, fields),
+							() => saveReceipt(customer, fields, allowDuplicate),
 							"Đã ghi khoản thu.",
 							() => recoverReceipt(customer, fields),
 						)

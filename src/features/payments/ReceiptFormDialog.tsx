@@ -2,12 +2,16 @@ import { ReceiptText } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import type { Customer } from "../../domain/customers/customer.model";
 import { normalizeVietnamese } from "../../domain/customers/customer.province";
-import type { ReceiptDraft } from "../../domain/payments/receipt-ledger";
+import {
+	type ReceiptDraft,
+	similarReceiptDays,
+} from "../../domain/payments/receipt-ledger";
+import type { SimilarReceipt } from "../../domain/payments/receipt-ledger.repository";
 import {
 	resourceWithQuery,
 	useServerData,
 } from "../../shared/hooks/useServerData";
-import { todayLocal } from "../../shared/lib/date";
+import { formatDateOnly, todayLocal } from "../../shared/lib/date";
 import { randomId } from "../../shared/lib/randomId";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
@@ -20,8 +24,14 @@ interface Props {
 	busy: boolean;
 	error: string;
 	onClose: () => void;
-	onSave: (customer: Customer, fields: ReceiptDraft) => void;
+	onSave: (
+		customer: Customer,
+		fields: ReceiptDraft,
+		allowDuplicate: boolean,
+	) => void;
 }
+
+const money = new Intl.NumberFormat("vi-VN");
 
 export function ReceiptFormDialog({
 	customers,
@@ -46,6 +56,7 @@ export function ReceiptFormDialog({
 	const [amount, setAmount] = useState("");
 	const [reference, setReference] = useState("");
 	const [validation, setValidation] = useState("");
+	const [confirmedDuplicate, setConfirmedDuplicate] = useState(false);
 	const { byLabel, options } = useMemo(() => {
 		const index = new Map<string, Customer | null>();
 		for (const item of customers) {
@@ -59,6 +70,29 @@ export function ReceiptFormDialog({
 			.sort((left, right) => left.localeCompare(right, "vi"));
 		return { byLabel: index, options };
 	}, [customers]);
+
+	// Cảnh báo ghi trùng: khoản thu khác của cùng khách, cùng số tiền, gần ngày hạch toán.
+	const selectedCustomer = byLabel.get(customer) ?? undefined;
+	const parsedAmount = parseVnd(amount);
+	const similarResource =
+		selectedCustomer &&
+		Number.isSafeInteger(parsedAmount) &&
+		parsedAmount > 0 &&
+		date
+			? resourceWithQuery("receipts/similar", {
+					customerId: selectedCustomer.id,
+					amount: parsedAmount,
+					date,
+					exclude: requestId,
+				})
+			: undefined;
+	const similar = useServerData<SimilarReceipt[]>(similarResource).data ?? [];
+	// Đổi khách, số tiền hoặc ngày thì phải xác nhận lại với danh sách mới.
+	const [confirmedFor, setConfirmedFor] = useState<string>();
+	if (confirmedDuplicate && confirmedFor !== similarResource) {
+		setConfirmedDuplicate(false);
+		setConfirmedFor(undefined);
+	}
 
 	return (
 		<Dialog
@@ -77,14 +111,24 @@ export function ReceiptFormDialog({
 					return;
 				}
 				if (busy) return;
+				if (similar.length && !confirmedDuplicate) {
+					setValidation(
+						"Kiểm tra các khoản thu có thể trùng bên dưới. Nếu không phải ghi trùng, tích xác nhận rồi lưu lại.",
+					);
+					return;
+				}
 				setValidation("");
-				onSave(found, {
-					id: requestId,
-					number: number?.trim() || undefined,
-					date,
-					amount: parseVnd(amount),
-					reference,
-				});
+				onSave(
+					found,
+					{
+						id: requestId,
+						number: number?.trim() || undefined,
+						date,
+						amount: parseVnd(amount),
+						reference,
+					},
+					confirmedDuplicate,
+				);
 			}}
 			footer={
 				<>
@@ -158,6 +202,38 @@ export function ReceiptFormDialog({
 						/>
 					</label>
 				</fieldset>
+				{similar.length > 0 && (
+					<>
+						<Notice tone="warning" title="Có thể ghi trùng khoản thu">
+							Khách hàng này đã có {similar.length} khoản thu cùng số tiền trong
+							vòng {similarReceiptDays} ngày:
+							<ul className="receipt-similar-list">
+								{similar.map((receipt) => (
+									<li key={receipt.id}>
+										{receipt.number} · ngày {formatDateOnly(receipt.date)} ·{" "}
+										{money.format(receipt.amount)} đ
+										{receipt.reference && ` · tham chiếu ${receipt.reference}`}
+									</li>
+								))}
+							</ul>
+						</Notice>
+						<div className="payment-advance">
+							<label className="payment-verify">
+								<input
+									type="checkbox"
+									checked={confirmedDuplicate}
+									onChange={(event) => {
+										setConfirmedDuplicate(event.target.checked);
+										setConfirmedFor(similarResource);
+										setValidation("");
+									}}
+									disabled={busy}
+								/>
+								Tôi đã kiểm tra, đây không phải khoản thu ghi trùng
+							</label>
+						</div>
+					</>
+				)}
 			</div>
 		</Dialog>
 	);

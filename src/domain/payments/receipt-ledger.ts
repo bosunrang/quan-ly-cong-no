@@ -126,6 +126,36 @@ export function nextReceiptNumber(receipts: readonly Receipt[], date: string) {
 	return `${prefix}${String(next).padStart(4, "0")}`;
 }
 
+/** Khoảng ngày (mỗi phía) để coi hai khoản thu cùng khách, cùng số tiền là có thể ghi trùng. */
+export const similarReceiptDays = 90;
+
+/**
+ * Khoản thu còn hiệu lực của cùng khách, cùng số tiền, cách ngày hạch toán không quá
+ * similarReceiptDays ngày: dấu hiệu ghi trùng (trả hai lần thật vẫn có thể xảy ra nên chỉ cảnh báo).
+ * Bỏ qua khoản thu mang mã excludeId (gửi lại chính khoản thu đang ghi).
+ */
+export function similarReceipts(
+	receipts: readonly Receipt[],
+	target: { customerId: string; amount: number; date: string },
+	excludeId?: string,
+) {
+	const at = Date.parse(target.date);
+	const window = similarReceiptDays * 86_400_000;
+	return receipts
+		.filter(
+			(receipt) =>
+				!receipt.reversal &&
+				receipt.id !== excludeId &&
+				receipt.customerId === target.customerId &&
+				receipt.amount === target.amount &&
+				Math.abs(Date.parse(receipt.date) - at) <= window,
+		)
+		.sort(
+			(a, b) =>
+				b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
+		);
+}
+
 export function recordReceipt(
 	ledger: ReceiptLedger,
 	customer: Customer,

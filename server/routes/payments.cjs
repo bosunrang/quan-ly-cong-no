@@ -53,6 +53,16 @@ function register(router, db, state) {
     if (!domain.isIsoDate(date)) fail(400, 'Ngày hạch toán không hợp lệ.');
     return domain.nextReceiptNumber(ledger().receipts, date);
   }, opts(['payments']));
+  // Khoản thu cùng khách, cùng số tiền, gần ngày: hộp ghi khoản thu cảnh báo có thể ghi trùng.
+  router.get('/api/receipts/similar', ({ query, scope }) => {
+    const customerId = query.get('customerId') ?? '';
+    const amount = Number(query.get('amount'));
+    const date = query.get('date');
+    scope.requireCustomer(customerId);
+    if (!Number.isSafeInteger(amount) || amount <= 0 || !domain.isIsoDate(date)) fail(400, 'Thông tin khoản thu không hợp lệ.');
+    return domain.similarReceipts(ledger().receipts, { customerId, amount, date }, query.get('exclude') ?? undefined)
+      .map(({ id, number, date, amount, reference }) => ({ id, number, date, amount, reference }));
+  }, opts(['payments']));
   router.get('/api/receipts/:id', ({ params, scope }) => {
     const data = ledger();
     const receipt = scope.receipt(data, params.id);
@@ -126,10 +136,11 @@ function register(router, db, state) {
   const text = (value, max) => typeof value === 'string' && value.length <= max;
   const requestId = /^[A-Za-z0-9_-]{8,64}$/;
   router.post('/api/receipts', ({ body, account, scope }) => {
-    const { id, customerId, customerCode, number, date, amount, reference } = body;
+    const { id, customerId, customerCode, number, date, amount, reference, allowDuplicate } = body;
     scope.requireCustomer(customerId);
     if (typeof id !== 'string' || !requestId.test(id) || !text(reference, 500) ||
-        (number !== undefined && !text(number, 64)))
+        (number !== undefined && !text(number, 64)) ||
+        (allowDuplicate !== undefined && typeof allowDuplicate !== 'boolean'))
       fail(400, 'Thông tin khoản thu không hợp lệ.');
     // Gửi lại cùng mã (bấm hai lần, lỗi mạng): trả kết quả cũ, không ghi thêm khoản thu.
     const same = (receipt) => receipt.customerId === customerId && receipt.amount === amount && receipt.date === date;
@@ -143,8 +154,15 @@ function register(router, db, state) {
       if (current.receipts.some((receipt) => receipt.id === id)) fail(409, 'Khoản thu này đã được ghi.');
       const customer = find(customers(), customerId, 'khách hàng');
       if (customer.misaCode !== customerCode) fail(409, 'Mã khách hàng vừa thay đổi.');
+      // Chặn ở máy chủ (cả khi hộp thoại chưa kịp tải cảnh báo, hoặc máy khác vừa ghi cùng lúc).
+      const similar = domain.similarReceipts(current.receipts, { customerId, amount, date });
+      const numbers = similar.map((receipt) => receipt.number + ' (' + receipt.date.split('-').reverse().join('/') + ')').join(', ');
+      if (similar.length && allowDuplicate !== true)
+        fail(409, 'Khách hàng đã có khoản thu cùng số tiền trong vòng ' + domain.similarReceiptDays + ' ngày: ' + numbers +
+          '. Kiểm tra lại; nếu không phải ghi trùng, tích xác nhận rồi lưu lại.');
       const after = domain.recordReceipt(current, customer, { id, number, date, amount, reference });
-      return { after, detail: after.receipts.at(-1).number + ' · ' + customer.name };
+      return { after, detail: after.receipts.at(-1).number + ' · ' + customer.name +
+        (similar.length ? ' · xác nhận không trùng ' + numbers : '') };
     });
   }, opts(['payments'], small));
   router.post('/api/receipts/:id/allocations', ({ body, params, account, scope }) => {

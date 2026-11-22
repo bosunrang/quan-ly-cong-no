@@ -94,6 +94,7 @@
 .payment-fields > label { min-inline-size: 0; align-self: end; }
 .payment-field-wide { grid-column: 1 / -1; }
 .payment-date { inline-size: var(--layout-170); }
+.receipt-similar-list { margin: var(--space-4) 0 0; padding-inline-start: var(--space-18); }
 .payment-verify { display: flex; align-items: center; gap: var(--field-label-gap); color: var(--text-body); font-size: var(--type-body-sm); }
 .payment-verify input { inline-size: var(--space-16); block-size: var(--space-16); margin: 0; flex: none; }
 .payment-amount { inline-size: var(--layout-128); max-inline-size: 100%; text-align: center; font-variant-numeric: tabular-nums; }

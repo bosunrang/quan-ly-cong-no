@@ -207,6 +207,9 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
     assert.equal((await write('one', 'DELETE', 'customers/' + other.id, { expected: other.updatedAt })).status, 404);
   }
   assert.ok((await read('admin', 'customers')).value.every(({ name }) => name !== 'Đổi trộm'));
+  // Kiểm tra khoản thu trùng cũng chỉ trong phạm vi khách được giao.
+  assert.equal((await read('one', 'receipts/similar?customerId=c-two&amount=1&date=2026-01-02')).status, 404);
+  assert.equal((await read('one', 'receipts/similar?customerId=c-one&amount=1&date=2026-01-02')).status, 200);
   const receivables = (await read('one', 'receivables')).value;
   assert.equal(receivables.rows.total, 1);
   assert.deepEqual(receivables.filterOptions.provinces, ['one']);

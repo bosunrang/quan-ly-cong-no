@@ -16,7 +16,7 @@
     "check:electron": "node --check electron/main.cjs && node --check electron/lan-host.cjs && node --check server/database.cjs && node --check server/books.cjs && node --check server/development.cjs",
     "test": "pnpm build:domain && vitest run",
     "test:sqlite": "node --test tests/sqlite-database.test.cjs",
-    "test:lan": "pnpm build:domain && node --test tests/lan.test.cjs tests/lan-security.test.cjs tests/customer-scope.test.cjs tests/receipt-advance.test.cjs tests/operations.test.cjs",
+    "test:lan": "pnpm build:domain && node --test tests/lan.test.cjs tests/lan-security.test.cjs tests/customer-scope.test.cjs tests/receipt-advance.test.cjs tests/receipt-duplicate.test.cjs tests/operations.test.cjs",
     "test:watch": "pnpm build:domain && vitest",
     "test:coverage": "pnpm build:domain && vitest run --coverage",
     "check": "pnpm lint && pnpm typecheck && pnpm check:electron && pnpm test && pnpm test:sqlite && pnpm test:lan",

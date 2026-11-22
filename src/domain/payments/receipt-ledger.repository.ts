@@ -19,11 +19,26 @@ export async function findReceipt(id: string) {
 	}
 }
 
-export function saveReceipt(customer: Customer, draft: ReceiptDraft) {
+/** Khoản thu cùng khách, cùng số tiền, gần ngày hạch toán (dấu hiệu ghi trùng). */
+export type SimilarReceipt = Pick<
+	Receipt,
+	"id" | "number" | "date" | "amount" | "reference"
+>;
+
+/**
+ * Ghi khoản thu. Máy chủ từ chối (409) khi khách đã có khoản thu cùng số tiền gần ngày đó,
+ * trừ khi người dùng đã xác nhận không phải ghi trùng (allowDuplicate).
+ */
+export function saveReceipt(
+	customer: Customer,
+	draft: ReceiptDraft,
+	allowDuplicate = false,
+) {
 	return api<string>("POST", "receipts", {
 		...draft,
 		customerId: customer.id,
 		customerCode: customer.misaCode,
+		allowDuplicate,
 	});
 }
 

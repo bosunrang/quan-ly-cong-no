@@ -382,6 +382,7 @@ it("lưu lại sau khi mất phản hồi: mở khoản thu đã ghi ở lần t
 		if (resource === "customers") return [customer] as never;
 		if (resource === "sales-book/status") return null as never;
 		if (resource.startsWith("receipts/next-number")) return "PT009" as never;
+		if (resource.startsWith("receipts/similar")) return [] as never;
 		if (method === "POST" && resource === "receipts") {
 			const draft = body as { id: string; amount: number };
 			posted = [...posted, draft];
@@ -507,6 +508,109 @@ it("lưu lại sau khi mất phản hồi: mở khoản thu đã ghi ở lần t
 		expect(container.querySelector("tbody")?.textContent).toContain(
 			"Không có khoản thu theo bộ lọc.",
 		);
+	} finally {
+		await act(async () => root.unmount());
+		container.remove();
+		vi.unstubAllGlobals();
+	}
+});
+
+it("cảnh báo khoản thu cùng khách, cùng số tiền và chỉ lưu khi đã xác nhận không trùng", async () => {
+	const customer = seedCustomers[0];
+	const posts: unknown[] = [];
+	const similarQueries: URLSearchParams[] = [];
+	vi.mocked(api).mockImplementation(async (method, resource, body) => {
+		if (resource === "customers") return [customer] as never;
+		if (resource === "sales-book/status") return null as never;
+		if (resource.startsWith("receipts/next-number"))
+			return "PT-2026-0010" as never;
+		if (resource.startsWith("receipts/similar")) {
+			const query = new URLSearchParams(resource.split("?")[1]);
+			similarQueries.push(query);
+			return (
+				query.get("amount") === "4704000"
+					? [
+							{
+								id: "old",
+								number: "PT-2026-0004",
+								date: "2026-08-30",
+								amount: 4_704_000,
+								reference: "00187",
+							},
+						]
+					: []
+			) as never;
+		}
+		if (method === "POST" && resource === "receipts") {
+			posts.push(body);
+			return "revision" as never;
+		}
+		return { items: [], total: 0, count: 0, page: 1, limit: 20 } as never;
+	});
+	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+	const container = document.createElement("div");
+	document.body.append(container);
+	const root = createRoot(container);
+	const type = (input: HTMLInputElement | null | undefined, value: string) => {
+		if (!input) throw new Error("Thiếu ô nhập.");
+		Object.getOwnPropertyDescriptor(
+			HTMLInputElement.prototype,
+			"value",
+		)?.set?.call(input, value);
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+	};
+	const field = (text: string) =>
+		Array.from(document.querySelectorAll(".receipt-form-dialog label"))
+			.find((label) => label.textContent?.startsWith(text))
+			?.querySelector("input");
+	const button = (text: string) =>
+		Array.from(document.querySelectorAll("button")).find(
+			(item) => item.textContent?.trim() === text,
+		);
+	const dialog = () => document.querySelector(".receipt-form-dialog");
+	const confirm = () =>
+		dialog()?.querySelector<HTMLInputElement>(".payment-verify input");
+
+	try {
+		await act(async () => root.render(createElement(PaymentsPage, {})));
+		await act(async () => button("Ghi khoản thu")?.click());
+		const label = [customer.misaCode, customer.name, customer.taxCode]
+			.filter(Boolean)
+			.join(" · ");
+		await act(async () => {
+			type(
+				dialog()?.querySelector<HTMLInputElement>('[role="combobox"]'),
+				label,
+			);
+			type(field("Số tiền thu"), "4.704.000");
+		});
+		const warning = dialog()?.textContent ?? "";
+		expect(warning).toContain("Có thể ghi trùng khoản thu");
+		expect(warning).toContain(
+			"PT-2026-0004 · ngày 30/08/2026 · 4.704.000 đ · tham chiếu 00187",
+		);
+		expect(similarQueries.at(-1)?.get("customerId")).toBe(customer.id);
+		expect(similarQueries.at(-1)?.get("exclude")).toBeTruthy();
+
+		// Chưa xác nhận: không gửi, nhắc kiểm tra.
+		await act(async () => button("Lưu khoản thu")?.click());
+		expect(posts).toEqual([]);
+		expect(dialog()?.textContent).toContain("tích xác nhận rồi lưu lại");
+
+		// Xác nhận rồi đổi số tiền sang số khác trùng: phải xác nhận lại.
+		await act(async () => confirm()?.click());
+		expect(confirm()?.checked).toBe(true);
+		await act(async () => type(field("Số tiền thu"), "1.000"));
+		expect(dialog()?.textContent).not.toContain("Có thể ghi trùng khoản thu");
+		await act(async () => type(field("Số tiền thu"), "4.704.000"));
+		expect(confirm()?.checked).toBe(false);
+
+		await act(async () => confirm()?.click());
+		await act(async () => button("Lưu khoản thu")?.click());
+		expect(posts).toEqual([
+			expect.objectContaining({ amount: 4_704_000, allowDuplicate: true }),
+		]);
+		expect(dialog()).toBeNull();
 	} finally {
 		await act(async () => root.unmount());
 		container.remove();

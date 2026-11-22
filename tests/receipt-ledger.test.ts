@@ -12,6 +12,7 @@ import {
 	recordReceipt,
 	reverseAllocation,
 	reverseReceipt,
+	similarReceipts,
 } from "../src/domain/payments/receipt-ledger";
 import { projectReceiptReceivables } from "../src/domain/payments/receipt-receivables";
 import { buildDashboardSummary } from "../src/features/dashboard/dashboard.summary";
@@ -85,6 +86,37 @@ const book = {
 };
 const invoices = (rows = book.rows) =>
 	getReceiptInvoices({ ...book, rows }, record().receipts[0], [customer]);
+
+describe("Cảnh báo khoản thu có thể ghi trùng", () => {
+	it("chỉ tính khoản còn hiệu lực, cùng khách, cùng số tiền, cách không quá 90 ngày", () => {
+		const base = record().receipts[0];
+		const receipts = [
+			{ ...base, id: "same", number: "PT01", date: "2024-03-03" },
+			{ ...base, id: "far", number: "PT02", date: "2024-03-02" },
+			{ ...base, id: "after", number: "PT03", date: "2024-08-30" },
+			{ ...base, id: "other-amount", number: "PT04", amount: 1201 },
+			{ ...base, id: "other-customer", number: "PT05", customerId: "khac" },
+			{
+				...base,
+				id: "reversed",
+				number: "PT06",
+				reversal: { date: "2024-06-02", createdAt: "", reason: "Nhầm" },
+			},
+			{ ...base, id: "self", number: "PT07" },
+		];
+		const target = {
+			customerId: base.customerId,
+			amount: 1200,
+			date: "2024-06-01",
+		};
+		expect(
+			similarReceipts(receipts, target, "self").map(({ number }) => number),
+		).toEqual(["PT03", "PT01"]);
+		expect(
+			similarReceipts(receipts, target).map(({ number }) => number),
+		).toEqual(["PT03", "PT07", "PT01"]);
+	});
+});
 
 describe("Dashboard công nợ theo ngày chốt", () => {
 	it("trừ khách dư có vào tổng còn phải thu nhưng không đưa vào danh sách còn nợ", () => {
