@@ -1,7 +1,9 @@
 import { GitMerge, Plus, ReceiptText, Search, Undo2, X } from "lucide-react";
 import { useDeferredValue, useRef, useState } from "react";
 import type { Customer } from "../../domain/customers/customer.model";
+import type { ReceiptDraft } from "../../domain/payments/receipt-ledger";
 import {
+	findReceipt,
 	saveAllocation,
 	saveReceipt,
 	saveReversal,
@@ -74,13 +76,15 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 	const selected = selectedData.data?.receipt;
 	const history = selectedData.data?.allocations ?? [];
 	const allocatedInvoices = selectedData.data?.allocatedInvoices ?? [];
-	const total = list.data?.total ?? 0;
+	// Giữ trang đang xem trong lúc chờ trang hoặc bộ lọc mới, không nháy về bảng trống.
+	const receipts = list.data ?? list.previous;
+	const total = receipts?.total ?? 0;
 	const pagination = {
-		...pageControls(list.data?.page ?? page, 20, total),
-		currentPage: list.data?.page ?? page,
+		...pageControls(receipts?.page ?? page, 20, total),
+		currentPage: receipts?.page ?? page,
 		setCurrentPage: setPage,
 		resetPage: () => setPage(1),
-		pageItems: list.data?.items ?? [],
+		pageItems: receipts?.items ?? [],
 	};
 
 	const reversing =
@@ -96,7 +100,11 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 		setAction(next);
 	}
 
-	async function commit(write: () => Promise<string>, message: string) {
+	async function commit(
+		write: () => Promise<string>,
+		message: string,
+		recover?: (reason: unknown) => Promise<boolean>,
+	) {
 		if (saving.current) return;
 		saving.current = true;
 		setBusy(true);
@@ -107,6 +115,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 			showNotice(message);
 			accountingChanged();
 		} catch (reason) {
+			if (await recover?.(reason)) return;
 			setError(errorText(reason));
 			// Sổ vừa đổi ở máy khác: tải lại phiên bản mới để lần lưu sau (hoặc mở lại) không bị từ chối tiếp.
 			if (reason instanceof ApiError && reason.status === 409)
@@ -134,6 +143,29 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 	const remaining =
 		selected && !selected.reversal ? selected.amount - allocatedAmount : 0;
 	const closeAction = () => setAction(null);
+
+	// Lưu lỗi (mất phản hồi, hoặc gửi lại sau khi đã sửa số liệu): khoản thu có thể đã được ghi ở
+	// lần trước. Đọc lại theo mã yêu cầu để không bắt người dùng ghi trùng hay kẹt ở lỗi 409.
+	async function recoverReceipt(customer: Customer, fields: ReceiptDraft) {
+		const saved = fields.id ? await findReceipt(fields.id) : undefined;
+		if (!saved) return false;
+		setAction(null);
+		accountingChanged();
+		const same =
+			saved.customerId === customer.id &&
+			saved.amount === fields.amount &&
+			saved.date === fields.date;
+		if (same) showNotice("Đã ghi khoản thu.");
+		else {
+			setSelectedId(saved.id);
+			showNotice(
+				`Khoản thu ${saved.number} đã được ghi ở lần lưu trước: ${money.format(saved.amount)} đ, ngày ${formatDateOnly(saved.date)}, khách ${saved.customerName}. Kiểm tra lại; nếu sai, hủy khoản thu này rồi ghi khoản mới.`,
+				15000,
+				"warning",
+			);
+		}
+		return true;
+	}
 	return (
 		<div className="payment-page">
 			<section className="panel import-strip" aria-label="Khoản thu khách hàng">
@@ -296,9 +328,11 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 							{!total && (
 								<tr>
 									<td colSpan={7}>
-										{(list.data?.count ?? 0)
-											? "Không có khoản thu theo bộ lọc."
-											: "Chưa ghi khoản thu nào."}
+										{!receipts
+											? "Đang tải khoản thu…"
+											: receipts.count
+												? "Không có khoản thu theo bộ lọc."
+												: "Chưa ghi khoản thu nào."}
 									</td>
 								</tr>
 							)}
@@ -495,6 +529,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 						void commit(
 							() => saveReceipt(customer, fields),
 							"Đã ghi khoản thu.",
+							() => recoverReceipt(customer, fields),
 						)
 					}
 				/>

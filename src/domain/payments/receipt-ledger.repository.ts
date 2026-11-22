@@ -1,6 +1,23 @@
 import { api } from "../../shared/api/client";
 import type { Customer } from "../customers/customer.model";
-import type { ReceiptDraft, ReceiptInvoice } from "./receipt-ledger";
+import type { Receipt, ReceiptDraft, ReceiptInvoice } from "./receipt-ledger";
+
+/**
+ * Khoản thu đã ghi theo mã yêu cầu, nếu có. Dùng sau khi lưu lỗi: yêu cầu có thể đã tới máy
+ * chủ dù phản hồi bị mất. Lỗi khi đọc (vẫn mất kết nối, không tìm thấy) trả về undefined.
+ */
+export async function findReceipt(id: string) {
+	try {
+		return (
+			await api<{ receipt: Receipt }>(
+				"GET",
+				`receipts/${encodeURIComponent(id)}`,
+			)
+		).receipt;
+	} catch {
+		return undefined;
+	}
+}
 
 export function saveReceipt(customer: Customer, draft: ReceiptDraft) {
 	return api<string>("POST", "receipts", {
