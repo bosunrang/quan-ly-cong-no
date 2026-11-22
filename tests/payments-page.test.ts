@@ -9,12 +9,15 @@ import {
 	type ReceiptInvoice,
 	recordReceipt,
 } from "../src/domain/payments/receipt-ledger";
-import { api } from "../src/shared/api/client";
+import { ApiError, api } from "../src/shared/api/client";
 import { accountingChanged } from "../src/shared/hooks/useServerData";
 import { PaymentsPage } from "../src/features/payments/PaymentsPage";
 import { ReceiptAllocationDialog } from "../src/features/payments/ReceiptAllocationDialog";
 
-vi.mock("../src/shared/api/client", () => ({ api: vi.fn() }));
+vi.mock("../src/shared/api/client", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../src/shared/api/client")>()),
+	api: vi.fn(),
+}));
 
 it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", async () => {
 	const receipt: Receipt = {
@@ -53,7 +56,9 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 		},
 	];
 	let customers: typeof seedCustomers = [];
+	let offline = false;
 	vi.mocked(api).mockImplementation(async (_method, resource) => {
+		if (offline) throw new ApiError("Không kết nối được máy chủ công nợ.", 0);
 		if (resource === "customers") return customers as never;
 		if (resource === "sales-book/status") return null as never;
 		if (resource === "receipts/one")
@@ -194,6 +199,21 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 		);
 		expect(container.querySelector("#receipt-detail-title")?.textContent).toBe(
 			"PT001",
+		);
+		// Quay lại cửa sổ đúng lúc mất kết nối: giữ ngăn chi tiết và danh sách, chỉ báo lỗi.
+		offline = true;
+		await act(async () => window.dispatchEvent(new Event("focus")));
+		expect(container.querySelector("#receipt-detail-title")?.textContent).toBe(
+			"PT001",
+		);
+		expect(receiptNumbers()).toEqual(["PT001"]);
+		expect(container.textContent).toContain(
+			"Không kết nối được máy chủ công nợ.",
+		);
+		offline = false;
+		await act(async () => window.dispatchEvent(new Event("focus")));
+		expect(container.textContent).not.toContain(
+			"Không kết nối được máy chủ công nợ.",
 		);
 		await act(async () =>
 			container

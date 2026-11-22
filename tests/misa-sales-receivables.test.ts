@@ -22,7 +22,10 @@ import { receivablesView } from "./fixtures/receivables-view";
 import { SalesReceivablesPage } from "../src/features/receivables/SalesReceivablesPage";
 import { InvoiceDueDateDialog } from "../src/features/receivables/InvoiceDueDateDialog";
 
-vi.mock("../src/shared/api/client", () => ({ api: vi.fn() }));
+vi.mock("../src/shared/api/client", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../src/shared/api/client")>()),
+	api: vi.fn(),
+}));
 
 const customer = {
 	...seedCustomers[0],

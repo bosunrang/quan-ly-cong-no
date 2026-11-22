@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 
 const changed = "accounting-changed";
 let channel: BroadcastChannel | undefined;
@@ -43,15 +43,24 @@ export function useServerData<T>(resource?: string) {
 				if (active) setResult({ resource, request, data });
 			})
 			.catch((reason: unknown) => {
-				if (active)
-					setResult({
-						resource,
-						request,
-						error:
-							reason instanceof Error
-								? reason.message
-								: "Không thể tải dữ liệu.",
-					});
+				if (!active) return;
+				const error =
+					reason instanceof Error ? reason.message : "Không thể tải dữ liệu.";
+				// Lỗi tạm thời (mất mạng, máy chủ đang khởi động lại) khi tải lại nền: giữ dữ liệu đang
+				// xem để không đóng ngăn chi tiết hay hộp thoại đang nhập dở. Lỗi 4xx thì bỏ dữ liệu cũ.
+				const transient =
+					!(reason instanceof ApiError) ||
+					reason.status === 0 ||
+					reason.status >= 500;
+				setResult((previous) => ({
+					resource,
+					request,
+					data:
+						transient && previous?.resource === resource
+							? previous.data
+							: undefined,
+					error,
+				}));
 			});
 		return () => {
 			active = false;

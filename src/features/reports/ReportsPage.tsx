@@ -97,7 +97,10 @@ export function ReportsPage({
 		}
 	}
 
-	if (error)
+	const loaded =
+		(directory.data ?? directory.previous) !== undefined &&
+		(sales.data ?? sales.previous) !== undefined;
+	if (error && !loaded)
 		return (
 			<div className="page-stack">
 				<Notice tone="danger" title="Không thể mở báo cáo" announce>
@@ -122,6 +125,11 @@ export function ReportsPage({
 
 	return (
 		<div className="page-stack reports-page">
+			{error && (
+				<Notice tone="danger" title="Không thể tải lại sổ công nợ" announce>
+					{error}
+				</Notice>
+			)}
 			{notice && (
 				<Notice tone={notice.tone} announce onDismiss={dismissNotice}>
 					{notice.text}

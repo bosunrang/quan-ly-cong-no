@@ -11,6 +11,7 @@ import type {
 	ReceiptList,
 	SalesMetadata,
 } from "../../domain/reports/view-types";
+import { ApiError } from "../../shared/api/client";
 import {
 	accountingChanged,
 	pageControls,
@@ -107,13 +108,16 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 			accountingChanged();
 		} catch (reason) {
 			setError(errorText(reason));
+			// Sổ vừa đổi ở máy khác: tải lại phiên bản mới để lần lưu sau (hoặc mở lại) không bị từ chối tiếp.
+			if (reason instanceof ApiError && reason.status === 409)
+				accountingChanged();
 		} finally {
 			saving.current = false;
 			setBusy(false);
 		}
 	}
 
-	if (directory.error)
+	if (directory.error && !directory.data)
 		return (
 			<Notice tone="danger" announce>
 				{directory.error}
@@ -315,9 +319,9 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 					/>
 				</footer>
 			</section>
-			{(list.error || selectedData.error) && (
+			{(list.error || selectedData.error || directory.error) && (
 				<Notice tone="danger" announce>
-					{list.error || selectedData.error}
+					{list.error || selectedData.error || directory.error}
 				</Notice>
 			)}
 			{(list.loading || selectedData.loading) && (

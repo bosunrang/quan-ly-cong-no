@@ -115,7 +115,7 @@ export function SalesReceivablesPage({
 		if (tableViewport.current) tableViewport.current.scrollTop = 0;
 	}, [currentData, resource]);
 
-	if (response.error)
+	if (response.error && !data)
 		return (
 			<Notice tone="danger" title="Không thể đọc công nợ" announce>
 				{response.error}
@@ -147,6 +147,11 @@ export function SalesReceivablesPage({
 
 	return (
 		<div className="page-stack">
+			{response.error && (
+				<Notice tone="danger" title="Không thể tải lại công nợ" announce>
+					{response.error}
+				</Notice>
+			)}
 			{unmatchedAllocationCount > 0 && (
 				<Notice tone="warning">
 					{number.format(unmatchedAllocationCount)} chứng từ có phân bổ đang

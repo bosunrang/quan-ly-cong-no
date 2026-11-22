@@ -5,7 +5,10 @@ import type { DashboardView } from "../src/domain/reports/view-types";
 import { Dashboard } from "../src/features/dashboard/Dashboard";
 import { api } from "../src/shared/api/client";
 
-vi.mock("../src/shared/api/client", () => ({ api: vi.fn() }));
+vi.mock("../src/shared/api/client", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../src/shared/api/client")>()),
+	api: vi.fn(),
+}));
 
 it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ trang đầu", async () => {
 	const customer = {
