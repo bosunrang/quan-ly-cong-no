@@ -4,6 +4,31 @@ const { activityEntry, fail } = require('../access.cjs');
 const domain = require('../domain.cjs');
 const { small, opts, normalize, docOrder, pageOf, find, search, domainChange } = require('./helpers.cjs');
 
+function allocatedInvoiceDetails(allocations, sources) {
+  const active = allocations.filter((item) => !item.reversal);
+  if (!active.length) return [];
+
+  const { sameInvoice } = domain;
+  const byId = new Map(sources.map((source) => [source.invoice.id, source]));
+  const details = new Map();
+  for (const allocation of active) {
+    for (const { invoice, amount } of allocation.lines) {
+      const source = byId.get(invoice.id);
+      const matches = source && sameInvoice(source.invoice, invoice);
+      const detail = details.get(invoice.id);
+      if (detail) {
+        detail.amount += amount;
+        if (!matches) detail.lines = null;
+        continue;
+      }
+      const lines = matches ? source.document.lines.map(({ rowNumber, productName, unit, quantity, unitPrice, paymentTotal }) =>
+        ({ rowNumber, productName, unit, quantity, unitPrice, paymentTotal })) : null;
+      details.set(invoice.id, { invoice, amount, lines });
+    }
+  }
+  return Array.from(details.values());
+}
+
 function register(router, db, state) {
   const { sales, ledger, customers, sourcesFor } = state;
   function receiptRows(data, query) {
@@ -32,10 +57,13 @@ function register(router, db, state) {
     const data = ledger();
     const receipt = scope.receipt(data, params.id);
     const book = sales();
+    const sources = receipt.reversal ? [] : sourcesFor(book, receipt);
+    const allocations = data.allocations.filter((item) => item.receiptId === receipt.id).reverse();
     return { receipt, allocated: domain.receiptAllocated(data, receipt.id), revision: data.revision,
       bookStamp: db.datasetStamp(SALE),
-      hasInvoices: Boolean(!receipt.reversal && sourcesFor(book, receipt).length),
-      allocations: data.allocations.filter((item) => item.receiptId === receipt.id).reverse() };
+      hasInvoices: sources.length > 0,
+      allocations,
+      allocatedInvoices: receipt.reversal ? [] : allocatedInvoiceDetails(allocations, sources) };
   }, opts(['payments']));
 
   function candidates(id, scope) {

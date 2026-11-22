@@ -5,9 +5,12 @@
 .payment-receipts-table { max-block-size: calc(100vh - var(--layout-292)); }
 :is(.payment-receipts-table, .payment-invoice-table) table { min-width: var(--layout-800); table-layout: fixed; }
 :is(.payment-receipts-table, .payment-invoice-table) :is(th, td) { white-space: normal; overflow-wrap: anywhere; }
-.payment-receipts-table .payment-receipt-number-column { width: 14%; }
-.payment-receipts-table .payment-customer-column { width: 34%; }
-.payment-receipts-table th.payment-amount-column { width: 13%; }
+.payment-receipts-table .payment-receipt-number-column { width: 13%; }
+.payment-receipts-table .payment-customer-column { width: 26%; }
+.payment-receipts-table th.payment-date-column { width: 11%; }
+.payment-receipts-table th.payment-amount-column { width: 12%; }
+.payment-receipts-table th.payment-status-column { width: 14%; }
+.payment-receipts-table th.payment-action-column { width: 12%; }
 .payment-invoice-table {
 	flex: 0 1 auto;
 	min-block-size: var(--layout-96);
@@ -23,11 +26,13 @@
 	padding-inline: 0;
 	font-size: var(--type-body-sm);
 }
-.payment-receipts-table :is(.payment-date-column, .payment-status-column, .payment-amount-column) { text-align: center; }
+.payment-receipts-table :is(.payment-date-column, .payment-status-column, .payment-amount-column, .payment-action-column) { text-align: center; }
+.payment-action-column .payment-link { margin-inline: auto; }
 .payment-receipts-table .payment-amount-column { font-variant-numeric: tabular-nums; }
 .payment-table-footer { display: flex; justify-content: space-between; align-items: center; gap: var(--space-10); padding: var(--space-10) var(--space-12); border-top: var(--border-width) solid var(--line); background: var(--table-footer-bg); color: var(--muted); font-size: var(--type-caption); }
 .payment-link { padding-inline: 0; font-size: var(--type-body-sm); text-align: left; }
 .payment-link svg { flex: none; }
+.customer-drawer.payment-detail-drawer { width: min(var(--drawer-width-wide), 100vw); }
 .payment-detail-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-14); padding: var(--space-16) var(--space-20); border-bottom: var(--border-width) solid var(--line); background: var(--bg); }
 .payment-detail-head small { color: var(--text-accent); font-weight: 750; }
 .payment-detail-head h2 { margin: var(--space-3) 0 0; }
@@ -40,9 +45,29 @@
 .payment-summary dd { margin: 0; font-weight: 750; font-variant-numeric: tabular-nums; }
 .payment-history { display: grid; gap: var(--space-8); }
 .payment-history h3, .payment-history p { margin: 0; }
-.payment-history-head > div { display: grid; gap: var(--space-3); }
 .payment-history-entry ul { padding: var(--space-6) 0 0; margin: 0; list-style: none; border-top: var(--border-width) solid var(--line); }
 .payment-history-entry li { padding-block: var(--space-4); font-size: var(--type-body-sm); }
+.payment-allocated-invoices, .payment-allocated-invoice {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-8);
+	min-width: 0;
+}
+.payment-allocated-invoice { padding: var(--space-12); }
+.payment-allocated-invoices :is(h3, h4, p) { margin: 0; }
+.payment-allocated-invoices :is(h4, p) { font-size: var(--type-body-sm); }
+.payment-allocated-invoices p { color: var(--muted); }
+.payment-allocated-invoices .invoice-lines-table { max-height: none; }
+.payment-allocated-invoices .invoice-lines-table table { min-width: 0; }
+.payment-allocated-invoices .invoice-lines-table th:first-child { width: 45%; }
+.payment-allocated-invoices .invoice-lines-table :is(th, td) {
+	padding-inline: var(--space-8);
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.dialog-shell.receipt-form-dialog {
+	width: min(var(--layout-650), 100%);
+}
 .dialog-shell.payment-allocation-dialog {
 	width: min(var(--modal-width-preview), 100%);
 	display: flex;

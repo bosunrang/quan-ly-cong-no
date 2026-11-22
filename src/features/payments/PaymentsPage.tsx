@@ -22,6 +22,7 @@ import { formatDateOnly, formatTimestamp } from "../../shared/lib/date";
 import { Drawer } from "../../shared/ui/Dialog/Drawer";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
+import { SalesInvoiceLinesTable } from "../../shared/ui/SalesInvoiceLinesDialog";
 import { StatusPill } from "../../shared/ui/StatusPill";
 import {
 	money,
@@ -71,6 +72,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 	const bookError = sales.error;
 	const selected = selectedData.data?.receipt;
 	const history = selectedData.data?.allocations ?? [];
+	const allocatedInvoices = selectedData.data?.allocatedInvoices ?? [];
 	const total = list.data?.total ?? 0;
 	const pagination = {
 		...pageControls(list.data?.page ?? page, 20, total),
@@ -232,6 +234,9 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 								<th scope="col" className="payment-status-column">
 									Trạng thái
 								</th>
+								<th scope="col" className="payment-action-column">
+									Thao tác
+								</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -271,11 +276,22 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 											{statuses[state].label}
 										</StatusPill>
 									</td>
+									<td className="payment-action-column">
+										<button
+											type="button"
+											className="text-button payment-link"
+											aria-label={`Xem chi tiết khoản thu ${receipt.number}`}
+											aria-haspopup="dialog"
+											onClick={() => setSelectedId(receipt.id)}
+										>
+											Xem chi tiết
+										</button>
+									</td>
 								</tr>
 							))}
 							{!total && (
 								<tr>
-									<td colSpan={6}>
+									<td colSpan={7}>
 										{(list.data?.count ?? 0)
 											? "Không có khoản thu theo bộ lọc."
 											: "Chưa ghi khoản thu nào."}
@@ -310,6 +326,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 			{selected && (
 				<Drawer
 					ariaLabelledBy="receipt-detail-title"
+					className="customer-drawer payment-detail-drawer"
 					onClose={() => setSelectedId("")}
 				>
 					<header className="payment-detail-head">
@@ -365,27 +382,48 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 								Chưa có chứng từ MISA phù hợp cho khoản thu này.
 							</Notice>
 						)}
+						{allocatedInvoices.length > 0 && (
+							<section
+								className="payment-allocated-invoices"
+								aria-labelledby="payment-allocated-invoices-title"
+							>
+								<h3 id="payment-allocated-invoices-title">
+									Mặt hàng trong hóa đơn đã phân bổ
+								</h3>
+								{allocatedInvoices.map(({ invoice, lines }) => (
+									<article
+										key={invoice.id}
+										className="panel payment-allocated-invoice"
+									>
+										<h4>
+											{invoice.invoiceNumber
+												? `HĐ ${[invoice.invoiceSeries, invoice.invoiceNumber].filter(Boolean).join(" ")} · ${invoice.documentNumber}`
+												: `Chứng từ ${invoice.documentNumber}`}
+										</h4>
+										{lines?.length ? (
+											<SalesInvoiceLinesTable
+												lines={lines}
+												label={`Mặt hàng trong chứng từ ${invoice.documentNumber}`}
+											/>
+										) : (
+											<p>
+												Không tìm được dòng hàng khớp trong sổ MISA hiện tại.
+											</p>
+										)}
+									</article>
+								))}
+							</section>
+						)}
 						<section className="payment-history" aria-label="Lịch sử phân bổ">
 							<h3>Lịch sử phân bổ</h3>
 							{!history.length && <p>Chưa có phân bổ.</p>}
 							{history.map((entry) => (
 								<article key={entry.id} className="panel payment-history-entry">
 									<div className="payment-history-head">
-										<div>
-											<strong>
-												{money.format(
-													entry.lines.reduce(
-														(sum, line) => sum + line.amount,
-														0,
-													),
-												)}{" "}
-												đ
-											</strong>
-											<small>
-												Hiệu lực {formatDateOnly(entry.date)} · Ghi{" "}
-												{formatTimestamp(entry.createdAt)}
-											</small>
-										</div>
+										<small>
+											Hiệu lực {formatDateOnly(entry.date)} · Ghi{" "}
+											{formatTimestamp(entry.createdAt)}
+										</small>
 										{entry.reversal ? (
 											<StatusPill tone="neutral">Đã hoàn tác</StatusPill>
 										) : (

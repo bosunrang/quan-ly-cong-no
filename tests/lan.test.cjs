@@ -288,7 +288,9 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   assert.equal((await call('GET', 'receipts', undefined, actor)).value.count, 1);
   assert.equal((await call('POST', 'receipts', { ...receiptInput, amount: 101 }, actor)).status, 409);
   const receiptId = (await call('GET', 'receipts', undefined, actor)).value.items[0].receipt.id;
-  const receiptInfo = (await call('GET', 'receipts/' + receiptId, undefined, actor)).value;
+  const getReceipt = async () => (await call('GET', 'receipts/' + receiptId, undefined, actor)).value;
+  const receiptInfo = await getReceipt();
+  assert.deepEqual(receiptInfo.allocatedInvoices, []);
   const candidates = (await call('GET', 'receipts/' + receiptId + '/candidates', undefined, actor)).value.items;
   assert.equal(candidates[0].remaining, 200);
   const lineInput = { date: '2026-01-02', revision: receiptInfo.revision, bookStamp: receiptInfo.bookStamp,
@@ -296,6 +298,22 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   assert.equal((await call('POST', 'receipts/' + receiptId + '/allocations', { ...lineInput, revision: 'stale' }, actor)).status, 409);
   const allocated = await call('POST', 'receipts/' + receiptId + '/allocations', lineInput, actor);
   assert.equal(allocated.status, 200);
+  const firstAllocation = await getReceipt();
+  const secondAllocation = await call('POST', 'receipts/' + receiptId + '/allocations', {
+    ...lineInput, revision: firstAllocation.revision, lines: [{ invoice: candidates[0].invoice, amount: 25 }],
+  }, actor);
+  assert.equal(secondAllocation.status, 200);
+  const withProducts = await getReceipt();
+  assert.deepEqual(withProducts.allocatedInvoices.map(({ invoice, amount, lines }) => ({
+    id: invoice.id, amount, products: lines.map(({ productName, unit, quantity, unitPrice, paymentTotal }) =>
+      ({ productName, unit, quantity, unitPrice, paymentTotal })),
+  })), [{ id: candidates[0].invoice.id, amount: 75,
+    products: [{ productName: 'Hàng', unit: 'Hộp', quantity: 1, unitPrice: 200, paymentTotal: 200 }] }]);
+  const undoLatest = await call('POST', 'allocations/' + withProducts.allocations[0].id + '/reversal', {
+    date: '2026-01-02', reason: 'Hoàn tác phân bổ thử', revision: withProducts.revision,
+  }, actor);
+  assert.equal(undoLatest.status, 200);
+  assert.deepEqual((await getReceipt()).allocatedInvoices.map(({ amount }) => amount), [50]);
   const replacement = { mode: 'import', applyChanges: true, book: { ...data, rows: [{ ...line, paymentTotal: 900 }] } };
   const locked = await call('POST', 'sales-imports/preview', replacement, misaCookie);
   assert.equal(locked.value.lockedVouchers, 1);
@@ -308,10 +326,11 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   assert.equal((await call('POST', 'receipts/' + receiptId + '/reversal', reversal, actor)).status, 400);
   // Hủy theo phiên bản sổ đã cũ (trước khi phân bổ) bị từ chối.
   assert.equal((await call('POST', 'receipts/' + receiptId + '/reversal', { ...reversal, revision: receiptInfo.revision }, actor)).status, 409);
-  const fresh = (await call('GET', 'receipts/' + receiptId, undefined, actor)).value.revision;
+  const fresh = (await getReceipt()).revision;
   assert.equal((await call('POST', 'receipts/' + receiptId + '/reversal', { ...reversal, revision: fresh }, actor)).status, 200);
-  const reversed = (await call('GET', 'receipts/' + receiptId, undefined, actor)).value;
-  assert.ok(reversed.receipt.reversal && reversed.allocations[0].reversal);
+  const reversed = await getReceipt();
+  assert.ok(reversed.receipt.reversal && reversed.allocations.every(({ reversal }) => reversal));
+  assert.deepEqual(reversed.allocatedInvoices, []);
   const audit = (await call('GET', 'activities/export', undefined, actor)).value;
   for (const action of ['Ghi khoản thu', 'Lưu phân bổ', 'Hủy khoản thu']) assert.ok(audit.some((row) => row.action === action));
   const ledger = (await call('GET', 'business-backup', undefined, actor)).value.data.ledger;

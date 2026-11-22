@@ -66,6 +66,7 @@ export function ReceiptFormDialog({
 			eyebrow="ĐỐI SOÁT KHOẢN THU"
 			title="Ghi khoản thu"
 			icon={<ReceiptText className="icon-size-19" />}
+			className="receipt-form-dialog"
 			disableClose={busy}
 			onClose={onClose}
 			onSubmit={(event) => {

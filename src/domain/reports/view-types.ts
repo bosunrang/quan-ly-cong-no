@@ -134,6 +134,20 @@ export interface ReceiptListRow {
 	state: "open" | "partial" | "closed" | "reversed";
 }
 export type ReceiptList = Page<ReceiptListRow> & { count: number };
+export type InvoiceProductLine = Pick<
+	MisaSalesLine,
+	| "rowNumber"
+	| "productName"
+	| "unit"
+	| "quantity"
+	| "unitPrice"
+	| "paymentTotal"
+>;
+export interface AllocatedReceiptInvoice {
+	invoice: ReceiptInvoice;
+	amount: number;
+	lines: InvoiceProductLine[] | null;
+}
 export interface ReceiptDetail {
 	receipt: Receipt;
 	allocated: number;
@@ -141,6 +155,7 @@ export interface ReceiptDetail {
 	bookStamp: string | null;
 	hasInvoices: boolean;
 	allocations: ReceiptAllocation[];
+	allocatedInvoices: AllocatedReceiptInvoice[];
 }
 export interface AllocationCandidate {
 	invoice: ReceiptInvoice;

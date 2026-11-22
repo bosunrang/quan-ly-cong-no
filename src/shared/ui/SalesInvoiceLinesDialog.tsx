@@ -24,6 +24,48 @@ interface InvoiceLinesDocument {
 	allocationMismatch: boolean;
 }
 
+export function SalesInvoiceLinesTable({
+	lines,
+	label,
+}: {
+	lines: InvoiceLinesDocument["lines"];
+	label?: string;
+}) {
+	return (
+		<section
+			className="table-scroll table-scroll-auto-gutter invoice-lines-table"
+			aria-label={label ?? "Vùng cuộn dòng hàng"}
+			// biome-ignore lint/a11y/noNoninteractiveTabindex: Support scrolling the table by keyboard.
+			tabIndex={0}
+		>
+			<table aria-label={label ?? "Dòng hàng của hóa đơn hoặc chứng từ"}>
+				<thead>
+					<tr>
+						<th scope="col">Tên hàng</th>
+						<th scope="col">ĐVT</th>
+						<th scope="col">Số lượng</th>
+						<th scope="col">Đơn giá</th>
+						<th scope="col">Tổng thanh toán</th>
+					</tr>
+				</thead>
+				<tbody>
+					{lines.map((line) => (
+						<tr key={line.rowNumber}>
+							<td>{line.productName || "—"}</td>
+							<td>{line.unit || "—"}</td>
+							<td>{formatNumber(line.quantity)}</td>
+							<td>{formatNumber(line.unitPrice)}</td>
+							<td className="strong-number">
+								{formatNumber(line.paymentTotal)}
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</section>
+	);
+}
+
 export function SalesInvoiceLinesDialog({
 	document,
 	customerName,
@@ -82,37 +124,7 @@ export function SalesInvoiceLinesDialog({
 						thu.
 					</p>
 				)}
-				<section
-					className="table-scroll table-scroll-auto-gutter invoice-lines-table"
-					aria-label="Vùng cuộn dòng hàng"
-					// biome-ignore lint/a11y/noNoninteractiveTabindex: Support scrolling the table by keyboard.
-					tabIndex={0}
-				>
-					<table aria-label="Dòng hàng của hóa đơn hoặc chứng từ">
-						<thead>
-							<tr>
-								<th scope="col">Tên hàng</th>
-								<th scope="col">ĐVT</th>
-								<th scope="col">Số lượng</th>
-								<th scope="col">Đơn giá</th>
-								<th scope="col">Tổng thanh toán</th>
-							</tr>
-						</thead>
-						<tbody>
-							{document.lines.map((line) => (
-								<tr key={line.rowNumber}>
-									<td>{line.productName || "—"}</td>
-									<td>{line.unit || "—"}</td>
-									<td>{formatNumber(line.quantity)}</td>
-									<td>{formatNumber(line.unitPrice)}</td>
-									<td className="strong-number">
-										{formatNumber(line.paymentTotal)}
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</section>
+				<SalesInvoiceLinesTable lines={document.lines} />
 			</div>
 		</Dialog>
 	);
