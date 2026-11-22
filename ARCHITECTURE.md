@@ -128,7 +128,7 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
 - Dữ liệu ghi theo envelope `{ version, data }`; máy chủ và SQLite là nguồn duy nhất, không dùng bản sao trên trình duyệt thay thế.
 - Lỗi đọc dữ liệu báo lên toàn ứng dụng và không ghi đè gì. UI chỉ báo thành công sau khi repository xác nhận đã ghi.
 - Sao lưu tự động 14 bản theo ngày, và bản JSON trước mỗi thao tác xóa/khôi phục.
-- Schema hiện tại là **17** (`SCHEMA_VERSION` trong `server/database.cjs`). Bước v13 tách dòng bán hàng, khoản thu, phân bổ và đảo phiếu thành các bảng riêng. SQLite kiểm tra dữ liệu sau khi chuyển và hủy bước nâng cấp nếu có sai lệch.
+- Schema hiện tại là **18** (`SCHEMA_VERSION` trong `server/database.cjs`). Bước v13 tách dòng bán hàng, khoản thu, phân bổ và đảo phiếu thành các bảng riêng. SQLite kiểm tra dữ liệu sau khi chuyển và hủy bước nâng cấp nếu có sai lệch.
   Bản sao lưu SQLite cũ được nâng cấp trên bản chép tạm khi đọc, tệp sao lưu gốc giữ nguyên.
 - Bước v14 chuyển khối JSON tài khoản `cong-no.accounts.v1` sang các bảng `users` và `user_pages`,
   đối chiếu toàn bộ tài khoản trước khi bỏ khối cũ. Bảng `sessions` lưu bản băm token, tài khoản,
@@ -141,6 +141,9 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
 - Bước v17 tách người thực hiện, nhóm, thao tác và chuỗi tìm kiếm đã bỏ dấu của nhật ký thành cột
   có chỉ mục (điền lại cho dòng cũ). Màn Nhật ký lọc và phân trang ở máy chủ; quy tắc bỏ dấu dùng chung
   nằm ở `src/domain/customers/vietnamese-text.mjs`.
+- Bước v18 (bản 0.1.8) thêm cột kỳ hạn thanh toán `payment_term_days` cho khách hàng và bảng
+  `invoice_due_dates` lưu hạn thanh toán sửa tay theo khách và chứng từ. Dữ liệu cũ giữ nguyên: khách
+  chưa có kỳ hạn thì hóa đơn nằm ở nhóm "Chưa có hạn" của tuổi nợ.
 
 ## API và lưu danh mục
 
