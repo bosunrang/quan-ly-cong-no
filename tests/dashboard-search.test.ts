@@ -23,6 +23,8 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 	};
 	const summary: DashboardView = {
 		remaining: 100,
+		creditAmount: 0,
+		creditCount: 0,
 		periodReceived: 200,
 		periodReversalCount: 0,
 		receiptTrend: {

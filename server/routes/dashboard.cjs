@@ -24,13 +24,14 @@ function register(router, db, state) {
   router.get('/api/dashboard', ({ query, scope }) => {
     const current = catalog();
     const {
-      customerTotals: _customerTotals, receivables, periodReceipts, unallocatedReceipts, ...totals
+      customerTotals: _customerTotals, receivables, credits, periodReceipts, unallocatedReceipts, ...totals
     } = summary(query, scope, current);
     const view = query.get('view');
     const q = search(query);
     // Tuổi nợ tại ngày chốt: số còn lại của từng hóa đơn đã tính theo sổ thu đến ngày đó.
     const [, through] = period(query);
-    const { overdue, ...aging } = domain.summarizeAgingPortfolio(receivables, agingFor(through));
+    // Gồm cả khách dư có để phần giảm trừ và tổng tuổi nợ khớp tổng còn phải thu.
+    const { overdue, ...aging } = domain.summarizeAgingPortfolio([...receivables, ...credits], agingFor(through));
     const provinceOptions = [...new Set(scope.customers(current.directory).map(({ province }) => province.trim()))]
       .sort((a, b) => Number(!a) - Number(!b) || a.localeCompare(b, 'vi'));
     const receipts = view === 'period' ? periodReceipts : view === 'unallocated' ? unallocatedReceipts : null;

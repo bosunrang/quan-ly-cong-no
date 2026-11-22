@@ -92,7 +92,11 @@ export type DashboardRow =
 	| Summary["periodReceipts"][number];
 export type DashboardView = Omit<
 	Summary,
-	"customerTotals" | "receivables" | "periodReceipts" | "unallocatedReceipts"
+	| "customerTotals"
+	| "receivables"
+	| "credits"
+	| "periodReceipts"
+	| "unallocatedReceipts"
 > & {
 	rows: Page<DashboardRow>;
 	topDebtors: DashboardCustomer[];

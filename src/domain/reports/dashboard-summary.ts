@@ -66,7 +66,10 @@ export function buildDashboardSummary(
 	const periodReceipts = [
 		...receiptRows
 			.filter((receipt) => receipt.date >= from)
-			.map((receipt) => ({ ...receipt, reversedOn: undefined as string | undefined })),
+			.map((receipt) => ({
+				...receipt,
+				reversedOn: undefined as string | undefined,
+			})),
 		...periodReversals,
 	].sort(
 		(a, b) =>
@@ -94,7 +97,7 @@ export function buildDashboardSummary(
 			{ balance, unverifiedCount },
 		]),
 	);
-	const receivables = projected.customers
+	const customerRows = projected.customers
 		.map((customer) => ({
 			id: customer.id,
 			customerId: customer.customerId,
@@ -108,18 +111,26 @@ export function buildDashboardSummary(
 			),
 			remaining: customer.balance?.remaining ?? 0,
 		}))
-		.filter(({ remaining }) => remaining > 0)
 		.sort(
 			(a, b) => b.remaining - a.remaining || a.name.localeCompare(b.name, "vi"),
 		);
+	const receivables = customerRows.filter(({ remaining }) => remaining > 0);
+	// Khách dư có (hàng trả lại, giảm giá lớn hơn số còn nợ): không vào danh sách còn nợ nhưng
+	// vẫn trừ vào tổng còn phải thu, để tổng khớp màn Công nợ phải thu.
+	const credits = customerRows.filter(({ remaining }) => remaining < 0);
+	const creditAmount = -credits.reduce((sum, row) => sum + row.remaining, 0);
 
 	return {
 		customerTotals,
 		receivables,
+		credits,
 		periodReceipts,
 		receiptTrend: receiptTrend(periodReceipts, from, through),
 		unallocatedReceipts,
-		remaining: receivables.reduce((sum, row) => sum + row.remaining, 0),
+		remaining:
+			receivables.reduce((sum, row) => sum + row.remaining, 0) - creditAmount,
+		creditAmount,
+		creditCount: credits.length,
 		periodReceived: periodReceipts.reduce((sum, row) => sum + row.amount, 0),
 		periodReversalCount: periodReversals.length,
 		unallocated: unallocatedReceipts.reduce(

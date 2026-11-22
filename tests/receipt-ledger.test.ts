@@ -19,9 +19,13 @@ import { buildReceivableStatement } from "../src/domain/reports/statement";
 
 // Dữ liệu mẫu ghi khoản thu trước ngày chứng từ: đây là các ca khách trả trước.
 const allocateReceipt = (
-	...[ledger, receiptId, date, lines]: Parameters<typeof allocateReceiptOnLedger>
+	...[ledger, receiptId, date, lines]: Parameters<
+		typeof allocateReceiptOnLedger
+	>
 ) =>
-	allocateReceiptOnLedger(ledger, receiptId, date, lines, { allowAdvance: true });
+	allocateReceiptOnLedger(ledger, receiptId, date, lines, {
+		allowAdvance: true,
+	});
 
 const customer: Customer = {
 	id: "customer-a",
@@ -83,6 +87,54 @@ const invoices = (rows = book.rows) =>
 	getReceiptInvoices({ ...book, rows }, record().receipts[0], [customer]);
 
 describe("Dashboard công nợ theo ngày chốt", () => {
+	it("trừ khách dư có vào tổng còn phải thu nhưng không đưa vào danh sách còn nợ", () => {
+		const other: Customer = {
+			...customer,
+			id: "customer-b",
+			misaCode: "0002",
+			name: "Khách B",
+		};
+		const otherLine = {
+			...line,
+			customerName: other.name,
+			source: { ...lineSource, customerCode: "0002" },
+		};
+		const rows = [
+			...book.rows,
+			{
+				...otherLine,
+				rowNumber: 5,
+				documentNumber: "BH10",
+				invoiceNumber: "00020",
+				paymentTotal: 500,
+			},
+			{
+				...otherLine,
+				rowNumber: 6,
+				documentNumber: "TL01",
+				invoiceNumber: "",
+				productName: "Hàng trả lại",
+				paymentTotal: -800,
+				source: { ...otherLine.source, debitAccount: "" },
+			},
+		];
+		const summary = buildDashboardSummary(
+			{ ...book, rows },
+			emptyReceiptLedger,
+			[customer, other],
+			[],
+			"2024-06-01",
+			"2024-06-30",
+		);
+		expect(summary.receivables.map(({ name }) => name)).toEqual(["Khách A"]);
+		expect(summary.credits.map(({ name }) => name)).toEqual(["Khách B"]);
+		expect(summary).toMatchObject({
+			remaining: 1100,
+			creditAmount: 300,
+			creditCount: 1,
+		});
+	});
+
 	it("tính theo ngày hạch toán và tái hiện khoản thu trước khi hoàn tác hoặc hủy", () => {
 		const ledger = record();
 		const receiptId = ledger.receipts[0].id;
@@ -562,7 +614,11 @@ describe("Hàng bán trả lại và giảm trừ", () => {
 			"2024-06-01",
 			"2024-06-30",
 		);
-		expect(statement).toMatchObject({ increase: 1100, closing: 1100, omitted: 0 });
+		expect(statement).toMatchObject({
+			increase: 1100,
+			closing: 1100,
+			omitted: 0,
+		});
 		expect(statement.rows).toContainEqual(
 			expect.objectContaining({
 				increase: -300,
@@ -581,6 +637,12 @@ describe("Hàng bán trả lại và giảm trừ", () => {
 			"2024-06-30",
 		);
 		expect(project(credit).balance?.remaining).toBe(-600);
-		expect(summary).toMatchObject({ remaining: 0, receivables: [] });
+		// Không vào danh sách còn nợ, nhưng tổng còn phải thu trừ phần dư có như màn Công nợ phải thu.
+		expect(summary).toMatchObject({
+			remaining: -600,
+			receivables: [],
+			creditAmount: 600,
+			creditCount: 1,
+		});
 	});
 });

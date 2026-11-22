@@ -167,7 +167,11 @@ export function Dashboard({
 	};
 	const counts = summary && {
 		receivables: summary.hasVerifiedDocuments
-			? `${number.format(summary.receivablesCount)} khách hàng còn nợ`
+			? `${number.format(summary.receivablesCount)} khách hàng còn nợ${
+					summary.creditCount
+						? ` · trừ ${number.format(summary.creditCount)} khách dư có ${number.format(summary.creditAmount)}`
+						: ""
+				}`
 			: summary.salesRowCount
 				? "Chưa có chứng từ đủ điều kiện"
 				: "Chưa có dữ liệu MISA tại ngày chốt",
