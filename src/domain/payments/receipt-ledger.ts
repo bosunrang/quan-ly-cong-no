@@ -347,14 +347,31 @@ export function totalsByReceipt(ledger: ReceiptLedger) {
 	return totals;
 }
 
-/** Số chứng từ bán hàng đang được phân bổ khoản thu còn hiệu lực. */
+/** Năm hạch toán trong khóa hóa đơn, cùng năm của ngày hóa đơn nếu khác. */
+export function receiptInvoiceYears(invoice: ReceiptInvoice) {
+	const years = new Set([invoice.date.slice(0, 4)]);
+	try {
+		const year = (JSON.parse(invoice.id) as unknown[])[2];
+		if (typeof year === "string" && /^\d{4}$/.test(year)) years.add(year);
+	} catch {
+		// Khóa kiểu cũ: chỉ dựa vào ngày hóa đơn.
+	}
+	return years;
+}
+
+/** Chứng từ bán hàng (số và năm) đang được phân bổ khoản thu còn hiệu lực. */
 export function allocatedDocumentNumbers(ledger: ReceiptLedger) {
-	const numbers = new Set<string>();
+	const documents = new Map<string, { documentNumber: string; year: string }>();
 	for (const entry of ledger.allocations) {
 		if (entry.reversal) continue;
-		for (const line of entry.lines) numbers.add(line.invoice.documentNumber);
+		for (const { invoice } of entry.lines)
+			for (const year of receiptInvoiceYears(invoice))
+				documents.set(JSON.stringify([invoice.documentNumber, year]), {
+					documentNumber: invoice.documentNumber,
+					year,
+				});
 	}
-	return numbers;
+	return [...documents.values()];
 }
 
 /** Lý do không được xóa hoặc đổi mã MISA của khách hàng, nếu có. */

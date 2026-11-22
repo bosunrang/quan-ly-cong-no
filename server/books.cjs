@@ -282,10 +282,22 @@ function migrateBooks(db) {
   }
 }
 
+// Chứng từ (số và năm hạch toán) đang có phân bổ còn hiệu lực. MISA đánh lại số mỗi năm nên
+// khóa theo cả năm; năm lấy từ khóa hóa đơn và ngày hóa đơn (bản sao của allocatedDocumentNumbers).
 function allocatedDocuments(db) {
-  return db.prepare(`SELECT DISTINCT l.document_number FROM allocation_lines l
+  const documents = new Map();
+  const rows = db.prepare(`SELECT DISTINCT l.document_number, l.invoice_id, l.invoice_date FROM allocation_lines l
     LEFT JOIN reversals v ON v.allocation_id = l.allocation_id
-    WHERE v.allocation_id IS NULL ORDER BY l.document_number`).all().map((row) => row.document_number);
+    WHERE v.allocation_id IS NULL ORDER BY l.document_number`).all();
+  for (const { document_number: documentNumber, invoice_id: id, invoice_date: date } of rows) {
+    const years = new Set([date.slice(0, 4)]);
+    try {
+      const year = JSON.parse(id)[2];
+      if (typeof year === 'string' && /^\d{4}$/.test(year)) years.add(year);
+    } catch { /* Khóa kiểu cũ: chỉ dựa vào ngày hóa đơn. */ }
+    for (const year of years) documents.set(JSON.stringify([documentNumber, year]), { documentNumber, year });
+  }
+  return [...documents.values()];
 }
 
 module.exports = { SALE, LEDGER, migrateBooks, readSales, readLedger, clearSales, clearLedger, writeSales, writeLedger,

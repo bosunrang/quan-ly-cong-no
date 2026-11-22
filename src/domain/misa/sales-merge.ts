@@ -92,8 +92,23 @@ export interface SalesImportOptions {
 	applyChanges?: boolean;
 	/** Gỡ chứng từ đã lưu trong khoảng ngày của file nhưng không còn trong file. */
 	removeMissing?: boolean;
-	/** Số chứng từ bán hàng đang có phân bổ khoản thu còn hiệu lực. */
-	allocatedDocuments?: Iterable<string>;
+	/** Chứng từ bán hàng (số và năm hạch toán) đang có phân bổ khoản thu còn hiệu lực. */
+	allocatedDocuments?: Iterable<AllocatedDocument>;
+}
+
+/** MISA đánh lại số chứng từ mỗi năm nên khóa theo cả số chứng từ và năm. */
+export interface AllocatedDocument {
+	documentNumber: string;
+	year: string;
+}
+
+const allocatedKey = (year: string, documentNumber: string) =>
+	JSON.stringify([year, keyText(documentNumber)]);
+
+/** Năm của dòng theo ngày chứng từ và ngày hạch toán (khóa hóa đơn lấy năm hạch toán). */
+function rowYears(row: MisaSalesLine) {
+	const posting = row.source?.postingDate || row.date;
+	return new Set([row.date.slice(0, 4), posting.slice(0, 4)]);
 }
 
 function groupByVoucher(rows: readonly MisaSalesLine[]) {
@@ -125,10 +140,16 @@ export function planMisaSalesImport(
 	const incoming = preview.book;
 	const existing = saved?.rows ?? [];
 	const allocated = new Set(
-		[...(options.allocatedDocuments ?? [])].map((value) => keyText(value)),
+		[...(options.allocatedDocuments ?? [])].map(({ documentNumber, year }) =>
+			allocatedKey(year, documentNumber),
+		),
 	);
 	const isLocked = (rows: readonly MisaSalesLine[]) =>
-		rows.some((row) => allocated.has(keyText(row.documentNumber)));
+		rows.some((row) =>
+			[...rowYears(row)].some((year) =>
+				allocated.has(allocatedKey(year, row.documentNumber)),
+			),
+		);
 	const issues = new Map<number, SalesImportIssue>();
 	const matches = matchSavedSalesRows(existing, incoming.rows);
 	const matchedSaved = new Set(matches.values());

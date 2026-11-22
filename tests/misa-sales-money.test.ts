@@ -90,10 +90,9 @@ describe("Nhập lại sổ bán hàng MISA không làm sai công nợ", () => {
 			0,
 		);
 		expect(total).toBe(13_000_000);
-		expect(applied.book.rows.map((line) => line.documentNumber).sort()).toEqual([
-			"BH0012",
-			"BH0014",
-		]);
+		expect(applied.book.rows.map((line) => line.documentNumber).sort()).toEqual(
+			["BH0012", "BH0014"],
+		);
 	});
 
 	it("không coi chứng từ ngoài khoảng ngày của file là đã bị xóa", () => {
@@ -154,13 +153,36 @@ describe("Nhập lại sổ bán hàng MISA không làm sai công nợ", () => {
 		const plan = planMisaSalesImport(saved, reexport, {
 			applyChanges: true,
 			removeMissing: true,
-			allocatedDocuments: [" bh0012 ", "BH0013"],
+			allocatedDocuments: [
+				{ documentNumber: " bh0012 ", year: "2026" },
+				{ documentNumber: "BH0013", year: "2026" },
+			],
 		});
 		expect(plan.lockedVouchers).toBe(1);
 		expect(plan.missing.lockedVouchers).toBe(1);
 		expect(plan.removedCount).toBe(0);
 		expect(plan.hasChanges).toBe(false);
 		expect(plan.issues.get(2)?.label).toBe("Chứng từ đã phân bổ khoản thu");
+	});
+
+	it("chứng từ năm khác trùng số với chứng từ đã phân bổ vẫn sửa, gỡ được", () => {
+		// MISA đánh lại số từ đầu năm: BH0012 năm 2025 đã phân bổ không khóa BH0012 năm 2026.
+		const reexport = parse("thang-11-lan-2.xlsx", [
+			row("01/11/2026", "BH0012", "Hàng A", 11_000_000),
+			row("20/11/2026", "BH0014", "Hàng C", 2_000_000),
+		]);
+		const plan = planMisaSalesImport(saved, reexport, {
+			applyChanges: true,
+			removeMissing: true,
+			allocatedDocuments: [
+				{ documentNumber: "BH0012", year: "2025" },
+				{ documentNumber: "BH0013", year: "2025" },
+			],
+		});
+		expect(plan.lockedVouchers).toBe(0);
+		expect(plan.missing.lockedVouchers).toBe(0);
+		expect(plan.removedCount).toBeGreaterThan(0);
+		expect(plan.hasChanges).toBe(true);
 	});
 });
 
@@ -185,7 +207,7 @@ describe("Đọc số tiền dạng chữ theo định dạng Việt Nam", () =>
 		expect(parseVietnameseNumber(text)).toBeUndefined();
 	});
 
-	it("không ghi ô chữ \"15.000\" thành 15 đồng khi nhập sổ", () => {
+	it('không ghi ô chữ "15.000" thành 15 đồng khi nhập sổ', () => {
 		const book = parse("chu.xlsx", [
 			row("01/11/2026", "BH0030", "Hàng A", "15.000"),
 		]).book;
@@ -234,13 +256,15 @@ describe("Khóa dữ liệu khách hàng đã có khoản thu", () => {
 			"2026-11-02",
 			[{ invoice, amount: 400_000 }],
 		);
-		expect([...allocatedDocumentNumbers(allocated)]).toEqual(["BH0012"]);
+		expect(allocatedDocumentNumbers(allocated)).toEqual([
+			{ documentNumber: "BH0012", year: "2026" },
+		]);
 		const undone = reverseAllocation(
 			allocated,
 			allocated.allocations[0].id,
 			"2026-11-03",
 			"Nhầm",
 		);
-		expect(allocatedDocumentNumbers(undone).size).toBe(0);
+		expect(allocatedDocumentNumbers(undone)).toEqual([]);
 	});
 });
