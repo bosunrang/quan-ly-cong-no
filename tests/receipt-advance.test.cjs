@@ -18,9 +18,13 @@ test('khoản thu chỉ phân bổ vào chứng từ sau ngày thu khi xác nh�
   db.writeAccounts([initial], [{ ...initial, mustChangePassword: false }]);
   db.writeDataset(DATASET_KEYS.customers, 2, [{ id: 'c-a', misaCode: 'a', name: 'Khách A', group: 'unknown',
     taxCode: '', address: '', province: '', status: 'active', createdAt: time, updatedAt: time, assignments: [] }]);
-  const rows = [['BH-early', '2026-01-02'], ['BH-later', '2026-01-10']].map(([documentNumber, date], index) => ({
+  const rows = [
+    ['BH-early', '2026-01-02', 200],
+    ['BH-later', '2026-01-10', 200],
+    ['BH-extra', '2026-01-11', 18],
+  ].map(([documentNumber, date, amount], index) => ({
     rowNumber: index + 1, date, documentNumber, invoiceNumber: String(index + 1), customerName: 'Khách A',
-    productName: 'Hàng', unit: 'Hộp', quantity: 1, unitPrice: 200, salesAmount: 200, paymentTotal: 200,
+    productName: 'Hàng', unit: 'Hộp', quantity: 1, unitPrice: amount, salesAmount: amount, paymentTotal: amount,
     source: { customerCode: 'a' },
   }));
   db.writeDataset(SALE, 1, { fileName: 'advance.xlsx', importedAt: time, rows });
@@ -42,18 +46,21 @@ test('khoản thu chỉ phân bổ vào chứng từ sau ngày thu khi xác nh�
   // Mặc định chỉ thấy chứng từ đến ngày thu và báo số chứng từ sau ngày thu đang ẩn.
   const listed = (await read(base)).value;
   assert.deepEqual(listed.items.map(({ invoice }) => invoice.documentNumber), ['BH-early']);
-  assert.equal(listed.later, 1);
+  assert.equal(listed.later, 2);
   const advance = (await read(base + '?advance=1')).value;
-  assert.deepEqual(advance.items.map(({ invoice }) => invoice.documentNumber), ['BH-later', 'BH-early']);
+  assert.deepEqual(advance.items.map(({ invoice }) => invoice.documentNumber), ['BH-extra', 'BH-later', 'BH-early']);
 
   // Nhóm khớp số tiền cũng không gom chứng từ sau ngày thu nếu chưa bật trả trước.
   const today = new Date();
   const date = [today.getFullYear(), today.getMonth() + 1, today.getDate()]
     .map((part) => String(part).padStart(2, '0')).join('-');
-  const matchesOf = async (query) => (await read(base + '/matches?date=' + date + query)).value.matches
-    .map((group) => group.map(({ invoice }) => invoice.documentNumber).sort());
-  assert.ok((await matchesOf('')).every((group) => !group.includes('BH-later')));
-  assert.ok((await matchesOf('&advance=1')).some((group) => group.includes('BH-later')));
+  const matchesPath = base + '/matches?date=' + date;
+  assert.deepEqual((await read(matchesPath)).value.matches, []);
+  const exactResult = (await read(matchesPath + '&advance=1')).value;
+  const matches = exactResult.matches.map((group) => group.map(({ invoice }) => invoice.documentNumber).sort());
+  assert.deepEqual(matches, [['BH-early', 'BH-later']]);
+  // Tổng 418 gần khớp, còn nhóm 400 đã khớp đúng.
+  assert.deepEqual(exactResult.nearMatches, []);
 
   // Cùng một số còn nợ: gợi ý đúng chiều dư/thiếu, chỉ gồm chứng từ đủ điều kiện theo ngày thu.
   for (const [amount, difference] of [[195, -5], [205, 5], [190, null]]) {

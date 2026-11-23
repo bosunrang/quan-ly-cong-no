@@ -293,7 +293,7 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 			allocationHistory?.querySelector(".payment-history-head strong"),
 		).toBeNull();
 		expect(allocationHistory?.querySelector("li strong")?.textContent).toBe(
-			"1.000 đ",
+			"1.000",
 		);
 		expect(allocatedProducts?.querySelector("h3")?.textContent).toBe(
 			"Mặt hàng trong hóa đơn đã phân bổ",
@@ -301,7 +301,6 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 		expect(allocatedProducts?.querySelector("h4")?.textContent).toBe(
 			"HĐ C24TAA 000187 · BH01",
 		);
-		expect(allocatedProducts?.textContent).not.toContain("1.000 đ");
 		expect(
 			Array.from(
 				allocatedProducts?.querySelectorAll("tbody td") ?? [],
@@ -375,7 +374,7 @@ it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", as
 	}
 });
 
-it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi điền nhóm khớp", async () => {
+it("ưu tiên nhóm khớp đúng và chỉ hiện nhóm gần khớp khi cần", async () => {
 	const customer = seedCustomers[0];
 	const ledger = recordReceipt(emptyReceiptLedger, customer, {
 		number: "PT001",
@@ -443,10 +442,11 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 		},
 		{ difference: -3, lines: [{ ...short, amount: 100 }] },
 	];
+	let hasExactMatch = true;
 	vi.mocked(api).mockImplementation(async (_method, resource) => {
 		if (resource.includes("/matches"))
 			return {
-				matches: [rows.slice(1)],
+				matches: hasExactMatch ? [rows.slice(1)] : [],
 				nearMatches,
 				unavailable: false,
 				incomplete: false,
@@ -500,6 +500,9 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 		);
 		await act(async () => findMatches?.click());
 		expect(vouchers("Chứng từ trong nhóm gợi ý")).toEqual(["BH-9", "BH-100"]);
+		expect(
+			container.querySelector('table[aria-label="Chứng từ gần khớp số tiền"]'),
+		).toBeNull();
 		await act(async () => {
 			container
 				.querySelector<HTMLButtonElement>('button[aria-label="Điền nhóm 1"]')
@@ -512,12 +515,20 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 				(input) => input.value,
 			);
 		expect(allocationValues()).toEqual(["", "60", "40", "", "", ""]);
+		hasExactMatch = false;
+		await act(async () => findMatches?.click());
+		await act(async () => findMatches?.click());
+		expect(
+			container.querySelector('table[aria-label="Chứng từ trong nhóm gợi ý"]'),
+		).toBeNull();
 		const nearHeading = container.querySelector(".payment-near-match-head");
 		const nearOptions = nearHeading?.querySelector<HTMLSelectElement>(
 			'select[aria-label="Chọn gợi ý gần khớp"]',
 		);
 		if (!nearOptions) throw new Error("Thiếu lựa chọn nhóm gần khớp");
-		expect(nearOptions.selectedOptions[0]?.textContent).toContain("Dư 2 đ");
+		expect(nearOptions.selectedOptions[0]?.textContent).toBe(
+			"1. 3 chứng từ · Dư 2",
+		);
 		expect(nearHeading?.querySelector(".status-pill")).toBeNull();
 		expect(vouchers("Chứng từ gần khớp số tiền")).toHaveLength(3);
 		const confirmation = container.querySelector<HTMLButtonElement>(
@@ -544,7 +555,9 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 			nearOptions.value = "1";
 			nearOptions.dispatchEvent(new Event("change", { bubbles: true }));
 		});
-		expect(nearOptions.selectedOptions[0]?.textContent).toContain("Thiếu 3 đ");
+		expect(nearOptions.selectedOptions[0]?.textContent).toBe(
+			"2. 1 chứng từ · Thiếu 3",
+		);
 		await fillNearGroup();
 		expect(vouchers(main)).toEqual(["BH-THIEU"]);
 		expect(allocationValues()).toEqual(["100"]);
@@ -666,7 +679,7 @@ it("lưu lại sau khi mất phản hồi: mở khoản thu đã ghi ở lần t
 			"PT009",
 		);
 		expect(container.textContent).toContain(
-			"Khoản thu PT009 đã được ghi ở lần lưu trước: 1.000 đ",
+			"Khoản thu PT009 đã được ghi ở lần lưu trước: 1.000, ngày",
 		);
 		expect(
 			Array.from(
@@ -780,7 +793,7 @@ it("cảnh báo khoản thu cùng khách, cùng số tiền và chỉ lưu khi �
 		const warning = dialog()?.textContent ?? "";
 		expect(warning).toContain("Có thể ghi trùng khoản thu");
 		expect(warning).toContain(
-			"PT-2026-0004 · ngày 30/08/2026 · 4.704.000 đ · tham chiếu 00187",
+			"PT-2026-0004 · ngày 30/08/2026 · 4.704.000 · tham chiếu 00187",
 		);
 		expect(similarQueries.at(-1)?.get("customerId")).toBe(customer.id);
 		expect(similarQueries.at(-1)?.get("exclude")).toBeTruthy();

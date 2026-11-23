@@ -63,7 +63,7 @@ export function ReceiptAllocationDialog({
 	) => void;
 }) {
 	const [date, setDate] = useState(todayLocal);
-	// Mặc định chỉ chứng từ đến ngày hạch toán khoản thu; bật khi khách trả trước.
+	// Mặc định chỉ chứng từ đến ngày thu; bật khi khách trả trước.
 	const [advance, setAdvance] = useState(false);
 	const isLater = (invoice: ReceiptInvoice) => invoice.date > receipt.date;
 	const [query, setQuery] = useState("");
@@ -110,14 +110,14 @@ export function ReceiptAllocationDialog({
 		Math.max(0, (matches?.matches.length ?? 0) - 1),
 	);
 	const activeGroup = matches?.matches[matchIndex];
-	const nearMatches = matches?.nearMatches ?? [];
+	const nearMatches = activeGroup ? [] : (matches?.nearMatches ?? []);
 	const nearIndex = Math.min(
 		nearGroupIndex,
 		Math.max(0, nearMatches.length - 1),
 	);
 	const nearGroup = nearMatches[nearIndex];
 	const nearDifference = (difference: number) =>
-		`${difference > 0 ? "Dư" : "Thiếu"} ${money.format(Math.abs(difference))} đ`;
+		`${difference > 0 ? "Dư" : "Thiếu"} ${money.format(Math.abs(difference))}`;
 	const selected = Object.values(chosen)
 		.filter(({ invoice }) => amounts[invoice.id]?.trim())
 		.map(({ invoice, changed, remaining }) => ({
@@ -214,10 +214,8 @@ export function ReceiptAllocationDialog({
 					<div className="payment-allocation-actions">
 						<span className="payment-total">
 							Phân bổ{" "}
-							<strong>
-								{Number.isNaN(total) ? "—" : money.format(total)} đ
-							</strong>{" "}
-							/ {money.format(remaining)} đ
+							<strong>{Number.isNaN(total) ? "—" : money.format(total)}</strong>{" "}
+							/ {money.format(remaining)}
 						</span>
 						<button
 							className="button secondary"
@@ -241,7 +239,7 @@ export function ReceiptAllocationDialog({
 			<div className="dialog-body payment-allocation-body">
 				<p>
 					<strong>{receipt.customerName}</strong> · Còn phân bổ{" "}
-					{money.format(remaining)} đ
+					{money.format(remaining)}
 				</p>
 				{(error || listing.error || matchResult.error || detail.error) && (
 					<Notice tone="danger" announce>
@@ -255,14 +253,11 @@ export function ReceiptAllocationDialog({
 				)}
 				<div className="payment-toolbar payment-allocation-tools">
 					{/* Chỉ để xem: mốc chặn chứng từ sau ngày thu, không sửa ở đây. */}
-					<label
-						className="ui-field payment-date"
-						htmlFor="receipt-posting-date"
-					>
-						<span className="ui-field-label">Ngày hạch toán</span>
+					<label className="ui-field payment-date" htmlFor="receipt-date">
+						<span className="ui-field-label">Ngày thu</span>
 						<DateInput
-							id="receipt-posting-date"
-							ariaLabel="Ngày hạch toán khoản thu"
+							id="receipt-date"
+							ariaLabel="Ngày thu"
 							value={receipt.date}
 							onChange={() => {}}
 							disabled
@@ -357,7 +352,7 @@ export function ReceiptAllocationDialog({
 				</div>
 				{advance ? (
 					<Notice tone="warning">
-						Đang gồm cả chứng từ có ngày sau ngày hạch toán khoản thu (
+						Đang gồm cả chứng từ ghi sổ sau ngày thu (
 						{formatDateOnly(receipt.date)}). Chỉ phân bổ vào các chứng từ này
 						khi khách thực sự trả trước cho hóa đơn xuất sau.
 					</Notice>
@@ -415,7 +410,7 @@ export function ReceiptAllocationDialog({
 											))}
 										</select>
 									)}
-									<strong>Khớp đúng {money.format(remaining)} đ</strong>
+									<strong>Khớp đúng {money.format(remaining)}</strong>
 									<button
 										className="button secondary"
 										type="button"
@@ -444,7 +439,7 @@ export function ReceiptAllocationDialog({
 											<tr>
 												<th scope="col">Chứng từ</th>
 												<th scope="col">Số hóa đơn</th>
-												<th scope="col">Ngày hạch toán</th>
+												<th scope="col">Ngày ghi sổ</th>
 												<th scope="col">Số tiền khớp</th>
 											</tr>
 										</thead>
@@ -483,9 +478,9 @@ export function ReceiptAllocationDialog({
 										Gần khớp · {nearGroup.lines.length} chứng từ
 										<span className="cell-meta">
 											Tổng còn phải thu{" "}
-											{money.format(remaining - nearGroup.difference)} đ
-										{nearMatches.length === 1 &&
-											` · ${nearDifference(nearGroup.difference)}`}
+											{money.format(remaining - nearGroup.difference)}
+											{nearMatches.length === 1 &&
+												` · ${nearDifference(nearGroup.difference)}`}
 										</span>
 									</strong>
 									{nearMatches.length > 1 && (
@@ -559,8 +554,8 @@ export function ReceiptAllocationDialog({
 																? renderLinesButton(invoice, "invoice")
 																: "—"}
 														</td>
-														<td>{money.format(remaining)} đ</td>
-														<td>{money.format(amount)} đ</td>
+														<td>{money.format(remaining)}</td>
+														<td>{money.format(amount)}</td>
 													</tr>
 												))}
 										</tbody>
@@ -582,7 +577,7 @@ export function ReceiptAllocationDialog({
 							<tr>
 								<th scope="col">Chứng từ</th>
 								<th scope="col">Số hóa đơn</th>
-								<th scope="col">Ngày hạch toán</th>
+								<th scope="col">Ngày ghi sổ</th>
 								<th scope="col" className="payment-amount-column">
 									Giá trị
 								</th>
@@ -753,7 +748,7 @@ export function ReceiptReversalDialog({
 			<div className="dialog-body payment-dialog-content">
 				<Notice tone="warning">
 					{allocation
-						? `Hoàn tác sẽ trả ${money.format(total)} đ về khoản thu và mở lại số tương ứng của ${allocation.lines.length} chứng từ.`
+						? `Hoàn tác sẽ trả ${money.format(total)} về khoản thu và mở lại số tương ứng của ${allocation.lines.length} chứng từ.`
 						: "Hủy khoản thu sẽ hoàn tác mọi phân bổ còn hiệu lực của khoản thu này."}{" "}
 					Chứng từ và phân bổ gốc được lưu trong lịch sử.
 				</Notice>

@@ -167,7 +167,7 @@ export function PaymentsPage({
 		else {
 			setSelectedId(saved.id);
 			showNotice(
-				`Khoản thu ${saved.number} đã được ghi ở lần lưu trước: ${money.format(saved.amount)} đ, ngày ${formatDateOnly(saved.date)}, khách ${saved.customerName}. Kiểm tra lại; nếu sai, hủy khoản thu này rồi ghi khoản mới.`,
+				`Khoản thu ${saved.number} đã được ghi ở lần lưu trước: ${money.format(saved.amount)}, ngày ${formatDateOnly(saved.date)}, khách ${saved.customerName}. Kiểm tra lại; nếu sai, hủy khoản thu này rồi ghi khoản mới.`,
 				15000,
 				"warning",
 			);
@@ -282,7 +282,7 @@ export function PaymentsPage({
 									Chứng từ thu
 								</th>
 								<th scope="col" className="payment-date-column">
-									Ngày hạch toán
+									Ngày thu
 								</th>
 								<th scope="col" className="payment-customer-column">
 									Khách hàng
@@ -433,15 +433,15 @@ export function PaymentsPage({
 							<dl>
 								<div>
 									<dt>Tiền thu</dt>
-									<dd>{money.format(selected.amount)} đ</dd>
+									<dd>{money.format(selected.amount)}</dd>
 								</div>
 								<div>
 									<dt>Đã phân bổ</dt>
-									<dd>{money.format(allocatedAmount)} đ</dd>
+									<dd>{money.format(allocatedAmount)}</dd>
 								</div>
 								<div>
 									<dt>Chưa phân bổ</dt>
-									<dd>{money.format(remaining)} đ</dd>
+									<dd>{money.format(remaining)}</dd>
 								</div>
 							</dl>
 						</section>
@@ -520,7 +520,7 @@ export function PaymentsPage({
 													{invoice.invoiceNumber &&
 														` · HĐ ${invoice.invoiceSeries} ${invoice.invoiceNumber}`}
 												</span>
-												<strong>{money.format(amount)} đ</strong>
+												<strong>{money.format(amount)}</strong>
 											</li>
 										))}
 									</ul>

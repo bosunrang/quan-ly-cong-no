@@ -71,7 +71,7 @@ export function ReceiptFormDialog({
 		return { byLabel: index, options };
 	}, [customers]);
 
-	// Cảnh báo ghi trùng: khoản thu khác của cùng khách, cùng số tiền, gần ngày hạch toán.
+	// Cảnh báo ghi trùng: khoản thu khác của cùng khách, cùng số tiền, gần ngày thu.
 	const selectedCustomer = byLabel.get(customer) ?? undefined;
 	const parsedAmount = parseVnd(amount);
 	const similarResource =
@@ -175,10 +175,10 @@ export function ReceiptFormDialog({
 						/>
 					</label>
 					<label htmlFor={dateField}>
-						Ngày hạch toán
+						Ngày thu
 						<DateInput
 							id={dateField}
-							ariaLabel="Ngày hạch toán"
+							ariaLabel="Ngày thu"
 							value={date}
 							onChange={setDate}
 							disabled={busy}
@@ -211,7 +211,7 @@ export function ReceiptFormDialog({
 								{similar.map((receipt) => (
 									<li key={receipt.id}>
 										{receipt.number} · ngày {formatDateOnly(receipt.date)} ·{" "}
-										{money.format(receipt.amount)} đ
+										{money.format(receipt.amount)}
 										{receipt.reference && ` · tham chiếu ${receipt.reference}`}
 									</li>
 								))}

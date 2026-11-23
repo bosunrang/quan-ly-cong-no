@@ -62,7 +62,7 @@ function register(router, db, state) {
   }, opts(['payments']));
   router.get('/api/receipts/next-number', ({ query }) => {
     const date = query.get('date');
-    if (!domain.isIsoDate(date)) fail(400, 'Ngày hạch toán không hợp lệ.');
+    if (!domain.isIsoDate(date)) fail(400, 'Ngày thu không hợp lệ.');
     return domain.nextReceiptNumber(ledger().receipts, date);
   }, opts(['payments']));
   // Khoản thu cùng khách, cùng số tiền, gần ngày: hộp ghi khoản thu cảnh báo có thể ghi trùng.
@@ -102,7 +102,7 @@ function register(router, db, state) {
   }
   const candidatePath = '/api/receipts/:id/candidates';
   const withoutDocument = ({ document, ...item }) => item;
-  // Mặc định chỉ chứng từ đến ngày hạch toán khoản thu; advance=1 khi người dùng xác nhận khách trả trước.
+  // Mặc định chỉ chứng từ đến ngày thu; advance=1 khi người dùng xác nhận khách trả trước.
   const advanceOf = (query) => query.get('advance') === '1';
   router.get(candidatePath, ({ query, params, scope }) => {
     const { receipt, rows } = candidates(params.id, scope);
@@ -135,6 +135,7 @@ function register(router, db, state) {
     };
     const exact = eligible.filter((item) => item.remaining <= remaining && available(item) >= item.remaining);
     const groups = domain.findReceiptMatches(exact.map(withoutDocument), remaining);
+    if (groups.matches.length) return { ...groups, nearMatches: [], unavailable: false };
     const nearby = domain.findNearReceiptMatches(eligible, remaining, available);
     const nearMatches = nearby.nearMatches.map(({ difference, lines }) => ({
       difference,

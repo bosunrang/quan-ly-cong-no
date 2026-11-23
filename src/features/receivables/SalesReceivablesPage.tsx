@@ -1,4 +1,4 @@
-import { ArrowRight, FilterX, Search } from "lucide-react";
+import { ArrowRight, ChevronDown, FilterX, Search } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
 	agingBuckets,
@@ -30,17 +30,15 @@ const initialFilters = {
 	aging: "" as AgingFilter,
 	page: 1,
 };
-// Hàng trên: tổng và trạng thái; hàng dưới: bốn nhóm quá hạn.
-const agingCards: AgingFilter[] = [
+const summaryAgingCards: AgingFilter[] = [
 	"",
 	"overdue",
 	"current",
 	"no-due-date",
-	"1-30",
-	"31-60",
-	"61-90",
-	"90+",
 ];
+const overdueAgingCards: readonly AgingFilter[] = agingBuckets.filter(
+	(bucket) => bucket !== "current" && bucket !== "no-due-date",
+);
 const agingLabels: Record<AgingFilter, string> = {
 	"": "Tất cả",
 	overdue: "Nợ quá hạn",
@@ -129,6 +127,8 @@ export function SalesReceivablesPage({
 		);
 	const { filterOptions, unmatchedAllocationCount, missingTotalCount } = data;
 	const { province, aging } = filters;
+	const overdueExpanded =
+		aging === "overdue" || overdueAgingCards.includes(aging);
 	const { page, limit, total, items } = data.rows;
 	const pagination = pageControls(page, limit, total);
 
@@ -144,6 +144,55 @@ export function SalesReceivablesPage({
 			</section>
 		);
 	}
+
+	const renderAgingCard = (filter: AgingFilter) => {
+		const count = data.agingUnitCounts?.[filter || "all"];
+		const overdue = filter === "overdue";
+		const noDueDate = filter === "no-due-date";
+		const className = overdue
+			? " is-overdue"
+			: noDueDate
+				? " is-no-due-date"
+				: "";
+		return (
+			<button
+				key={filter}
+				className={`choice-card receivable-aging-card${className}`}
+				type="button"
+				aria-pressed={aging === filter}
+				aria-expanded={overdue ? overdueExpanded : undefined}
+				aria-controls={
+					overdue
+						? "receivable-overdue-groups receivable-customer-table"
+						: "receivable-customer-table"
+				}
+				onClick={() =>
+					setFilters((current) => ({
+						...current,
+						q: searchQuery,
+						aging: overdue && current.aging === "overdue" ? "" : filter,
+						page: 1,
+					}))
+				}
+			>
+				<span className="receivable-aging-card-label">
+					<AgingSwatch bucket={filter} />
+					{agingLabels[filter]}
+					{overdue && (
+						<ChevronDown
+							className="receivable-aging-chevron icon-size-16"
+							aria-hidden="true"
+						/>
+					)}
+				</span>
+				<strong>{number.format(agingCardAmount(data, filter))}</strong>
+				<span className="cell-meta">
+					{count === undefined ? "—" : number.format(count)} khách hàng
+					{noDueDate && " có hóa đơn chưa đặt hạn"}
+				</span>
+			</button>
+		);
+	};
 
 	return (
 		<div className="page-stack">
@@ -178,51 +227,25 @@ export function SalesReceivablesPage({
 				className="panel receivable-invoice-summary receivable-aging"
 				aria-labelledby="receivable-aging-title"
 			>
-				<div>
+				<div className="receivable-aging-head">
 					<h2 id="receivable-aging-title">Tuổi nợ</h2>
-					<span>
-						Tính đến {formatDateOnly(data.agingAsOf)} · Sổ {data.fileName} · Số
-						dư đầu kỳ chưa được tính
-					</span>
+					<span>Tính đến {formatDateOnly(data.agingAsOf)}</span>
 				</div>
 				<div className="receivable-aging-cards">
-					{agingCards.map((filter) => {
-						const count = data.agingUnitCounts?.[filter || "all"];
-						return (
-							<button
-								key={filter}
-								className={`choice-card receivable-aging-card${filter === "overdue" ? " is-overdue" : ""}`}
-								type="button"
-								aria-pressed={aging === filter}
-								aria-controls="receivable-customer-table"
-								onClick={() =>
-									setFilters((current) => ({
-										...current,
-										q: searchQuery,
-										aging: filter,
-										page: 1,
-									}))
-								}
-							>
-								<span className="receivable-aging-card-label">
-									<AgingSwatch bucket={filter} />
-									{agingLabels[filter]}
-								</span>
-								<strong>{number.format(agingCardAmount(data, filter))}</strong>
-								<span className="cell-meta">
-									{count === undefined ? "—" : number.format(count)} khách hàng
-								</span>
-							</button>
-						);
-					})}
+					{summaryAgingCards.map(renderAgingCard)}
 				</div>
-				<p>
-					Mỗi hóa đơn thuộc một nhóm; một khách có thể nằm ở nhiều nhóm.
-					{data.agingReductionAmount > 0 &&
-						` Giảm trừ chưa trừ vào hóa đơn −${number.format(data.agingReductionAmount)}, đã trừ vào Tất cả và Nợ quá hạn.`}{" "}
-					Thu chưa phân bổ {number.format(data.agingUnallocatedAmount)}, chưa
-					trừ vào tuổi nợ.
-				</p>
+				<section
+					id="receivable-overdue-groups"
+					className="receivable-overdue-groups"
+					aria-label="Nhóm nợ quá hạn theo số ngày"
+					hidden={!overdueExpanded}
+				>
+					{overdueExpanded && (
+						<div className="receivable-aging-cards">
+							{overdueAgingCards.map(renderAgingCard)}
+						</div>
+					)}
+				</section>
 			</section>
 			<section className="panel data-panel">
 				<div className="panel-header receivable-toolbar">
@@ -360,17 +383,17 @@ export function SalesReceivablesPage({
 									<td className="receivable-number">
 										<InvoiceCount row={group} />
 									</td>
-									<td className="receivable-number strong-number">
+									<td className="receivable-amount-column receivable-number strong-number">
 										{group.paymentTotal === null
 											? "—"
 											: number.format(group.paymentTotal)}
 									</td>
-									<td className="receivable-number">
+									<td className="receivable-amount-column receivable-number">
 										{group.balance
 											? number.format(group.balance.received)
 											: "—"}
 									</td>
-									<td className="receivable-number">
+									<td className="receivable-amount-column receivable-number">
 										<strong>
 											{group.balance
 												? number.format(group.balance.remaining)
@@ -383,7 +406,7 @@ export function SalesReceivablesPage({
 											</span>
 										)}
 									</td>
-									<td className="receivable-number">
+									<td className="receivable-amount-column receivable-number">
 										{group.overdueAmount > 0 ? (
 											<strong className="receivable-overdue">
 												{number.format(group.overdueAmount)}

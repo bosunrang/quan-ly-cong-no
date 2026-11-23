@@ -145,7 +145,7 @@ function AgingOverview({ summary }: { summary: DashboardView }) {
 			<div className="dashboard-insight-head">
 				<div>
 					<h2 id="dashboard-aging-title">Tuổi nợ</h2>
-					<p>Tại ngày chốt {formatDateOnly(aging.asOf)} · VND</p>
+					<p>Tại ngày chốt {formatDateOnly(aging.asOf)}</p>
 				</div>
 				<ChartNoAxesGantt
 					className="dashboard-insight-icon icon-size-20"
@@ -307,8 +307,7 @@ function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 					<p>
 						{daysPerBucket === 1
 							? "Theo ngày"
-							: `Mỗi cột tối đa ${daysPerBucket} ngày`}{" "}
-						· VND
+							: `Mỗi cột tối đa ${daysPerBucket} ngày`}
 					</p>
 				</div>
 				<ChartColumn

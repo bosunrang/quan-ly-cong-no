@@ -228,7 +228,7 @@ export function MisaSalesImportDialog({
 					<Notice tone="warning" title="Chứng từ không còn trong file">
 						{number.format(missing.vouchers)} chứng từ (
 						{number.format(missing.rowCount)} dòng, tổng thanh toán{" "}
-						{money.format(missingTotal)} đ) đã lưu trong khoảng{" "}
+						{money.format(missingTotal)}) đã lưu trong khoảng{" "}
 						{formatDateOnly(missing.from)}–{formatDateOnly(missing.to)} nhưng
 						không có trong file này. Có thể chứng từ đã bị xóa hoặc hủy trong
 						MISA. Nếu file chỉ xuất một phần (lọc theo khách hàng hoặc mặt

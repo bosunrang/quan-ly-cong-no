@@ -564,11 +564,24 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 			container.querySelector("table tbody")?.textContent;
 		expect(customerRows()).toContain(secondCustomer.name);
 		const allCard = ageCard("Tất cả");
-		const overdueCard = ageCard("Quá hạn 1–30 ngày");
+		const totalOverdue = ageCard("Nợ quá hạn");
+		const overdueGroups = container.querySelector("#receivable-overdue-groups");
+		expect(totalOverdue.getAttribute("aria-expanded")).toBe("false");
+		expect(overdueGroups?.querySelectorAll("button")).toHaveLength(0);
 		expect(allCard.textContent).toContain("2 khách hàng");
+		expect(ageCard("Chưa có hạn").textContent).toContain(
+			"có hóa đơn chưa đặt hạn",
+		);
+		expect(
+			container.querySelector(".receivable-aging-head > span")?.textContent,
+		).toBe("Tính đến 01/06/2026");
+		expect(container.querySelector(".receivable-aging > p")).toBeNull();
+		await act(async () => totalOverdue.click());
+		expect(totalOverdue.getAttribute("aria-expanded")).toBe("true");
+		expect(overdueGroups?.querySelectorAll("button")).toHaveLength(4);
+		const overdueCard = ageCard("Quá hạn 1–30 ngày");
 		expect(overdueCard.textContent).toContain("1 khách hàng");
 		// Thẻ hiện số tiền làm số chính; "Nợ quá hạn" gom mọi nhóm quá hạn.
-		const totalOverdue = ageCard("Nợ quá hạn");
 		expect(totalOverdue.querySelector("strong")?.textContent).toBe(
 			overdueCard.querySelector("strong")?.textContent,
 		);
@@ -576,10 +589,13 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 		expect(ageCard("Chưa quá hạn").textContent).toContain("khách hàng");
 		await act(async () => overdueCard.click());
 		expect(overdueCard.getAttribute("aria-pressed")).toBe("true");
+		expect(totalOverdue.getAttribute("aria-expanded")).toBe("true");
 		expect(customerRows()).toContain(customer.name);
 		expect(customerRows()).not.toContain(secondCustomer.name);
 		await act(async () => allCard.click());
 		expect(allCard.getAttribute("aria-pressed")).toBe("true");
+		expect(totalOverdue.getAttribute("aria-expanded")).toBe("false");
+		expect(overdueGroups?.querySelectorAll("button")).toHaveLength(0);
 		expect(customerRows()).toContain(secondCustomer.name);
 		await select(
 			"Lọc theo nhân viên phụ trách",
@@ -592,7 +608,8 @@ it("lọc khách hàng rồi mở đúng dòng hàng theo hóa đơn hoặc ch�
 			"Không tìm thấy khách hàng phù hợp",
 		);
 		await select("Lọc theo khu vực", customer.province);
-		await act(async () => overdueCard.click());
+		await act(async () => totalOverdue.click());
+		await act(async () => ageCard("Quá hạn 1–30 ngày").click());
 		expect(api).toHaveBeenLastCalledWith(
 			"GET",
 			expect.stringContaining("aging=1-30"),

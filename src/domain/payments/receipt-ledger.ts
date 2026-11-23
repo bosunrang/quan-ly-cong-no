@@ -130,7 +130,7 @@ export function nextReceiptNumber(receipts: readonly Receipt[], date: string) {
 export const similarReceiptDays = 90;
 
 /**
- * Khoản thu còn hiệu lực của cùng khách, cùng số tiền, cách ngày hạch toán không quá
+ * Khoản thu còn hiệu lực của cùng khách, cùng số tiền, cách ngày thu không quá
  * similarReceiptDays ngày: dấu hiệu ghi trùng (trả hai lần thật vẫn có thể xảy ra nên chỉ cảnh báo).
  * Bỏ qua khoản thu mang mã excludeId (gửi lại chính khoản thu đang ghi).
  */
@@ -162,7 +162,7 @@ export function recordReceipt(
 	draft: ReceiptDraft,
 ) {
 	const { date, amount } = draft;
-	checkDate(date, "Ngày hạch toán khoản thu");
+	checkDate(date, "Ngày thu");
 	const number =
 		draft.number?.trim() ?? nextReceiptNumber(ledger.receipts, date);
 	if (!number) throw new InputError("Nhập số chứng từ thu.");
@@ -175,7 +175,7 @@ export function recordReceipt(
 				identity(receipt.number) === identity(number),
 		)
 	)
-		throw new Error("Số chứng từ thu này đã được ghi trong năm hạch toán.");
+		throw new Error("Số chứng từ thu này đã được ghi trong cùng năm.");
 
 	const receipt: Receipt = {
 		id: draft.id ?? randomId(),
@@ -517,7 +517,7 @@ export function allocateReceipt(
 	if (receipt?.reversal) throw new Error("Khoản thu đã hủy.");
 	if (!receipt) throw new Error("Khoản thu không còn trong sổ.");
 	if (date < receipt.date)
-		throw new InputError("Ngày phân bổ phải từ ngày hạch toán khoản thu.");
+		throw new InputError("Ngày phân bổ phải từ ngày thu trở đi.");
 	// Tiền thu trả cho chứng từ đã phát sinh đến ngày thu. Chứng từ sau ngày thu chỉ nhận
 	// phân bổ khi người dùng xác nhận khách trả trước.
 	if (
@@ -525,7 +525,7 @@ export function allocateReceipt(
 		lines.some(({ invoice }) => invoice?.date > receipt.date)
 	)
 		throw new InputError(
-			"Chứng từ sau ngày hạch toán khoản thu chỉ phân bổ được khi khách trả trước.",
+			"Chứng từ ghi sổ sau ngày thu chỉ phân bổ được khi khách trả trước.",
 		);
 	if (
 		!lines.length ||
@@ -626,7 +626,7 @@ export function reverseReceipt(
 		history.some((entry) => date < (entry.reversal?.date ?? entry.date))
 	)
 		throw new InputError(
-			"Nhập lý do và chọn ngày hủy từ ngày hạch toán và ngày xử lý phân bổ gần nhất trở đi.",
+			"Nhập lý do và chọn ngày hủy từ ngày thu và ngày xử lý phân bổ gần nhất trở đi.",
 		);
 	const reversal = {
 		date,

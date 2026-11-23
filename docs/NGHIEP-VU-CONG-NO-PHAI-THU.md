@@ -84,7 +84,7 @@ Khi đảo một khoản thu đã phân bổ, hoàn tác các phân bổ liên q
 
 ### Luồng đang dùng trong app
 
-1. Chọn **Đối soát khoản thu → Ghi khoản thu**. App tự điền số chứng từ theo năm hạch toán (ví dụ `PT-2026-0001`). Có thể nhập số trên phiếu thu có sẵn. Chọn khách hàng, ngày hạch toán, nhập số tiền bằng đồng và tham chiếu hóa đơn nếu có. Số chứng từ thu được kiểm tra trùng trong năm hạch toán cho sổ của một đơn vị.
+1. Chọn **Đối soát khoản thu → Ghi khoản thu**. App tự điền số chứng từ theo năm của **Ngày thu** (ví dụ `PT-2026-0001`). Có thể nhập số trên phiếu thu có sẵn. Chọn khách hàng, ngày thu, nhập số tiền và tham chiếu hóa đơn nếu có. App kiểm tra số chứng từ thu có bị trùng trong cùng năm và cùng đơn vị hay không.
 2. Mở chứng từ thu rồi chọn **Phân bổ khoản thu**. App lấy chứng từ bán hàng theo mã MISA khớp duy nhất trong danh mục. Với dòng có TK Nợ, app chỉ đưa vào danh sách khi thuộc 131. Sổ cũ thiếu TK Nợ vẫn dùng được sau khi kiểm tra với MISA. Chứng từ âm, thiếu tổng hoặc trùng khóa cần đối chiếu tại nguồn.
 3. Nhập số phân bổ từng dòng và xác nhận đã đối chiếu số phải thu với MISA. Giá trị còn lại trong cửa sổ bằng giá trị chứng từ trừ phân bổ đã lưu trong app. Tiền thu dư vẫn hiển thị ở cột **Chưa phân bổ**.
 4. Dùng **Hoàn tác** trong lịch sử để trả tiền về khoản thu. Dùng **Đảo khoản thu** để ghi nhận chứng từ thu bị đảo và hoàn tác đồng thời các phân bổ còn hiệu lực. Cả hai thao tác lưu ngày và lý do.

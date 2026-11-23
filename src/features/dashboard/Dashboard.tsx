@@ -376,10 +376,9 @@ export function Dashboard({
 											<p>
 												{view === "period"
 													? `${formatDateOnly(from)} – ${formatDateOnly(through)}`
-													: `Tại ngày ${formatDateOnly(through)}`}{" "}
+													: `Tại ngày ${formatDateOnly(through)}`}
 												{view === "overdue" &&
-													"· Đã trừ hàng bán trả lại và giảm giá "}
-												· VND
+													" · Đã trừ hàng bán trả lại và giảm giá"}
 											</p>
 										)}
 										{coverageNote && (

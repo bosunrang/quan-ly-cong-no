@@ -19,7 +19,7 @@ export async function findReceipt(id: string) {
 	}
 }
 
-/** Khoản thu cùng khách, cùng số tiền, gần ngày hạch toán (dấu hiệu ghi trùng). */
+/** Khoản thu cùng khách, cùng số tiền, gần ngày thu (dấu hiệu ghi trùng). */
 export type SimilarReceipt = Pick<
 	Receipt,
 	"id" | "number" | "date" | "amount" | "reference"
