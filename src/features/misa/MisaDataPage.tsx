@@ -29,6 +29,7 @@ import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { MisaSalesImportDialog } from "./MisaSalesImportDialog";
 import { MisaSalesTable } from "./MisaSalesTable";
+import { OpeningBalanceSection } from "./OpeningBalanceSection";
 import {
 	parseMisaSalesWorkbook,
 	type MisaSalesImportPreview,
@@ -242,6 +243,7 @@ export function MisaDataPage() {
 					</button>
 				</div>
 			</section>
+			<OpeningBalanceSection disabled={busy} />
 			{success && (
 				<Notice tone="success" announce onDismiss={() => setSuccess("")}>
 					{success}

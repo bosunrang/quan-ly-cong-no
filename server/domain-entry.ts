@@ -3,6 +3,7 @@ export { buildReceivableStatement } from "../src/domain/reports/statement";
 export * from "../src/domain/misa/misa.sales-receivables";
 export * from "../src/domain/misa/sales-merge";
 export * from "../src/domain/misa/customer-supplement";
+export * from "../src/domain/misa/opening-balances";
 export * from "../src/domain/payments/receipt-ledger";
 export * from "../src/domain/payments/receipt-receivables";
 export * from "../src/domain/payments/receivable-aging";

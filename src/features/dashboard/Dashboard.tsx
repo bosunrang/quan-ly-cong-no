@@ -24,7 +24,12 @@ import {
 	resourceWithQuery,
 	useServerData,
 } from "../../shared/hooks/useServerData";
-import { formatDateOnly, isIsoDate, todayLocal } from "../../shared/lib/date";
+import {
+	formatDateOnly,
+	isIsoDate,
+	previousDay,
+	todayLocal,
+} from "../../shared/lib/date";
 import { DateInput } from "../../shared/ui/DateInput/DateInput";
 import { Notice } from "../../shared/ui/Notice";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
@@ -81,6 +86,20 @@ export function Dashboard({
 		[directory.data],
 	);
 	const from = periodStart ?? (through ? `${through.slice(0, 7)}-01` : "");
+	const today = todayLocal();
+	const monthStart = `${today.slice(0, 7)}-01`;
+	const lastMonthEnd = previousDay(monthStart);
+	const lastMonthStart = `${lastMonthEnd.slice(0, 7)}-01`;
+	const quickPeriod =
+		through === today
+			? from === monthStart
+				? "this-month"
+				: isIsoDate(from) && from <= today
+					? "through-today"
+					: ""
+			: through === lastMonthEnd && from === lastMonthStart
+				? "last-month"
+				: "";
 	const [detailsView, setDetailsView] = useState<View>();
 	const detailsOpen = detailsView !== undefined;
 	const view = detailsView ?? "receivables";
@@ -165,6 +184,7 @@ export function Dashboard({
 		period: summary?.periodReceived,
 		unallocated: summary?.unallocated,
 	};
+	const aging = summary?.aging;
 	const counts = summary && {
 		receivables: summary.hasVerifiedDocuments
 			? `${number.format(summary.receivablesCount)} khách hàng còn nợ${
@@ -233,11 +253,40 @@ export function Dashboard({
 	);
 
 	return (
-		<div className={`page-stack${detailsOpen ? " dashboard-expanded" : ""}`}>
+		<div
+			className={`page-stack dashboard-page${detailsOpen ? " dashboard-expanded" : ""}`}
+		>
 			<section
-				className="panel dashboard-filters"
+				className={`panel dashboard-filters${showEmployeeFilter ? " dashboard-filters-with-employee" : ""}`}
 				aria-label="Kỳ theo dõi Dashboard"
 			>
+				<div className="ui-field">
+					<label htmlFor="dashboard-quick-period">Kỳ nhanh</label>
+					<select
+						id="dashboard-quick-period"
+						value={quickPeriod}
+						onChange={(event) => {
+							const period = event.target.value;
+							if (period === "last-month") {
+								setPeriodStart(lastMonthStart);
+								setThrough(lastMonthEnd);
+							} else {
+								if (period === "this-month" || !isIsoDate(from) || from > today)
+									setPeriodStart(monthStart);
+								else setPeriodStart(from);
+								setThrough(today);
+							}
+							setPage(1);
+						}}
+					>
+						<option value="" disabled>
+							Tùy chỉnh
+						</option>
+						<option value="this-month">Tháng này</option>
+						<option value="last-month">Tháng trước</option>
+						<option value="through-today">Đến hôm nay</option>
+					</select>
+				</div>
 				<div className="ui-field">
 					<label htmlFor="dashboard-from">Từ ngày</label>
 					<DateInput
@@ -251,10 +300,10 @@ export function Dashboard({
 					/>
 				</div>
 				<div className="ui-field">
-					<label htmlFor="dashboard-through">Đến ngày (ngày chốt)</label>
+					<label htmlFor="dashboard-through">Ngày chốt</label>
 					<DateInput
 						id="dashboard-through"
-						ariaLabel="Đến ngày (ngày chốt)"
+						ariaLabel="Ngày chốt"
 						value={through}
 						onChange={(date) => {
 							setThrough(date);
@@ -327,18 +376,28 @@ export function Dashboard({
 									onClick={(event) => openDetails(id, event.currentTarget)}
 								>
 									<span className="dashboard-metric-icon">
-										<Icon className="icon-size-22" aria-hidden="true" />
+										<Icon className="icon-size-18" aria-hidden="true" />
 									</span>
-									<span className="dashboard-metric-copy">
-										<span>{title}</span>
-										<strong>
-											{amounts[id] == null ? "—" : number.format(amounts[id])}
-										</strong>
-										<small>{counts?.[id]}</small>
-									</span>
+									<span className="dashboard-metric-label">{title}</span>
+									<strong>
+										{amounts[id] == null ? "—" : number.format(amounts[id])}
+									</strong>
+									<small>{counts?.[id]}</small>
 								</button>
 							))}
 						</section>
+
+						{aging && aging.noDueDateCount > 0 && (
+							<Notice tone="warning" announce>
+								<strong>Thiếu hạn thanh toán.</strong>{" "}
+								{number.format(aging.noDueDateCount)} khách hàng còn hóa đơn
+								chưa có hạn, trị giá{" "}
+								<strong>
+									{number.format(aging.amounts["no-due-date"])} VND
+								</strong>
+								. Các khoản này chưa được tính vào nợ quá hạn.
+							</Notice>
+						)}
 
 						{summary?.receiptTrend && summary.topDebtors && (
 							<DashboardInsights

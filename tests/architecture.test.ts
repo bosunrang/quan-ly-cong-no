@@ -149,7 +149,7 @@ describe("architecture guardrails", () => {
 			if (path.endsWith("/styles/foundation/tokens.css")) continue;
 			const declarations = styles
 				.replace(/\/\*[\s\S]*?\*\//g, "")
-				.replace(/@media[^{]+/g, "");
+				.replace(/@(?:media|container)\b[^{]+/g, "");
 			expect(declarations, path).not.toMatch(/(?<![\w.-])-?[\d.]+(?:px|rem)\b/);
 		}
 		for (const [path, source] of Object.entries(sourceModules)) {

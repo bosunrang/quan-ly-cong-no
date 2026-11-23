@@ -6,6 +6,7 @@ import type {
 	ReceiptInvoice,
 } from "../../domain/payments/receipt-ledger";
 import type { ReceivableDocument } from "../../domain/payments/receipt-receivables";
+import { isOpeningInvoice } from "../../domain/misa/opening-balances";
 import type {
 	AllocationCandidate,
 	CandidateMatches,
@@ -168,6 +169,8 @@ export function ReceiptAllocationDialog({
 			kind === "document"
 				? invoice.documentNumber
 				: `${invoice.invoiceSeries} ${invoice.invoiceNumber}`.trim();
+		// Số dư đầu kỳ không có dòng hàng để xem.
+		if (isOpeningInvoice(invoice)) return label;
 		return (
 			<button
 				type="button"

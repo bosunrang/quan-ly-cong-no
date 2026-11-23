@@ -4,6 +4,7 @@ const domain = require('../domain.cjs');
 const { small, opts, pageOf, customerSummary, documentSummary, find, search, searchText } = require('./helpers.cjs');
 
 const emptyInvoiceTotals = { balance: { received: 0, remaining: 0 }, unverifiedCount: 0 };
+const missingInvoiceNumber = ({ invoiceNumber, openingBalance }) => !invoiceNumber && !openingBalance;
 
 function agingFilter(query) {
   const filter = query.get('aging') ?? '';
@@ -13,7 +14,18 @@ function agingFilter(query) {
 }
 
 function register(router, db, state) {
-  const { sales, ledger, projected, catalog, dashboardScope, summary } = state;
+  const { sales, ledger, opening, projected, catalog, customers, employees, dashboardScope, summary } = state;
+  const catalogPrefix = 'catalog:';
+
+  // Tìm theo tên hoặc mã thì hiện cả khách chưa có chứng từ, để điền số dư đầu kỳ cho khách đó.
+  function customersWithoutDocuments(listed, q, scope) {
+    const listedIds = new Set(listed.map(({ customerId }) => customerId));
+    const candidates = scope.customers(customers()).filter((item) => !listedIds.has(item.id) &&
+      searchText(item, 'name-code', ({ name, misaCode }) => name + ' ' + misaCode).includes(q)).slice(0, 50);
+    if (!candidates.length) return [];
+    const groups = domain.buildSalesReceivables([], candidates, employees(), { includeEmptyCustomers: true });
+    return domain.projectReceiptReceivables(groups, '').customers;
+  }
   const ageForCustomer = state.agingFor;
 
   router.get('/api/receivables', ({ query, scope }) => {
@@ -35,7 +47,8 @@ function register(router, db, state) {
     let agingUnallocatedAmount = 0;
     let agingOverdueAmount = 0;
     const missing = '?';
-    const filtered = data.customers.filter((item) =>
+    const listed = q ? [...data.customers, ...customersWithoutDocuments(data.customers, q, scope)] : data.customers;
+    const filtered = listed.filter((item) =>
       (!employee || employee === (item.employeeId || missing)) &&
       (!province || province === (item.province || missing)) &&
       (!q || searchText(item, 'name-code', ({ name, customerCode }) => name + ' ' + customerCode).includes(q)));
@@ -64,7 +77,7 @@ function register(router, db, state) {
     const groupAmount = ({ row, amounts }) => filter === 'overdue' ? row.overdueAmount : filter ? amounts[filter] : 0;
     if (filter) rows.sort((a, b) => groupAmount(b) - groupAmount(a) || (b.row.maxOverdueDays ?? -1) - (a.row.maxOverdueDays ?? -1));
     return {
-      hasBook: Boolean(book?.rows.length), fileName: book?.fileName ?? "",
+      hasBook: Boolean(book?.rows.length || opening()?.entries.length), fileName: book?.fileName ?? "",
       unmatchedAllocationCount: data.unmatchedCount,
       missingTotalCount: rows.reduce((sum, { row }) => sum + row.missingTotalCount, 0),
       agingAsOf, agingUnitCounts, agingAmounts, agingReductionAmount, agingUnallocatedAmount, agingOverdueAmount,
@@ -80,8 +93,12 @@ function register(router, db, state) {
   function invoiceDetails(account, query, id, scope) {
     if (!query.get('through')) {
       if (!canOpen(account, 'receivables')) fail(403, 'Cần thẻ Công nợ phải thu.');
-      const { documents, customerId } = find(projected(scope).customers, id, 'khách hàng');
-      return { documents, customerId };
+      const group = projected(scope).customers.find((item) => item.id === id);
+      if (group) return { documents: group.documents, customerId: group.customerId, invoiceCount: group.invoiceCount };
+      const customerId = id.startsWith(catalogPrefix) ? id.slice(catalogPrefix.length) : '';
+      if (customerId && scope.allows(customerId) && customers().some((item) => item.id === customerId))
+        return { documents: [], customerId, invoiceCount: 0 };
+      fail(404, 'Không tìm thấy khách hàng.');
     }
     if (!canOpen(account, 'dashboard')) fail(403, 'Cần thẻ Dashboard.');
     const current = catalog();
@@ -96,12 +113,15 @@ function register(router, db, state) {
   }
   const invoices = '/api/receivables/:customerId/invoices';
   router.get(invoices, ({ query, params, account, scope }) => {
-    const { documents, totals, customerId } = invoiceDetails(account, query, params.customerId, scope);
+    const { documents, totals, customerId, invoiceCount } = invoiceDetails(account, query, params.customerId, scope);
+    const through = query.get('through');
+    const missingDocuments = through ? [] : documents.filter(missingInvoiceNumber);
+    const candidates = !through && query.get('missingInvoice') === '1' ? missingDocuments : documents;
     const q = search(query);
-    const rows = q ? documents.filter((item) =>
+    const rows = q ? candidates.filter((item) =>
       searchText(item, 'invoice-vouchers', ({ invoiceNumber, invoiceSeries, documentNumbers }) =>
-        [invoiceNumber, invoiceSeries, ...documentNumbers].join(' ')).includes(q)) : documents;
-    if (query.get('through')) {
+        [invoiceNumber, invoiceSeries, ...documentNumbers].join(' ')).includes(q)) : candidates;
+    if (through) {
       const page = pageOf(rows, query);
       return { ...page, items: page.items.map(documentSummary), totals };
     }
@@ -109,7 +129,10 @@ function register(router, db, state) {
     const { todayLocal, matchesAging } = domain;
     const ageOf = ageForCustomer(todayLocal())(customerId);
     const page = pageOf(filter ? rows.filter((document) => matchesAging(ageOf(document).bucket, filter)) : rows, query);
-    return { ...page, items: page.items.map((document) => ({ ...documentSummary(document), aging: ageOf(document) })) };
+    return {
+      ...page, invoiceCount, missingInvoiceNumberCount: missingDocuments.length,
+      items: page.items.map((document) => ({ ...documentSummary(document), aging: ageOf(document) })),
+    };
   }, opts(['receivables', 'dashboard']));
   router.get(invoices + '/:documentId', ({ query, params, account, scope }) =>
     find(invoiceDetails(account, query, params.customerId, scope).documents, params.documentId, 'chứng từ'),

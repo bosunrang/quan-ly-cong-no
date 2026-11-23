@@ -13,6 +13,8 @@ const DATASET_KEYS = {
   customers: 'cong-no.customers.v2',
   employees: 'cong-no.sales-employees.v2',
   settings: 'cong-no.settings.v2',
+  // Số dư công nợ MISA tại ngày chốt chuyển sổ: { date, fileName, importedAt, entries }.
+  openingBalances: 'cong-no.opening-balances.v1',
 };
 
 function snapshotBeforeUpgrade(database, databasePath, currentVersion) {
@@ -810,6 +812,7 @@ function readBusinessData(database) {
     return version ? read(database, version.version).data : fallback;
   }
   const invoiceDueDates = readInvoiceDueDates(database);
+  const openingBalances = readGeneric(database, DATASET_KEYS.openingBalances)?.data;
   return {
     customers: directory(DATASET_KEYS.customers, readCustomers, []),
     employees: directory(DATASET_KEYS.employees, readEmployees, []),
@@ -817,6 +820,7 @@ function readBusinessData(database) {
     ledger: books.readLedger(database) ?? null,
     settings: directory(DATASET_KEYS.settings, readSettings, null),
     ...(invoiceDueDates.length ? { invoiceDueDates } : {}),
+    ...(openingBalances ? { openingBalances } : {}),
   };
 }
 
@@ -842,6 +846,10 @@ function changeBusinessData(database, change, companyId, expected, onChange) {
         const insert = upsertInvoiceDueDate(database);
         for (const item of next.invoiceDueDates) insert.run(item.customerId, item.documentId, item.dueDate);
       }
+    }
+    if (next.openingBalances !== current.openingBalances) {
+      if (next.openingBalances) writeGeneric(database, DATASET_KEYS.openingBalances, 1, next.openingBalances);
+      else database.prepare('DELETE FROM app_datasets WHERE dataset_key = ?').run(DATASET_KEYS.openingBalances);
     }
     if (next.employees !== current.employees) writeEmployees(database, 2, next.employees);
     if (next.salesBook !== current.salesBook) {
@@ -1024,6 +1032,22 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
         if (audit) appendActivity(database, audit);
         cached?.onWrite?.(`1:${stamp}`, { ...after, revision });
         return revision;
+      });
+    },
+    /**
+     * Ghi hoặc xóa số dư đầu kỳ (và thêm khách hàng mới vào danh mục) trong một giao dịch.
+     * `work(current, changeDirectory)` trả `{ balances, audit }`; `balances` null là xóa,
+     * `{ unchanged: true }` là không ghi gì.
+     */
+    changeOpeningBalances(work) {
+      return withTransaction(database, () => {
+        const current = readGeneric(database, DATASET_KEYS.openingBalances)?.data ?? null;
+        const { balances, audit, unchanged } = work(current, (apply) => directoryTransaction(database, apply, false));
+        if (unchanged) return current;
+        if (balances) writeGeneric(database, DATASET_KEYS.openingBalances, 1, balances);
+        else database.prepare('DELETE FROM app_datasets WHERE dataset_key = ?').run(DATASET_KEYS.openingBalances);
+        if (audit) appendActivity(database, audit);
+        return balances;
       });
     },
     changeSales(work) {

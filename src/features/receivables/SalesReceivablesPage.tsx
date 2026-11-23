@@ -6,7 +6,6 @@ import {
 } from "../../domain/payments/receivable-aging";
 import type {
 	InvoiceCustomer,
-	ReceivableRow,
 	ReceivablesView,
 } from "../../domain/reports/view-types";
 import {
@@ -57,20 +56,6 @@ function agingCardAmount(data: ReceivablesView, filter: AgingFilter) {
 	return (
 		agingBuckets.reduce((sum, bucket) => sum + data.agingAmounts[bucket], 0) -
 		data.agingReductionAmount
-	);
-}
-
-function InvoiceCount({ row }: { row: ReceivableRow }) {
-	const unnumberedCount = row.documentCount - row.invoiceCount;
-	return (
-		<>
-			{number.format(row.invoiceCount)}
-			{unnumberedCount > 0 && (
-				<span className="cell-meta">
-					{number.format(unnumberedCount)} chứng từ thiếu số HĐ
-				</span>
-			)}
-		</>
 	);
 }
 
@@ -339,7 +324,6 @@ export function SalesReceivablesPage({
 								<th scope="col">Khách hàng</th>
 								<th scope="col">Nhân viên phụ trách</th>
 								<th scope="col">Khu vực</th>
-								<th scope="col">Hóa đơn có số</th>
 								<th scope="col" className="receivable-amount-column">
 									Giá trị
 								</th>
@@ -352,7 +336,9 @@ export function SalesReceivablesPage({
 								<th scope="col" className="receivable-amount-column">
 									Nợ quá hạn
 								</th>
-								<th scope="col">Hạn thanh toán sớm nhất</th>
+								<th scope="col" className="receivable-due-date-column">
+									Hạn thanh toán sớm nhất
+								</th>
 								<th scope="col">Số ngày quá hạn tối đa</th>
 							</tr>
 						</thead>
@@ -380,9 +366,6 @@ export function SalesReceivablesPage({
 									</td>
 									<td>{group.employeeName || "—"}</td>
 									<td>{group.province || "—"}</td>
-									<td className="receivable-number">
-										<InvoiceCount row={group} />
-									</td>
 									<td className="receivable-amount-column receivable-number strong-number">
 										{group.paymentTotal === null
 											? "—"
@@ -421,7 +404,9 @@ export function SalesReceivablesPage({
 											</span>
 										)}
 									</td>
-									<td>{formatDateOnly(group.earliestDueDate)}</td>
+									<td className="receivable-number">
+										{formatDateOnly(group.earliestDueDate)}
+									</td>
 									<td>
 										{group.maxOverdueDays === null
 											? "—"

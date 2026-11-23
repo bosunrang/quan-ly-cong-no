@@ -13,6 +13,7 @@ function allocatedInvoiceDetails(allocations, sources) {
   const details = new Map();
   for (const allocation of active) {
     for (const { invoice, amount } of allocation.lines) {
+      if (domain.isOpeningInvoice(invoice)) continue;
       const source = byId.get(invoice.id);
       const matches = source && sameInvoice(source.invoice, invoice);
       const detail = details.get(invoice.id);
@@ -30,7 +31,7 @@ function allocatedInvoiceDetails(allocations, sources) {
 }
 
 function register(router, db, state) {
-  const { sales, ledger, customers, employees, sourcesFor } = state;
+  const { sales, ledger, opening, customers, employees, sourcesFor } = state;
   function receiptRows(data, query, directory) {
     const allocated = domain.totalsByReceipt(data);
     const assignments = new Map(directory.map((customer) =>
@@ -175,6 +176,11 @@ function register(router, db, state) {
       if (!same(existing)) fail(409, 'Mã khoản thu đã được dùng cho khoản thu khác.');
       return ledger().revision;
     }
+    // Số dư đầu kỳ đã trừ mọi khoản thu đến ngày chốt: ghi thêm sẽ trừ hai lần.
+    const balances = opening();
+    if (balances && typeof date === 'string' && date <= balances.date)
+      fail(400, 'Ngày thu phải sau ngày chốt số dư đầu kỳ ' + balances.date.split('-').reverse().join('/') +
+        '. Khoản thu đến ngày này đã nằm trong số dư đầu kỳ.');
     return apply(account, 'Ghi khoản thu', (current) => {
       if (current.receipts.some((receipt) => receipt.id === id)) fail(409, 'Khoản thu này đã được ghi.');
       const customer = find(customers(), customerId, 'khách hàng');

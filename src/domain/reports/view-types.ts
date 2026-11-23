@@ -36,13 +36,19 @@ export interface CandidatePage extends Page<AllocationCandidate> {
 }
 export type InvoiceCustomer = {
 	id: string;
+	/** Mã khách trong danh mục; không có khi chứng từ chưa ghép được khách. */
+	customerId?: string;
 	customerCode: string;
 	name: string;
 };
 export type InvoiceRow = Omit<ReceivableDocument, "lines"> & {
 	aging?: InvoiceAging;
 };
-export type InvoicePage = Page<InvoiceRow> & { totals?: CustomerInvoiceTotals };
+export type InvoicePage = Page<InvoiceRow> & {
+	totals?: CustomerInvoiceTotals;
+	invoiceCount?: number;
+	missingInvoiceNumberCount?: number;
+};
 export type ReceivableRow = Omit<CustomerReceivables, "documents"> & {
 	documentCount: number;
 	earliestDueDate: string | null;

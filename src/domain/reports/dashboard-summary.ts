@@ -6,6 +6,7 @@ import {
 	type SalesCustomerGroup,
 	salesRowsThrough,
 } from "../misa/misa.sales-receivables";
+import type { OpeningBalances } from "../misa/opening-balances";
 import {
 	type ReceiptLedger,
 	receiptLedgerAt,
@@ -31,6 +32,7 @@ export function buildDashboardSummary(
 	through: string,
 	/** Nhóm khách đã dựng từ các dòng bán hàng tính đến ngày chốt (máy chủ giữ sẵn để dùng lại). */
 	groupsThrough?: readonly SalesCustomerGroup[],
+	opening?: OpeningBalances | null,
 ) {
 	const ledgerAtClose = receiptLedgerAt(ledger, through);
 
@@ -82,7 +84,11 @@ export function buildDashboardSummary(
 
 	const salesRows = salesRowsThrough(book?.rows ?? [], through);
 	const groups =
-		groupsThrough ?? buildSalesReceivables(salesRows, customers, employees);
+		groupsThrough ??
+		buildSalesReceivables(salesRows, customers, employees, {
+			opening,
+			through,
+		});
 	const projected = projectReceiptReceivables(
 		groups,
 		book?.fileName ?? "",

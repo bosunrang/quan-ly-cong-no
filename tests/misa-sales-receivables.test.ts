@@ -398,12 +398,19 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 		expect(
 			container.querySelector('select[aria-label="Lọc theo khu vực"]'),
 		).not.toBeNull();
-		const tableBalances = (table: string, column = 6) =>
-			amounts(
-				`${table} tbody td:nth-child(${column}), ${table} tbody td:nth-child(${column + 1})`,
-			);
+		const tableBalances = (table: string) =>
+			amounts(`${table} tbody td:nth-child(5), ${table} tbody td:nth-child(6)`);
+		expect(
+			container.querySelector(".receivable-table thead")?.textContent,
+		).not.toContain("Hóa đơn có số");
+		expect(
+			container.querySelector(".receivable-table .status-pill"),
+		).toBeNull();
 		expect(tableBalances(".receivable-table")).toEqual(["0", "110"]);
 		await click(".receivable-customer-link");
+		expect(
+			container.querySelector(".receivable-invoice-meta")?.textContent,
+		).toBe("1 hóa đơn có số");
 		await click(".receivable-invoice-link");
 		expect(amounts(".invoice-lines-balances dd")).toEqual(["0", "110"]);
 
@@ -412,7 +419,7 @@ it("cập nhật tổng khách hàng và chi tiết hóa đơn đang mở khi l�
 			refresh();
 		});
 		expect(tableBalances(".receivable-table")).toEqual(["25", "85"]);
-		expect(tableBalances(".receivable-invoice-table", 5)).toEqual(["25", "85"]);
+		expect(tableBalances(".receivable-invoice-table")).toEqual(["25", "85"]);
 		expect(amounts(".invoice-lines-balances dd")).toEqual(["25", "85"]);
 		await click(".invoice-lines-dialog footer button");
 		const paidLink = container.querySelector<HTMLButtonElement>(

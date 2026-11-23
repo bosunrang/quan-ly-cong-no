@@ -8,6 +8,10 @@ import {
 	type SalesCustomerGroup,
 	type SalesDocumentGroup,
 } from "../misa/misa.sales-receivables";
+import {
+	type OpeningBalances,
+	openingBalanceLabel,
+} from "../misa/opening-balances";
 
 export interface Receipt {
 	id: string;
@@ -195,8 +199,9 @@ export function getReceiptInvoices(
 	book: MisaSalesBook,
 	receipt: Receipt,
 	customers: readonly Customer[],
+	opening?: OpeningBalances | null,
 ) {
-	return getReceiptInvoiceSources(book, receipt, customers).map(
+	return getReceiptInvoiceSources(book, receipt, customers, opening).map(
 		({ invoice }) => invoice,
 	);
 }
@@ -205,10 +210,11 @@ export function getReceiptInvoiceSources(
 	book: MisaSalesBook,
 	receipt: Receipt,
 	customers: readonly Customer[],
+	opening?: OpeningBalances | null,
 ): ReceiptInvoiceSource[] {
 	if (!identity(receipt.customerCode)) return [];
 	return receiptInvoiceSourcesFromGroups(
-		buildSalesReceivables(book.rows, customers, []),
+		buildSalesReceivables(book.rows, customers, [], { opening }),
 		book.fileName,
 		receipt,
 	);
@@ -265,6 +271,7 @@ export function getGroupReceiptInvoices(
 		JSON.stringify([identity(voucher), date.slice(0, 4)]);
 	const voucherCounts = new Map<string, number>();
 	for (const document of documents) {
+		if (document.openingBalance) continue;
 		const date = documentPostingDate(document);
 		for (const voucher of document.documentNumbers) {
 			const key = voucherKey(voucher, date);
@@ -272,6 +279,21 @@ export function getGroupReceiptInvoices(
 		}
 	}
 	for (const document of documents) {
+		// Số dư đầu kỳ dư Nợ nhận phân bổ như một chứng từ; dư Có được trừ thẳng vào công nợ.
+		if (document.openingBalance) {
+			if (positiveMoney(document.paymentTotal) && isIsoDate(document.firstDate))
+				invoices.set(document.id, {
+					id: receiptInvoiceId(code, openingBalanceLabel, document.firstDate),
+					customerId,
+					date: document.firstDate,
+					invoiceNumber: "",
+					invoiceSeries: "",
+					documentNumber: openingBalanceLabel,
+					amount: document.paymentTotal,
+					sourceFile: document.openingBalance.fileName,
+				});
+			continue;
+		}
 		const documentNumber = document.documentNumbers[0] ?? "";
 		const voucher = identity(documentNumber);
 		const date = documentPostingDate(document);

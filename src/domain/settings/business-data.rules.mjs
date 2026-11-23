@@ -45,6 +45,10 @@ const allocationLine = (value) =>
 const allocation = (value) =>
   fields(value, ["id", "receiptId"]) && date(value.date) && timestamp(value.createdAt) &&
   Array.isArray(value.lines) && value.lines.every(allocationLine) && optional(value.reversal, reversal);
+const openingEntry = (value) =>
+  fields(value, ["customerId", "customerCode", "customerName"]) && value.customerId.length > 0 &&
+  Number.isSafeInteger(value.amount) && value.amount !== 0 && Number.isSafeInteger(value.rowNumber) &&
+  optional(value.source, (source) => source === "manual");
 const settings = (value) =>
   fields(value, ["companyName", "companyAddress", "displayName", "tagline"]) &&
   (value.logoDataUrl === null || (text(value.logoDataUrl) && value.logoDataUrl.length <= 1500000));
@@ -67,6 +71,13 @@ function validInvoiceDueDates(values, customers) {
     fields(item, ["customerId", "documentId", "dueDate"]) &&
     ids.has(item.customerId) && item.documentId.length > 0 && calendarDate(item.dueDate)) &&
     unique(values.map(({ customerId, documentId }) => JSON.stringify([customerId, documentId])));
+}
+
+/** Số dư đầu kỳ: mỗi khách một dòng, khách phải có trong danh mục. */
+function validOpeningBalances(value, customers) {
+  const ids = new Set(customers.map(({ id }) => id));
+  return fields(value, ["fileName"]) && calendarDate(value.date) && timestamp(value.importedAt) &&
+    list(value.entries, openingEntry, "customerId") && value.entries.every(({ customerId }) => ids.has(customerId));
 }
 
 /** Kiểm tra dữ liệu ghi qua máy chủ LAN bằng cùng quy tắc với bản sao lưu. */
@@ -103,6 +114,7 @@ export function validateBusinessBackup(backup) {
   const data = backup.data;
   if (!record(data) || !list(data.customers, customer) || !list(data.employees, employee) ||
     !optional(data.invoiceDueDates, (items) => validInvoiceDueDates(items, data.customers)) ||
+    !optional(data.openingBalances, (value) => value === null || validOpeningBalances(value, data.customers)) ||
     !unique(data.customers.map(({ misaCode }) => misaCode)) ||
     !unique(data.employees.map(({ code }) => code)) ||
     !unique(data.employees.flatMap(({ linkedAccountId }) => linkedAccountId ? [linkedAccountId] : [])) ||
@@ -131,6 +143,7 @@ export function restoreBusinessData(backup, current, companyId, accountIds) {
     ledger: data.ledger ? { ...data.ledger, revision: restoredAt.toISOString() + "-" + globalThis.crypto.getRandomValues(new Uint32Array(2)).join("-") } : null,
     settings: data.settings,
     ...(data.invoiceDueDates?.length ? { invoiceDueDates: data.invoiceDueDates } : {}),
+    ...(data.openingBalances ? { openingBalances: data.openingBalances } : {}),
   };
 }
 
@@ -148,11 +161,13 @@ export function deleteBusinessGroups(current, groups) {
   const now = new Date();
   const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, "0")).join("-");
   const employees = new Set(current.employees.map(({ id }) => id));
-  const { invoiceDueDates, ...data } = current;
+  const { invoiceDueDates, openingBalances, ...data } = current;
+  // Số dư đầu kỳ thuộc nhóm Dữ liệu MISA và gắn với danh mục khách hàng.
+  const keep = !selected.has("salesBook") && !selected.has("customers");
   return {
     ...data,
-    ...(!selected.has("salesBook") && !selected.has("customers") && invoiceDueDates
-      ? { invoiceDueDates } : {}),
+    ...(keep && invoiceDueDates ? { invoiceDueDates } : {}),
+    ...(keep && openingBalances ? { openingBalances } : {}),
     salesBook: selected.has("salesBook") ? null : current.salesBook,
     ledger: selected.has("ledger") ? null : current.ledger,
     employees: selected.has("employees") ? [] : current.employees,

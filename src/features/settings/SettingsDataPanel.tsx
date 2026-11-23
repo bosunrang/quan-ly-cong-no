@@ -25,7 +25,7 @@ import { StatusPill } from "../../shared/ui/StatusPill";
 import { AutomaticBackups } from "./AutomaticBackups";
 
 const groups = {
-	salesBook: ["Dữ liệu MISA", "Các dòng bán hàng đã nhập"],
+	salesBook: ["Dữ liệu MISA", "Sổ bán hàng và số dư đầu kỳ đã nhập"],
 	ledger: ["Khoản thu và phân bổ", "Chứng từ thu, lịch sử phân bổ và hoàn tác"],
 	customers: ["Khách hàng", "Danh mục và lịch sử phân công khách hàng"],
 	employees: [

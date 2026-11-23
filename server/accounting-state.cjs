@@ -21,6 +21,7 @@ function createAccountingState(db) {
   };
   const sales = bookReader(SALE, (data) => data ?? null);
   const ledger = bookReader(LEDGER, (data) => domain.migrateReceiptLedger(data ?? domain.emptyReceiptLedger));
+  const opening = bookReader(DATASET_KEYS.openingBalances, (data) => data ?? null);
   const none = Object.freeze([]);
   const customers = () => db.readDataset(DATASET_KEYS.customers)?.data ?? none;
   const employees = () => db.readDataset(DATASET_KEYS.employees)?.data ?? none;
@@ -28,13 +29,16 @@ function createAccountingState(db) {
   // bản đọc đổi. `version` chỉ tăng khi nội dung đổi, dùng làm khóa ngắn cho bộ đệm Dashboard.
   let lastCatalog;
   let catalogVersion = 0;
+  // Số dư đầu kỳ đi cùng danh mục: đổi số dư thì dựng lại sổ theo khách như khi đổi danh mục.
   function catalog() {
     const directory = customers();
     const staff = employees();
-    if (lastCatalog?.directory === directory && lastCatalog.staff === staff) return lastCatalog;
-    const key = JSON.stringify([directory, staff]);
+    const balances = opening();
+    if (lastCatalog?.directory === directory && lastCatalog.staff === staff && lastCatalog.opening === balances)
+      return lastCatalog;
+    const key = JSON.stringify([directory, staff, balances]);
     const version = lastCatalog?.key === key ? lastCatalog.version : ++catalogVersion;
-    lastCatalog = { directory, staff, key, version };
+    lastCatalog = { directory, staff, opening: balances, key, version };
     return lastCatalog;
   }
 
@@ -44,7 +48,8 @@ function createAccountingState(db) {
   function groupsFor(book, current) {
     if (!lastGroups || lastGroups.book !== book || lastGroups.key !== current.key) {
       lastGroups = { book, key: current.key,
-        groups: domain.buildSalesReceivables(book?.rows ?? [], current.directory, current.staff) };
+        groups: domain.buildSalesReceivables(book?.rows ?? [], current.directory, current.staff,
+          { opening: current.opening }) };
     }
     return lastGroups.groups;
   }
@@ -57,10 +62,12 @@ function createAccountingState(db) {
   const throughGroups = new Map();
   function groupsThrough(book, current, through) {
     const rows = domain.salesRowsThrough(book?.rows ?? [], through);
-    if (rows.length === (book?.rows.length ?? 0)) return groupsFor(book, current);
+    if (rows.length === (book?.rows.length ?? 0) && (!current.opening || current.opening.date <= through))
+      return groupsFor(book, current);
     const cached = throughGroups.get(through);
     if (cached && cached.book === book && cached.key === current.key) return cached.groups;
-    const groups = domain.buildSalesReceivables(rows, current.directory, current.staff);
+    const groups = domain.buildSalesReceivables(rows, current.directory, current.staff,
+      { opening: current.opening, through });
     throughGroups.delete(through);
     throughGroups.set(through, { book, key: current.key, groups });
     while (throughGroups.size > 6) throughGroups.delete(throughGroups.keys().next().value);
@@ -101,7 +108,8 @@ function createAccountingState(db) {
     const cache = summaries[bucket];
     const key = JSON.stringify([current.version, from, through, scopeKey]);
     const cached = cache.get(key);
-    if (cached && cached.book === book && cached.data === data) {
+    const buildSummary = domain.buildDashboardSummary;
+    if (cached && cached.book === book && cached.data === data && cached.buildSummary === buildSummary) {
       cache.delete(key);
       cache.set(key, cached);
       return cached.result;
@@ -111,10 +119,10 @@ function createAccountingState(db) {
     const visibleLines = visibleScope && !visibleScope.unrestricted
       ? new Set(visibleGroups.flatMap((group) => group.documents.flatMap((document) => document.lines))) : null;
     const visibleBook = book && visibleLines ? { ...book, rows: book.rows.filter((row) => visibleLines.has(row)) } : book;
-    const result = domain.buildDashboardSummary(visibleBook, visibleScope ? visibleScope.ledger(data) : data,
-      current.directory, current.staff, from, through, visibleGroups);
+    const result = buildSummary(visibleBook, visibleScope ? visibleScope.ledger(data) : data,
+      current.directory, current.staff, from, through, visibleGroups, current.opening);
     cache.delete(key);
-    cache.set(key, { book, data, result });
+    cache.set(key, { book, data, buildSummary, result });
     while (cache.size > summaryLimits[bucket]) cache.delete(cache.keys().next().value);
     return result;
   }
@@ -137,7 +145,7 @@ function createAccountingState(db) {
     const through = domain.todayLocal();
     summary(new URLSearchParams({ from: through.slice(0, 8) + '01', through }));
   }
-  return { sales, ledger, customers, employees, catalog, groupsFor, sourcesFor, projected, dashboardScope, summary, agingFor, warm };
+  return { sales, ledger, opening, customers, employees, catalog, groupsFor, sourcesFor, projected, dashboardScope, summary, agingFor, warm };
 }
 
 module.exports = { createAccountingState };

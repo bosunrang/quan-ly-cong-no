@@ -453,7 +453,7 @@ export function PaymentsPage({
 						)}
 						{!selectedData.data?.hasInvoices && remaining > 0 && (
 							<Notice tone="info">
-								Chưa có chứng từ MISA phù hợp cho khoản thu này.
+								Chưa có chứng từ MISA hoặc số dư đầu kỳ phù hợp cho khoản thu này.
 							</Notice>
 						)}
 						{allocatedInvoices.length > 0 && (

@@ -5,6 +5,8 @@ export type ReceiptTrendBucket = {
 	count: number;
 	/** Khoản thu kỳ trước bị hủy trong cột này; số tiền đã được trừ vào `amount`. */
 	reversals: number;
+	/** Giá trị hủy trước khi bù trừ với tiền thu, lưu dưới dạng số dương. */
+	reversedAmount: number;
 };
 
 const dayInMs = 86_400_000;
@@ -35,6 +37,7 @@ export function receiptTrend(
 				amount: 0,
 				count: 0,
 				reversals: 0,
+				reversedAmount: 0,
 			};
 		},
 	);
@@ -44,8 +47,10 @@ export function receiptTrend(
 		const bucket = buckets[Math.floor(day / daysPerBucket)];
 		if (!bucket || day >= days) continue;
 		bucket.amount += receipt.amount;
-		if (receipt.reversedOn) bucket.reversals += 1;
-		else bucket.count += 1;
+		if (receipt.reversedOn) {
+			bucket.reversals += 1;
+			bucket.reversedAmount -= receipt.amount;
+		} else bucket.count += 1;
 	}
 	return { buckets, daysPerBucket };
 }

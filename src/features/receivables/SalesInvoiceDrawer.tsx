@@ -1,4 +1,4 @@
-import { Search, X } from "lucide-react";
+import { Check, Filter, Search, X } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import type {
 	InvoiceCustomer,
@@ -17,8 +17,10 @@ import { formatDateOnly } from "../../shared/lib/date";
 import { Drawer } from "../../shared/ui/Dialog/Drawer";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { SalesInvoiceLinesDialog } from "../../shared/ui/SalesInvoiceLinesDialog";
+import { StatusPill } from "../../shared/ui/StatusPill";
 import { InvoiceReceiptAllocationsDialog } from "./InvoiceReceiptAllocationsDialog";
 import { InvoiceDueDateDialog } from "./InvoiceDueDateDialog";
+import { OpeningBalancePanel } from "./OpeningBalancePanel";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
 
@@ -42,6 +44,7 @@ export function SalesInvoiceDrawer({
 	onClose: () => void;
 }) {
 	const [query, setQuery] = useState("");
+	const [missingInvoiceOnly, setMissingInvoiceOnly] = useState(false);
 	const [detail, setDetail] = useState<{
 		documentId: string;
 		kind: "lines" | "allocations";
@@ -55,6 +58,7 @@ export function SalesInvoiceDrawer({
 		resourceWithQuery(base, {
 			...periodScope,
 			aging: agingFilter || undefined,
+			missingInvoice: missingInvoiceOnly ? 1 : undefined,
 			q: search,
 			page,
 		}),
@@ -62,9 +66,10 @@ export function SalesInvoiceDrawer({
 	const sameScope = response.previousResource?.startsWith(
 		`${resourceWithQuery(base, periodScope)}&`,
 	);
-	const totals =
-		response.data?.totals ??
-		(sameScope && !response.error ? response.previous?.totals : undefined);
+	const { totals, invoiceCount, missingInvoiceNumberCount } =
+		response.data ??
+		(sameScope && !response.error ? response.previous : undefined) ??
+		{};
 	const balance = totals?.balance;
 	const amounts = [
 		["Tổng giá trị", balance && balance.received + balance.remaining],
@@ -111,6 +116,12 @@ export function SalesInvoiceDrawer({
 					</button>
 				</header>
 				<div className="customer-detail-body">
+					{!asOfDate && customer.customerId && (
+						<OpeningBalancePanel
+							customerId={customer.customerId}
+							canEdit={canEditDueDates}
+						/>
+					)}
 					{totals && (
 						<section
 							className="panel receivable-invoice-summary"
@@ -158,14 +169,59 @@ export function SalesInvoiceDrawer({
 								/>
 							</label>
 							{asOfDate && (
-								<span className="receivable-invoice-cutoff">
+								<span className="receivable-invoice-meta">
 									Ngày chốt {formatDateOnly(asOfDate)}
 								</span>
+							)}
+							{(invoiceCount !== undefined || missingInvoiceOnly) && (
+								<div className="receivable-invoice-meta receivable-invoice-counts">
+									{invoiceCount !== undefined && (
+										<span>
+											<strong>{number.format(invoiceCount)}</strong> hóa đơn có
+											số
+										</span>
+									)}
+									{((missingInvoiceNumberCount ?? 0) > 0 ||
+										missingInvoiceOnly) && (
+										<button
+											className="receivable-invoice-filter"
+											type="button"
+											aria-pressed={missingInvoiceOnly}
+											aria-controls="receivable-invoice-results"
+											title={
+												missingInvoiceOnly
+													? "Bỏ lọc chứng từ thiếu số HĐ"
+													: "Lọc chứng từ thiếu số HĐ"
+											}
+											onClick={() => {
+												setMissingInvoiceOnly((value) => !value);
+												pagination.resetPage();
+											}}
+										>
+											<StatusPill
+												tone="warning"
+												icon={
+													missingInvoiceOnly ? (
+														<Check aria-hidden="true" />
+													) : (
+														<Filter aria-hidden="true" />
+													)
+												}
+											>
+												{missingInvoiceNumberCount === undefined
+													? "Chứng từ thiếu số HĐ"
+													: `${number.format(missingInvoiceNumberCount)} chứng từ thiếu số HĐ`}
+											</StatusPill>
+										</button>
+									)}
+								</div>
 							)}
 						</div>
 						<section
 							className="table-scroll receivable-invoice-table"
+							id="receivable-invoice-results"
 							aria-label="Vùng cuộn bảng hóa đơn"
+							aria-busy={response.loading}
 							// biome-ignore lint/a11y/noNoninteractiveTabindex: Support scrolling the table by keyboard.
 							tabIndex={0}
 						>
@@ -230,7 +286,7 @@ export function SalesInvoiceDrawer({
 												)}
 											</td>
 											<td>
-												{document.invoiceNumber ? (
+												{document.invoiceNumber || document.openingBalance ? (
 													document.documentNumbers.join(", ")
 												) : (
 													<button
@@ -250,7 +306,9 @@ export function SalesInvoiceDrawer({
 											</td>
 											{asOfDate && (
 												<td className="receivable-number">
-													{number.format(document.lineCount)}
+													{document.openingBalance
+														? "—"
+														: number.format(document.lineCount)}
 												</td>
 											)}
 											<td className="receivable-number strong-number">
@@ -285,7 +343,11 @@ export function SalesInvoiceDrawer({
 														: "—"}
 												</strong>
 												{document.reduction && (
-													<span className="cell-meta">Giảm trừ</span>
+													<span className="cell-meta">
+														{document.openingBalance
+															? "Dư có đầu kỳ"
+															: "Giảm trừ"}
+													</span>
 												)}
 												{document.allocationMismatch && (
 													<span className="cell-meta">Cần đối chiếu</span>
@@ -337,7 +399,9 @@ export function SalesInvoiceDrawer({
 								<p className="empty-state">
 									{asOfDate && !search.trim()
 										? "Không có chứng từ còn nợ được tính tại ngày chốt."
-										: "Không tìm thấy chứng từ phù hợp."}
+										: missingInvoiceOnly
+											? "Không tìm thấy chứng từ thiếu số hóa đơn phù hợp."
+											: "Không tìm thấy chứng từ phù hợp."}
 								</p>
 							)}
 						</section>

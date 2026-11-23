@@ -36,10 +36,17 @@ export function receivablesView(
 		limit,
 	});
 	if (parts.length > 1) {
-		const documents =
-			group.customers.find(({ id }) => id === parts[1])?.documents ?? [];
+		const customer = group.customers.find(({ id }) => id === parts[1]);
+		const documents = customer?.documents ?? [];
 		if (parts[3]) return documents.find(({ id }) => id === parts[3]);
-		return paging(documents.map(({ lines: _lines, ...item }) => item));
+		return {
+			...paging(documents.map(({ lines: _lines, ...item }) => item)),
+			invoiceCount: customer?.invoiceCount,
+			missingInvoiceNumberCount: documents.filter(
+				({ invoiceNumber, openingBalance }) =>
+					!invoiceNumber && !openingBalance,
+			).length,
+		};
 	}
 	const employee = url.searchParams.get("employee");
 	const province = url.searchParams.get("province");

@@ -39,7 +39,7 @@
 }
 
 .receivable-table table {
-	min-width: var(--layout-1180);
+	min-width: var(--layout-1040);
 }
 
 :is(.receivable-table, .receivable-invoice-table) table {
@@ -47,11 +47,15 @@
 }
 
 .receivable-table th:first-child {
-	width: 24%;
+	width: 21%;
 }
 
 .receivable-table th.receivable-amount-column {
-	width: 10%;
+	width: 11.5%;
+}
+
+.receivable-table th.receivable-due-date-column {
+	width: 9.5%;
 }
 
 :is(.receivable-table, .receivable-invoice-table) :is(th, td:not(.receivable-number), .cell-meta) {
@@ -128,11 +132,30 @@
 	flex: none;
 }
 
-.receivable-invoice-cutoff {
+.receivable-invoice-meta {
 	margin-inline-start: auto;
 	color: var(--muted);
 	font-size: var(--type-body-sm);
 	white-space: nowrap;
+}
+
+.receivable-invoice-counts {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-4) var(--space-10);
+}
+
+.receivable-invoice-filter {
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: transparent;
+	cursor: pointer;
+}
+
+.receivable-invoice-filter:is(:hover, [aria-pressed="true"]) .status-pill {
+	border-color: var(--status-warning-text);
 }
 
 .receivable-invoice-summary {
@@ -338,3 +361,61 @@
 	overflow-wrap: anywhere;
 }
 
+
+.receivable-opening-balance {
+	padding: var(--space-12) var(--space-14);
+	display: grid;
+	gap: var(--space-10);
+}
+
+.receivable-opening-balance header {
+	display: flex;
+	align-items: center;
+	gap: var(--space-10);
+	color: var(--teal);
+}
+
+.receivable-opening-balance header > div {
+	min-width: 0;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.receivable-opening-balance h3 {
+	margin: 0;
+	color: var(--ink);
+	font-size: var(--type-body);
+}
+
+.receivable-opening-balance header strong {
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.receivable-opening-balance > p {
+	margin: 0;
+}
+
+.receivable-opening-form {
+	display: grid;
+	gap: var(--space-10);
+}
+
+.receivable-opening-form .ui-field input {
+	width: 100%;
+	height: var(--control-height);
+	padding: 0 var(--control-padding);
+	border: var(--border-width) solid var(--line-strong);
+	border-radius: var(--surface-radius);
+	background: var(--panel);
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+}
+
+.receivable-opening-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-8);
+}

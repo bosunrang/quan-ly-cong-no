@@ -5,7 +5,7 @@ import {
 	ChartNoAxesGantt,
 	Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import {
 	type AgingBucket,
 	agingBuckets,
@@ -196,13 +196,6 @@ function AgingOverview({ summary }: { summary: DashboardView }) {
 							<dd>{money.format(remaining)}</dd>
 						</div>
 					</dl>
-					{aging.noDueDateCount > 0 && (
-						<p className="dashboard-aging-note">
-							{money.format(aging.noDueDateCount)} khách hàng còn hóa đơn chưa
-							có hạn thanh toán. Đặt kỳ hạn trong Danh mục khách hàng để tính
-							tuổi nợ.
-						</p>
-					)}
 				</>
 			) : (
 				<p className="dashboard-insight-empty">
@@ -276,16 +269,20 @@ function TopOverdue({
 			) : (
 				<p className="dashboard-insight-empty">
 					Chưa có khách hàng quá hạn tại ngày chốt.
-					{aging.noDueDateCount > 0 &&
-						` ${money.format(aging.noDueDateCount)} khách hàng còn hóa đơn chưa có hạn thanh toán.`}
 				</p>
 			)}
 		</section>
 	);
 }
 
-const receiptCount = (count: number, reversals: number) =>
-	`${money.format(count)} khoản thu${reversals ? ` · ${money.format(reversals)} khoản thu kỳ trước bị hủy` : ""}`;
+type ReceiptBucket = DashboardView["receiptTrend"]["buckets"][number];
+
+function receiptActivity({ count, reversals, reversedAmount }: ReceiptBucket) {
+	const receipts = `${money.format(count)} khoản thu`;
+	return reversals
+		? `${receipts} · Hủy ${money.format(reversals)} khoản kỳ trước (${money.format(reversedAmount)} VND)`
+		: receipts;
+}
 
 function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 	const { buckets, daysPerBucket } = trend;
@@ -295,7 +292,19 @@ function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 	);
 	const active =
 		buckets.find((bucket) => bucket.from === selected) ?? receiptBuckets.at(-1);
-	const max = Math.max(0, ...buckets.map(({ amount }) => amount));
+	const maxReceived = Math.max(
+		0,
+		...buckets.map(({ amount, reversedAmount }) => amount + reversedAmount),
+	);
+	const maxReversed = Math.max(
+		0,
+		...buckets.map(({ reversedAmount }) => reversedAmount),
+	);
+	// Chừa chỗ cho nhãn trục 0 khi hai phía chênh lệch lớn, vẫn dùng chung thang tiền.
+	const upper = maxReceived > 0 ? Math.max(maxReceived, maxReversed / 3) : 0;
+	const lower = maxReversed > 0 ? Math.max(maxReversed, maxReceived / 3) : 0;
+	const range = upper + lower;
+	const zero = range > 0 ? (upper / range) * 100 : 50;
 	return (
 		<section
 			className="panel dashboard-insight"
@@ -315,29 +324,41 @@ function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 					aria-hidden="true"
 				/>
 			</div>
-			{max > 0 && active ? (
+			{active ? (
 				<>
 					<div className="dashboard-trend-readout" aria-live="polite">
 						<strong>{money.format(active.amount)}</strong>
 						<span>
+							{active.reversals > 0 && "Thu ròng · "}
 							{dateRange(active.from, active.through)} ·{" "}
-							{receiptCount(active.count, active.reversals)}
+							{receiptActivity(active)}
 						</span>
 					</div>
+					<ul className="dashboard-trend-legend" aria-label="Chú giải biểu đồ">
+						<li className="dashboard-trend-inflow">Thu trong kỳ</li>
+						<li className="dashboard-trend-reversal">Hủy khoản thu kỳ trước</li>
+					</ul>
 					<div
 						className={`dashboard-trend${receiptBuckets.length >= 4 ? " dashboard-trend-tall" : ""}`}
+						style={{ "--trend-zero": `${zero}%` } as CSSProperties}
 					>
 						<div className="dashboard-trend-axis" aria-hidden="true">
-							<span>{compact.format(max)}</span>
-							<span>{compact.format(max / 2)}</span>
-							<span>0</span>
+							{upper > 0 && <span>{compact.format(upper)}</span>}
+							<span className="dashboard-trend-axis-zero">0</span>
+							{lower > 0 && (
+								<span className="dashboard-trend-axis-min">
+									{compact.format(-lower)}
+								</span>
+							)}
 						</div>
 						<fieldset className="dashboard-trend-bars">
 							<legend className="visually-hidden">
 								Khoản thu theo ngày hoặc nhóm ngày
 							</legend>
-							{buckets.map(({ from, through, amount, count, reversals }) => {
-								const label = `${dateRange(from, through)} · ${money.format(amount)} · ${receiptCount(count, reversals)}`;
+							{buckets.map((bucket) => {
+								const { from, through, amount, reversedAmount } = bucket;
+								const received = amount + reversedAmount;
+								const label = `${dateRange(from, through)} · Thu ròng ${money.format(amount)} VND · ${receiptActivity(bucket)}`;
 								return (
 									<button
 										key={from}
@@ -347,12 +368,20 @@ function ReceiptTrend({ trend }: { trend: DashboardView["receiptTrend"] }) {
 										aria-pressed={active.from === from}
 										onClick={() => setSelected(from)}
 									>
-										<span
-											aria-hidden="true"
-											style={{
-												height: `${(Math.max(0, amount) / max) * 100}%`,
-											}}
-										/>
+										{received > 0 && (
+											<span
+												className="dashboard-trend-inflow"
+												aria-hidden="true"
+												style={{ height: `${(received / range) * 100}%` }}
+											/>
+										)}
+										{reversedAmount > 0 && (
+											<span
+												className="dashboard-trend-reversal"
+												aria-hidden="true"
+												style={{ height: `${(reversedAmount / range) * 100}%` }}
+											/>
+										)}
 									</button>
 								);
 							})}

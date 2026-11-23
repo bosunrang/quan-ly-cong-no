@@ -25,7 +25,7 @@ function createApi(tenant) {
   const state = createAccountingState(db);
   // Dựng sẵn sau khi máy chủ mở cổng; lỗi (kho trống, đang đóng) để yêu cầu đầu tiên tự dựng.
   setImmediate(() => { try { state.warm(); } catch { /* dựng lại khi có yêu cầu */ } });
-  for (const name of ['misa', 'dashboard', 'receivables', 'reports', 'payments'])
+  for (const name of ['misa', 'opening-balances', 'dashboard', 'receivables', 'reports', 'payments'])
     require('./routes/' + name + '.cjs').register(router, db, state);
   require('./routes/audit.cjs').register(router, tenant);
 

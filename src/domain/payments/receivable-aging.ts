@@ -89,10 +89,14 @@ export function invoiceAging(
 	overrideDueDate: string | undefined,
 	asOf: string,
 ): InvoiceAging {
+	// Số dư đầu kỳ gồm nhiều hóa đơn cũ không rõ ngày: không tính hạn theo kỳ hạn của khách,
+	// chỉ dùng hạn sửa tay nếu có.
 	const dueDate = document.reduction
 		? null
 		: (overrideDueDate ??
-			(document.balance ? invoiceDueDateFromTerm(document, termDays) : null));
+			(document.balance && !document.openingBalance
+				? invoiceDueDateFromTerm(document, termDays)
+				: null));
 	const remaining = document.balance?.remaining ?? 0;
 	const daysOverdue =
 		remaining > 0 && dueDate

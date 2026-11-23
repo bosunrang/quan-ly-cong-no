@@ -25,7 +25,10 @@ interface ReceivableAllocation {
 export type ReceivableDocument = SalesDocumentGroup & {
 	balance: (ReceivableBalance & { allocations: ReceivableAllocation[] }) | null;
 	allocationMismatch: boolean;
-	/** Chứng từ giảm trừ (hàng bán trả lại, giảm giá...): số âm trừ thẳng vào công nợ của khách. */
+	/**
+	 * Chứng từ giảm trừ (hàng bán trả lại, giảm giá...) hoặc số dư đầu kỳ dư Có: số âm trừ thẳng
+	 * vào công nợ của khách.
+	 */
 	reduction?: true;
 };
 
@@ -35,8 +38,7 @@ export type CustomerReceivables = Omit<SalesCustomerGroup, "documents"> & {
 	unverifiedCount: number;
 };
 
-const identity = (value: string) =>
-	value.trim().normalize("NFC").toUpperCase();
+const identity = (value: string) => value.trim().normalize("NFC").toUpperCase();
 // Chứng từ âm ghi giảm phải thu: Nợ 5212 (hàng bán trả lại), 5213 (giảm giá), 511 (điều chỉnh giảm
 // doanh thu) hoặc âm trên 131. Sổ cũ không có cột TK Nợ vẫn được tính.
 const reductionAccount = /^(?:131|511|521)/;
@@ -90,7 +92,8 @@ export function projectReceiptReceivables(
 				ledger &&
 				!candidate &&
 				group.customerId &&
-				isSalesReduction(document, group.customerCode)
+				(isSalesReduction(document, group.customerCode) ||
+					(document.openingBalance && (document.paymentTotal ?? 0) < 0))
 			) {
 				const remaining = document.paymentTotal ?? 0;
 				balance ??= { received: 0, remaining: 0 };

@@ -240,6 +240,26 @@ describe("Dashboard công nợ theo ngày chốt", () => {
 			amount: -1200,
 			count: 0,
 			reversals: 1,
+			reversedAmount: 1200,
+		});
+		const withNewReceipt = recordReceipt(cancelled, customer, {
+			...draft,
+			number: "PT02",
+			date: "2024-06-07",
+		});
+		const sameDay = buildDashboardSummary(
+			book,
+			withNewReceipt,
+			[customer],
+			[],
+			"2024-06-07",
+			"2024-06-07",
+		);
+		expect(sameDay.receiptTrend.buckets[0]).toMatchObject({
+			amount: 0,
+			count: 1,
+			reversals: 1,
+			reversedAmount: 1200,
 		});
 		// Kỳ kết thúc trước ngày hủy chưa thấy phiếu hủy; kỳ chứa ngày thu thì đã loại khoản thu.
 		expect(at("2024-06-06", "2024-06-02").periodReceived).toBe(0);

@@ -61,6 +61,8 @@ function register(router, db, readers) {
     const current = customerAt(tx, params.id, body.expected);
     if (tx.customerHasReceipts(current.id))
       fail(409, 'Khách hàng đã có chứng từ thu. Hãy chuyển sang trạng thái tạm dừng.');
+    if (db.readDataset(DATASET_KEYS.openingBalances)?.data?.entries.some(({ customerId }) => customerId === current.id))
+      fail(409, 'Khách hàng có số dư đầu kỳ MISA. Hãy chuyển sang trạng thái tạm dừng.');
     tx.deleteCustomer(current.id);
     log(account, 'Xóa khách hàng', `${current.misaCode} · ${current.name}`);
     return true;

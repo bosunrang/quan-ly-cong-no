@@ -36,6 +36,7 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 					amount: 80,
 					count: 1,
 					reversals: 0,
+					reversedAmount: 0,
 				},
 				{
 					from: "2026-11-02",
@@ -43,6 +44,7 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 					amount: 120,
 					count: 1,
 					reversals: 0,
+					reversedAmount: 0,
 				},
 			],
 		},
@@ -111,15 +113,16 @@ it("giữ ô tìm và bảng Dashboard trong lúc chờ kết quả, tìm từ t
 				(label) => label.textContent,
 			),
 		).toEqual([
+			"Kỳ nhanh",
 			"Từ ngày",
-			"Đến ngày (ngày chốt)",
+			"Ngày chốt",
 			"Khu vực",
 			"Tìm nhanh khách hàng",
 		]);
 		expect(container.querySelector("#dashboard-employee")).toBeNull();
 		// Tuổi nợ tại ngày chốt: chỉ tiêu Nợ quá hạn, thanh tuổi nợ và danh sách quá hạn.
 		const metrics = [
-			...container.querySelectorAll(".dashboard-metric-copy"),
+			...container.querySelectorAll(".dashboard-metrics > button"),
 		].map((item) => item.textContent);
 		expect(metrics[1]).toContain("Nợ quá hạn40");
 		expect(metrics[1]).toContain("1 khách hàng · 40% tổng còn phải thu");

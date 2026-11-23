@@ -4,6 +4,7 @@ import {
 	buildSalesReceivables,
 	salesRowsThrough,
 } from "../misa/misa.sales-receivables";
+import type { OpeningBalances } from "../misa/opening-balances";
 import {
 	type ReceiptLedger,
 	receiptLedgerAt,
@@ -24,7 +25,7 @@ export const statementSignatures = ["ĐẠI DIỆN KHÁCH HÀNG", "ĐẠI DIỆN
 export const statementConfirmation =
 	"Nếu đồng ý với số liệu trên, xin vui lòng ký xác nhận, đóng dấu và gửi lại 01 bản.";
 export const statementBasis =
-	"Số dư đầu kỳ được tính từ sổ MISA đã nhập. Số thanh toán là chênh lệch phân bổ có hiệu lực trong kỳ. Tiền đã thu chưa phân bổ được trình bày riêng và trừ vào công nợ thuần. Số dư đầu kỳ ngoài sổ MISA chưa được tính.";
+	"Số dư đầu kỳ được tính từ số dư công nợ MISA tại ngày chốt chuyển sổ (nếu đã nhập) và sổ bán hàng MISA đã nhập. Số thanh toán là chênh lệch phân bổ có hiệu lực trong kỳ. Tiền đã thu chưa phân bổ được trình bày riêng và trừ vào công nợ thuần.";
 
 export function statementSeller(settings: AppSettings) {
 	// Không tự điền tên công ty khác khi Cài đặt còn trống: mỗi kho LAN là một
@@ -55,6 +56,7 @@ export function buildReceivableStatement(
 	customer: Customer,
 	from: string,
 	through: string,
+	openingBalances?: OpeningBalances | null,
 ) {
 	const receipts = ledger.receipts.filter(
 		({ customerId }) => customerId === customer.id,
@@ -69,9 +71,10 @@ export function buildReceivableStatement(
 	};
 	const at = (date: string) => {
 		const rows = salesRowsThrough(book.rows, date);
-		const groups = buildSalesReceivables(rows, customers, []).filter(
-			({ customerId }) => customerId === customer.id,
-		);
+		const groups = buildSalesReceivables(rows, customers, [], {
+			opening: openingBalances,
+			through: date,
+		}).filter(({ customerId }) => customerId === customer.id);
 		return projectReceiptReceivables(
 			groups,
 			book.fileName,
@@ -119,9 +122,18 @@ export function buildReceivableStatement(
 			),
 		].sort();
 		const note = [
-			document.reduction && "Hàng trả lại / giảm trừ",
-			!document.invoiceNumber && `CT ${document.documentNumbers.join(", ")}`,
-			previous && !increase && "Hóa đơn trước kỳ",
+			document.openingBalance
+				? (document.paymentTotal ?? 0) < 0
+					? "Số dư đầu kỳ MISA (dư có)"
+					: "Số dư đầu kỳ MISA"
+				: [
+						document.reduction && "Hàng trả lại / giảm trừ",
+						!document.invoiceNumber &&
+							`CT ${document.documentNumbers.join(", ")}`,
+						previous && !increase && "Hóa đơn trước kỳ",
+					]
+						.filter(Boolean)
+						.join(" · "),
 			receiptsInPeriod.length > 0 &&
 				`Thu ngày ${receiptsInPeriod.map((date) => formatDateOnly(date)).join(", ")}`,
 			[...previousIds].some((id) => !currentIds.has(id)) &&

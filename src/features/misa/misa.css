@@ -897,3 +897,62 @@
 }
 .misa-import-choice { display: flex; align-items: center; gap: var(--field-label-gap); margin-top: var(--space-8); font-weight: 600; }
 .misa-import-choice input { inline-size: var(--space-16); block-size: var(--space-16); margin: 0; flex: none; }
+
+.opening-balance-dialog {
+	width: min(var(--layout-650), 100%);
+}
+
+.opening-balance-body {
+	max-height: min(70vh, var(--layout-650));
+	overflow-y: auto;
+}
+
+.opening-balance-facts {
+	margin: 0;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-8);
+}
+
+.opening-balance-facts > div {
+	padding: var(--space-10) var(--space-12);
+	border: var(--border-width) solid var(--line);
+	border-radius: var(--radius);
+	background: var(--surface-subtle);
+}
+
+.opening-balance-facts dt {
+	color: var(--muted);
+	font-size: var(--type-caption);
+}
+
+.opening-balance-facts dd {
+	margin: var(--space-3) 0 0;
+	color: var(--ink);
+	font-size: var(--type-body);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.opening-balance-notes {
+	margin: 0;
+	padding-left: var(--space-18);
+	color: var(--text-body);
+	font-size: var(--type-body-sm);
+	display: grid;
+	gap: var(--space-4);
+}
+
+.opening-balance-additions {
+	max-height: var(--layout-160);
+	margin: var(--space-6) 0 0;
+	padding-left: var(--space-18);
+	overflow-y: auto;
+	font-size: var(--type-caption);
+}
+
+@media (max-width: 560px) {
+	.opening-balance-facts {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

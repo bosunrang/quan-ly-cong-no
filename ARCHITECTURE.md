@@ -144,6 +144,17 @@ Các giai đoạn chuyển đổi nằm trong [docs/KE-HOACH-CHUYEN-KIEN-TRUC.md
 - Bước v18 (bản 0.1.8) thêm cột kỳ hạn thanh toán `payment_term_days` cho khách hàng và bảng
   `invoice_due_dates` lưu hạn thanh toán sửa tay theo khách và chứng từ. Dữ liệu cũ giữ nguyên: khách
   chưa có kỳ hạn thì hóa đơn nằm ở nhóm "Chưa có hạn" của tuổi nợ.
+- Số dư đầu kỳ (không đổi schema) lưu trong `app_datasets` với khóa `cong-no.opening-balances.v1`:
+  `{ date, fileName, importedAt, entries: [{ customerId, customerCode, customerName, amount, rowNumber }] }`,
+  nhập từ báo cáo Tổng hợp công nợ phải thu (TK 131) của MISA ở màn Dữ liệu MISA. Công nợ = số dư tại
+  cuối ngày `date` + phát sinh sau ngày đó: dòng bán hàng hạch toán đến `date` bị bỏ khi tính công nợ,
+  không ghi được khoản thu có ngày đến `date`. Số dư dư Nợ là chứng từ "Số dư đầu kỳ" nhận phân bổ và
+  nằm ở nhóm "Chưa có hạn"; dư Có trừ thẳng vào công nợ như hàng bán trả lại. Số dư thuộc nhóm Dữ liệu
+  MISA khi xóa dữ liệu và đi cùng bản sao lưu. Không xóa hay nhập lại khác số dư khi đã có phân bổ vào số
+  dư đầu kỳ của khách đó. Khi chưa có báo cáo, quản trị đặt ngày chốt chung (`entries` rỗng) ở Dữ liệu
+  MISA; nhân viên (không phải tài khoản chỉ xem, trong phạm vi khách được giao) điền tay số dư từng khách
+  trong ngăn chi tiết ở Công nợ phải thu (`source: "manual"`, có nhật ký). Nhập lại báo cáo thay toàn bộ
+  số dư nhập tay. Tìm theo tên/mã ở Công nợ phải thu hiện cả khách chưa có chứng từ để điền số dư.
 
 ## API và lưu danh mục
 
