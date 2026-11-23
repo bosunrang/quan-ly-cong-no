@@ -56,7 +56,7 @@ export function CustomerFormDrawer({
 			(!Number.isSafeInteger(draft.paymentTermDays) ||
 				draft.paymentTermDays < 0)
 		) {
-			setError("Kỳ hạn thanh toán phải là số ngày nguyên từ 0 trở lên.");
+			setError("Thời hạn công nợ phải là số ngày nguyên từ 0 trở lên.");
 			return;
 		}
 		const duplicate = customers.some(
@@ -184,12 +184,13 @@ export function CustomerFormDrawer({
 								placeholder="Nhập địa chỉ giao dịch"
 							/>
 						</label>
-						<label>
-							Kỳ hạn thanh toán (ngày)
+						<label className="field-span-2">
+							Thời hạn công nợ (ngày)
 							<input
 								type="number"
 								min={0}
 								step={1}
+								aria-describedby="customer-payment-term-help"
 								value={draft.paymentTermDays ?? ""}
 								onChange={(event) =>
 									update(
@@ -199,10 +200,13 @@ export function CustomerFormDrawer({
 											: event.target.valueAsNumber,
 									)
 								}
-								placeholder="Chưa có kỳ hạn"
+								placeholder="Ví dụ: 30"
 							/>
-							<small className="cell-meta">
-								Tính từ ngày hóa đơn hoặc ngày chứng từ.
+							<small className="cell-meta" id="customer-payment-term-help">
+								Áp dụng cho tất cả hóa đơn của khách hàng, tính từ ngày hóa
+								đơn hoặc ngày chứng từ. Lưu thay đổi sẽ cập nhật hạn thanh
+								toán và tuổi nợ; hóa đơn đã đặt hạn riêng giữ nguyên. Nhập 0
+								để đến hạn ngay, để trống nếu chưa có thời hạn.
 							</small>
 						</label>
 					</div>

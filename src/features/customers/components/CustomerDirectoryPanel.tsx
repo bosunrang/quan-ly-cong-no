@@ -141,6 +141,7 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 							<th>Khách hàng</th>
 							<th>Tỉnh/thành</th>
 							<th>Nhân viên phụ trách</th>
+							<th>Thời hạn công nợ</th>
 							<th>Trạng thái</th>
 							<th />
 						</tr>
@@ -173,6 +174,13 @@ export function CustomerDirectoryPanel(props: CustomerDirectoryPanelProps) {
 											</>
 										) : (
 											<span className="missing-value">Chưa phân công</span>
+										)}
+									</td>
+									<td>
+										{customer.paymentTermDays == null ? (
+											<span className="missing-value">Chưa thiết lập</span>
+										) : (
+											`${customer.paymentTermDays} ngày`
 										)}
 									</td>
 									<td>

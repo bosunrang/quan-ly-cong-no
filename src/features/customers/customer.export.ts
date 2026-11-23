@@ -10,6 +10,7 @@ export function exportCustomers(customers: Customer[]) {
 		"Tỉnh/Thành phố",
 		"Mã số thuế",
 		"Nhân viên phụ trách",
+		"Thời hạn công nợ (ngày)",
 		"Trạng thái",
 	];
 	const rows = customers.map((customer) => [
@@ -19,6 +20,7 @@ export function exportCustomers(customers: Customer[]) {
 		customer.province,
 		customer.taxCode,
 		currentAssignment(customer)?.employeeName ?? "",
+		customer.paymentTermDays ?? "",
 		customerStatusLabels[customer.status],
 	]);
 	const csv = `\uFEFF${[header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n")}`;

@@ -231,6 +231,12 @@ Các quy tắc trên cùng cấu hình sandbox, CSP và giới hạn điều hư
 
 Trong **Dữ liệu MISA**, chọn file Excel **Sổ chi tiết bán hàng**, kiểm tra các dòng xem trước rồi xác nhận nhập. App hiển thị 10 cột từ file và cho phép tìm theo chứng từ, hóa đơn, tên khách hàng hoặc tên hàng. Có thể nhập từng kỳ vì app bổ sung dữ liệu vào sổ hiện có, bỏ qua dòng trùng và đánh dấu các dòng xung đột với bản đã lưu.
 
+## Thời hạn công nợ theo khách hàng
+
+Danh mục khách hàng và file xuất danh mục hiển thị **Thời hạn công nợ**. Mở hồ sơ khách hàng → **Chỉnh sửa hồ sơ** để nhập số ngày; nhập 0 để đến hạn ngay hoặc để trống nếu chưa có thời hạn.
+
+Sau khi lưu, hóa đơn cũ và mới tự tính hạn thanh toán từ ngày hóa đơn (thiếu thì dùng ngày chứng từ), đồng thời cập nhật số ngày quá hạn và tuổi nợ. Hóa đơn đã đặt hạn thanh toán riêng giữ nguyên ngày đã chọn.
+
 ## Người dùng và nhật ký sử dụng
 
 Với bản desktop cục bộ hoặc LAN, app tự tạo quản trị đầu tiên `admin` / `admin` khi kho chưa có tài khoản và bắt đổi mật khẩu ở lần đăng nhập đầu. Với máy chủ chạy bằng lệnh, dùng `lan:init-admin`. Kho phát triển có `dev:init-admin` để tạo tài khoản thủ công khi kho còn trống. **Quản trị** có quyền truy cập toàn bộ thẻ. Khi tạo hoặc sửa tài khoản **Nhân viên** hay **Chỉ xem**, chọn từng thẻ trong giới hạn của vai trò. Tài khoản cũ chưa có danh sách thẻ riêng dùng quyền mặc định của vai trò. Khóa tài khoản, đổi quyền truy cập hoặc đổi mật khẩu sẽ vô hiệu hóa phiên cũ của tài khoản đó.

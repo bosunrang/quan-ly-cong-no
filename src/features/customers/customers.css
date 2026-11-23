@@ -8,11 +8,12 @@
 .customer-toolbar select{max-width:var(--layout-190)}
 .reset-filter{width:var(--control-height);height:var(--control-height);flex:none;color:var(--red)}
 .customer-data-panel .customer-table{height:max(var(--layout-320),calc(100vh - var(--layout-292)));max-height:none}
-.customer-table table{min-width:var(--layout-975);table-layout:fixed}
+.customer-table table{min-width:calc(var(--layout-975) + var(--layout-160));table-layout:fixed}
 .customer-table th:first-child{width:var(--layout-340)}
 .customer-table th:nth-child(2){width:var(--layout-230)}
 .customer-table th:nth-child(3){width:var(--layout-190)}
 .customer-table th:nth-child(4){width:var(--layout-160)}
+.customer-table th:nth-child(5){width:var(--layout-160)}
 .customer-table th:last-child{width:var(--layout-55)}
 .customer-table td:first-child,.customer-table td:nth-child(2){overflow:hidden}.customer-table td:first-child>strong,.customer-table td:first-child>.cell-meta,.customer-table td:nth-child(2)>.cell-meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .customer-table th:not(:first-child),.customer-table td:not(:first-child){text-align:center}

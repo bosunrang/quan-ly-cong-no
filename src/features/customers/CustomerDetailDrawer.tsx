@@ -96,10 +96,23 @@ export function CustomerDetailDrawer({
 									<dd>{customer.address || "Chưa cập nhật"}</dd>
 								</div>
 								<div>
+									<dt>Thời hạn công nợ</dt>
+									<dd>
+										{customer.paymentTermDays == null
+											? "Chưa thiết lập"
+											: `${customer.paymentTermDays} ngày`}
+									</dd>
+								</div>
+								<div>
 									<dt>Ngày cập nhật</dt>
 									<dd>{formatTimestamp(customer.updatedAt)}</dd>
 								</div>
 							</dl>
+							<p className="cell-meta">
+								Hạn thanh toán của các hóa đơn tự tính theo thời hạn công nợ,
+								từ ngày hóa đơn hoặc ngày chứng từ. Hóa đơn đã đặt hạn riêng
+								giữ nguyên ngày đã chọn.
+							</p>
 						</section>
 						<section className="detail-card">
 							<div className="detail-card-title">
