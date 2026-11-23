@@ -39,23 +39,51 @@
 }
 
 .receivable-table table {
-	min-width: var(--layout-1040);
+	min-width: var(--layout-1180);
 }
 
 :is(.receivable-table, .receivable-invoice-table) table {
 	table-layout: fixed;
 }
 
-.receivable-table th:first-child {
-	width: 21%;
+.receivable-table .receivable-col-employee {
+	width: 8.5%;
 }
 
-.receivable-table th.receivable-amount-column {
+.receivable-table .receivable-col-region,
+.receivable-table .receivable-col-overdue-days {
+	width: 7.5%;
+}
+
+.receivable-table .receivable-col-value,
+.receivable-table .receivable-col-paid {
+	width: 10%;
+}
+
+.receivable-table .receivable-col-balance {
+	width: 11%;
+}
+
+.receivable-table .receivable-col-overdue {
 	width: 11.5%;
 }
 
-.receivable-table th.receivable-due-date-column {
+.receivable-table .receivable-col-due-date {
 	width: 9.5%;
+}
+
+@media (max-width: 760px) {
+	.receivable-table table {
+		min-width: var(--layout-1040);
+	}
+
+	.receivable-table col:first-child {
+		width: 36vw;
+	}
+
+	.receivable-table :is(.receivable-col-value, .receivable-col-paid, .receivable-col-balance, .receivable-col-overdue) {
+		width: auto;
+	}
 }
 
 :is(.receivable-table, .receivable-invoice-table) :is(th, td:not(.receivable-number), .cell-meta) {
@@ -71,6 +99,25 @@
 	z-index: var(--z-sticky);
 }
 
+.receivable-table :is(th, td):first-child {
+	position: sticky;
+	inset-inline-start: 0;
+	box-shadow: inset calc(-1 * var(--border-width)) 0 var(--line);
+}
+
+.receivable-table th:first-child {
+	z-index: var(--z-sticky-raised);
+}
+
+.receivable-table td:where(:first-child) {
+	background-color: var(--panel);
+}
+
+.receivable-table th:not(:first-child) {
+	padding-inline: var(--space-5);
+	text-wrap: balance;
+}
+
 .receivable-table :is(th, td):not(:first-child),
 .receivable-allocations-table :is(th, td):not(:first-child),
 .receivable-invoice-table :is(th, td) {
@@ -78,7 +125,12 @@
 }
 
 .receivable-table :is(th, td).receivable-amount-column {
-	text-align: right;
+	padding-inline: var(--space-7);
+}
+
+.receivable-table td.receivable-amount-column {
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 
 .receivable-number {
@@ -91,7 +143,7 @@
 	text-align: left;
 	white-space: normal;
 	overflow-wrap: anywhere;
-	max-width: var(--layout-420);
+	max-width: 100%;
 }
 
 .receivable-footer {
@@ -363,59 +415,134 @@
 
 
 .receivable-opening-balance {
-	padding: var(--space-12) var(--space-14);
+	padding: var(--space-14);
 	display: grid;
-	gap: var(--space-10);
+	gap: var(--space-12);
 }
 
-.receivable-opening-balance header {
+.receivable-opening-head,
+.receivable-opening-current,
+.receivable-opening-value {
 	display: flex;
 	align-items: center;
-	gap: var(--space-10);
-	color: var(--teal);
 }
 
-.receivable-opening-balance header > div {
+.receivable-opening-head,
+.receivable-opening-current {
+	flex-wrap: wrap;
+}
+
+.receivable-opening-head {
+	gap: var(--space-10);
+}
+
+.receivable-opening-head .data-source-icon {
+	width: var(--space-36);
+	height: var(--space-36);
+}
+
+.receivable-opening-head .receivable-opening-edit {
+	border-color: transparent;
+	background-color: transparent;
+}
+
+.receivable-opening-title {
 	min-width: 0;
-	flex: 1;
-	display: flex;
-	flex-direction: column;
+	flex: 1 1 var(--layout-150);
 }
 
 .receivable-opening-balance h3 {
 	margin: 0;
 	color: var(--ink);
-	font-size: var(--type-body);
+	font-size: var(--type-heading-sm);
 }
 
-.receivable-opening-balance header strong {
+.receivable-opening-current {
+	gap: var(--space-8);
+}
+
+.receivable-opening-value {
+	min-width: 0;
+	gap: var(--space-2);
+}
+
+.receivable-opening-value strong {
 	color: var(--ink);
+	font-size: var(--type-heading-sm);
 	font-variant-numeric: tabular-nums;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
 .receivable-opening-balance > p {
 	margin: 0;
 }
 
-.receivable-opening-form {
-	display: grid;
-	gap: var(--space-10);
+.receivable-opening-context {
+	overflow-wrap: anywhere;
 }
 
-.receivable-opening-form .ui-field input {
-	width: 100%;
-	height: var(--control-height);
-	padding: 0 var(--control-padding);
-	border: var(--border-width) solid var(--line-strong);
+.receivable-opening-side {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.receivable-opening-side legend {
+	margin-block-end: var(--field-label-gap);
+	padding: 0;
+}
+
+.receivable-opening-choices {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-8);
+}
+
+.receivable-opening-choice {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: var(--space-8);
+	padding: var(--space-7) var(--space-10);
+	border: var(--border-width) solid var(--line);
 	border-radius: var(--surface-radius);
-	background: var(--panel);
-	color: var(--ink);
+	cursor: pointer;
+}
+
+.receivable-opening-choice:has(input:checked) {
+	border-color: var(--selection-border);
+	background: var(--selection-bg);
+}
+
+.receivable-opening-choice input {
+	margin: 0;
+}
+
+.receivable-opening-choice strong,
+.receivable-opening-choice small {
+	display: block;
+}
+
+.receivable-opening-choice strong {
+	font-size: var(--type-body-sm);
+}
+
+.receivable-opening-choice small,
+.receivable-opening-hint {
+	color: var(--muted);
+	font-size: var(--type-caption);
+	font-weight: 400;
+}
+
+.receivable-opening-amount {
 	font-variant-numeric: tabular-nums;
 }
 
-.receivable-opening-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: var(--space-8);
+.dialog-body > .ui-field .receivable-opening-amount[aria-invalid="true"] {
+	border-color: var(--status-danger-border);
+}
+
+.receivable-opening-amount[aria-invalid="true"] + .receivable-opening-hint {
+	color: var(--status-danger-text);
 }

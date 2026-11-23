@@ -14,13 +14,13 @@ function voucherKey(row: MisaSalesLine) {
 	return JSON.stringify([row.date.slice(0, 4), keyText(row.documentNumber)]);
 }
 
-function lineKey(row: MisaSalesLine) {
+function lineKey(row: MisaSalesLine, normalize: typeof keyText) {
 	return JSON.stringify([
 		row.date,
-		keyText(row.documentNumber),
-		keyText(row.invoiceNumber),
-		keyText(row.productName),
-		keyText(row.unit),
+		normalize(row.documentNumber),
+		normalize(row.invoiceNumber),
+		normalize(row.productName),
+		normalize(row.unit),
 		row.quantity,
 		row.unitPrice,
 		row.salesAmount,
@@ -28,12 +28,12 @@ function lineKey(row: MisaSalesLine) {
 	]);
 }
 
-function comparableLine(row: MisaSalesLine) {
+function comparableLine(row: MisaSalesLine, normalize: typeof keyText) {
 	const source = row.source;
 	return {
 		row,
-		key: lineKey(row),
-		customerName: keyText(row.customerName),
+		key: lineKey(row, normalize),
+		customerName: normalize(row.customerName),
 		fields: [
 			source?.customerCode,
 			source?.invoiceSeries,
@@ -42,7 +42,7 @@ function comparableLine(row: MisaSalesLine) {
 			source?.debitAccount,
 			source?.productCode,
 			source?.lotNumber,
-		].map(keyText),
+		].map(normalize),
 	};
 }
 
@@ -50,15 +50,25 @@ export function matchSavedSalesRows(
 	saved: readonly MisaSalesLine[],
 	incoming: readonly MisaSalesLine[],
 ) {
+	const matches = new Map<number, MisaSalesLine>();
+	if (!saved.length || !incoming.length) return matches;
+	const normalized = new Map<string, string>();
+	const normalize = (value = "") => {
+		let text = normalized.get(value);
+		if (text === undefined) {
+			text = keyText(value);
+			normalized.set(value, text);
+		}
+		return text;
+	};
 	const candidates = new Map<string, ReturnType<typeof comparableLine>[]>();
 	for (const row of saved) {
-		const line = comparableLine(row);
+		const line = comparableLine(row, normalize);
 		const bucket = candidates.get(line.key);
 		if (bucket) bucket.push(line);
 		else candidates.set(line.key, [line]);
 	}
-	const matches = new Map<number, MisaSalesLine>();
-	const lines = incoming.map(comparableLine);
+	const lines = incoming.map((row) => comparableLine(row, normalize));
 	// Each stored line can match once. Exact metadata gets priority over older
 	// rows that may be missing a customer code, product code or lot number.
 	for (const exact of [true, false]) {

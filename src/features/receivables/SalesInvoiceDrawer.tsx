@@ -1,5 +1,6 @@
 import { Check, Filter, Search, X } from "lucide-react";
 import { useDeferredValue, useState } from "react";
+import type { CustomerOpeningBalance } from "../../domain/misa/opening-balances.repository";
 import type {
 	InvoiceCustomer,
 	InvoicePage,
@@ -20,6 +21,7 @@ import { SalesInvoiceLinesDialog } from "../../shared/ui/SalesInvoiceLinesDialog
 import { StatusPill } from "../../shared/ui/StatusPill";
 import { InvoiceReceiptAllocationsDialog } from "./InvoiceReceiptAllocationsDialog";
 import { InvoiceDueDateDialog } from "./InvoiceDueDateDialog";
+import { OpeningBalanceDialog } from "./OpeningBalanceDialog";
 import { OpeningBalancePanel } from "./OpeningBalancePanel";
 
 const number = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
@@ -51,6 +53,9 @@ export function SalesInvoiceDrawer({
 	}>();
 	const [page, setPage] = useState(1);
 	const [editingDueDate, setEditingDueDate] = useState<InvoiceRow>();
+	const [editingOpeningBalance, setEditingOpeningBalance] =
+		useState<CustomerOpeningBalance>();
+	const openingCustomerId = asOfDate ? undefined : customer.customerId;
 	const search = useDeferredValue(query);
 	const base = `receivables/${encodeURIComponent(customer.id)}/invoices`;
 	const periodScope = { through: asOfDate, from, employee, province };
@@ -116,10 +121,11 @@ export function SalesInvoiceDrawer({
 					</button>
 				</header>
 				<div className="customer-detail-body">
-					{!asOfDate && customer.customerId && (
+					{openingCustomerId && (
 						<OpeningBalancePanel
-							customerId={customer.customerId}
+							customerId={openingCustomerId}
 							canEdit={canEditDueDates}
+							onEdit={setEditingOpeningBalance}
 						/>
 					)}
 					{totals && (
@@ -422,6 +428,14 @@ export function SalesInvoiceDrawer({
 					</section>
 				</div>
 			</Drawer>
+			{openingCustomerId && editingOpeningBalance && (
+				<OpeningBalanceDialog
+					customerId={openingCustomerId}
+					customerName={customer.name}
+					balance={editingOpeningBalance}
+					onClose={() => setEditingOpeningBalance(undefined)}
+				/>
+			)}
 			{editingDueDate && (
 				<InvoiceDueDateDialog
 					invoice={editingDueDate}

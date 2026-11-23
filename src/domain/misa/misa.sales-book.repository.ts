@@ -3,7 +3,6 @@ import type {
 	Page,
 	SalesImportReview,
 	SalesMetadata,
-	SalesSupplementReview,
 } from "../reports/view-types";
 import type { MisaSalesLine } from "./misa.sales-book";
 import type { MisaSalesImportPreview } from "./sales-import.model";
@@ -14,13 +13,9 @@ export type ImportChoices = Pick<
 	"applyChanges" | "removeMissing"
 >;
 
-function payload(
-	source: MisaSalesImportPreview,
-	mode: "import" | "supplement",
-	choices?: ImportChoices,
-) {
+function payload(source: MisaSalesImportPreview, choices: ImportChoices) {
 	return {
-		mode,
+		mode: "import",
 		book: source.book,
 		duplicateOf: [...source.duplicateOf],
 		customerAddresses: [...(source.customerAddresses ?? [])],
@@ -35,24 +30,11 @@ export function previewSalesImport(
 	return api<SalesImportReview>(
 		"POST",
 		"sales-imports/preview",
-		payload(source, "import", choices),
+		payload(source, choices),
 	);
 }
-export function previewSalesSupplement(source: MisaSalesImportPreview) {
-	return api<SalesSupplementReview>(
-		"POST",
-		"sales-imports/preview",
-		payload(source, "supplement"),
-	);
-}
-export function confirmSalesImport(
-	source: MisaSalesImportPreview,
-	mode: "import" | "supplement",
-	token: string,
-	choices?: ImportChoices,
-) {
-	return api<{ book: SalesMetadata | null }>("POST", "sales-imports", {
-		...payload(source, mode, choices),
+export function confirmSalesImport(token: string) {
+	return api<{ book: SalesMetadata | null }>("POST", "sales-imports/confirm", {
 		token,
 	});
 }

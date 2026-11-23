@@ -40,12 +40,6 @@ function cellText(value: unknown) {
 	return String(value ?? "").trim();
 }
 
-function dateOnly(value: unknown) {
-	return value instanceof Date
-		? value.toISOString().slice(0, 10)
-		: normalizeDateOnly(cellText(value));
-}
-
 /**
  * Đọc số từ ô dạng chữ theo định dạng Việt Nam: dấu chấm phân cách hàng nghìn,
  * dấu phẩy thập phân ("15.000" = 15000, "1,5" = 1.5). Chấp nhận thêm dạng có đủ
@@ -79,11 +73,11 @@ export function parseVietnameseNumber(text: string): number | undefined {
 }
 
 function amount(value: unknown, label: string, rowNumber: number) {
+	if (typeof value === "number" && Number.isFinite(value)) return value;
 	const text = cellText(value);
 	if (!text) return null;
-	const number =
-		typeof value === "number" ? value : parseVietnameseNumber(text);
-	if (number === undefined || !Number.isFinite(number))
+	const number = parseVietnameseNumber(text);
+	if (number === undefined)
 		throw new Error(
 			`Dòng ${rowNumber}: ${label} "${text}" không đúng định dạng số.`,
 		);
@@ -106,9 +100,9 @@ export function parseMisaSalesRows(
 	const header = sheet[headerRow].map((value) =>
 		normalizeVietnamese(cellText(value)),
 	);
-	const columns = new Map(
+	const columns = Object.fromEntries(
 		salesColumns.map((key, index) => [key, header.indexOf(required[index])]),
-	);
+	) as Record<keyof typeof salesHeaders, number>;
 	const customerCodeColumn = header.indexOf("ma khach hang");
 	const addressColumn = header.indexOf("dia chi");
 	const invoiceSeriesColumn = header.indexOf("ky hieu hoa don");
@@ -121,14 +115,35 @@ export function parseMisaSalesRows(
 	const firstRowBySignature = new Map<string, number>();
 	const duplicateOf = new Map<number, number>();
 	const customerAddresses = new Map<number, string>();
+	const dateTimes = new Map<number, string>();
+	const textDates = new Map<string, string | undefined>();
+	function isoTime(value: Date) {
+		const key = value.getTime();
+		let text = dateTimes.get(key);
+		if (text === undefined) {
+			text = value.toISOString();
+			dateTimes.set(key, text);
+		}
+		return text;
+	}
+	function dateOnly(value: unknown) {
+		if (value instanceof Date) return isoTime(value).slice(0, 10);
+		const text = cellText(value);
+		if (!text) return undefined;
+		if (!textDates.has(text)) textDates.set(text, normalizeDateOnly(text));
+		return textDates.get(text);
+	}
+	const signatureColumns: number[] = [];
+	header.forEach((_, column) => {
+		signatureColumns.push(column);
+	});
+	const signatureCells = new Array<unknown>(header.length);
 	for (let index = headerRow + 1; index < sheet.length; index++) {
 		const row = sheet[index];
-		const cell = (key: keyof typeof salesHeaders) =>
-			row[columns.get(key) ?? -1];
-		const documentNumber = cellText(cell("documentNumber"));
-		const rawDate = cell("date");
-		const customerName = cellText(cell("customerName"));
-		const productName = cellText(cell("productName"));
+		const documentNumber = cellText(row[columns.documentNumber]);
+		const rawDate = row[columns.date];
+		const customerName = cellText(row[columns.customerName]);
+		const productName = cellText(row[columns.productName]);
 		if (!rawDate && !documentNumber && !customerName && !productName) continue;
 		const rowNumber = index + 1;
 		const date = dateOnly(rawDate);
@@ -149,17 +164,17 @@ export function parseMisaSalesRows(
 			documentNumber,
 			customerName,
 			productName,
-			invoiceNumber: cellText(cell("invoiceNumber")),
-			unit: cellText(cell("unit")),
-			quantity: amount(cell("quantity"), salesHeaders.quantity, rowNumber),
-			unitPrice: amount(cell("unitPrice"), salesHeaders.unitPrice, rowNumber),
+			invoiceNumber: cellText(row[columns.invoiceNumber]),
+			unit: cellText(row[columns.unit]),
+			quantity: amount(row[columns.quantity], salesHeaders.quantity, rowNumber),
+			unitPrice: amount(row[columns.unitPrice], salesHeaders.unitPrice, rowNumber),
 			salesAmount: amount(
-				cell("salesAmount"),
+				row[columns.salesAmount],
 				salesHeaders.salesAmount,
 				rowNumber,
 			),
 			paymentTotal: amount(
-				cell("paymentTotal"),
+				row[columns.paymentTotal],
 				salesHeaders.paymentTotal,
 				rowNumber,
 			),
@@ -184,14 +199,18 @@ export function parseMisaSalesRows(
 				: {}),
 		});
 		// Đồng thời kiểm tra các cột nguồn như mã hàng và ký hiệu hóa đơn.
-		const signature = JSON.stringify(
-			header.map((_, column) => {
-				const value = row[column];
-				return typeof value === "string"
+		for (const column of signatureColumns) {
+			const value = row[column];
+			signatureCells[column] =
+				typeof value === "string"
 					? value.trim() || null
-					: (value ?? null);
-			}),
-		);
+					: value instanceof Date
+						? Number.isNaN(value.getTime())
+							? null
+							: isoTime(value)
+						: (value ?? null);
+		}
+		const signature = JSON.stringify(signatureCells);
 		const firstRow = firstRowBySignature.get(signature);
 		if (firstRow === undefined) firstRowBySignature.set(signature, rowNumber);
 		else duplicateOf.set(rowNumber, firstRow);

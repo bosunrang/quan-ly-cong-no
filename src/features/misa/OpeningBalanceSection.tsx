@@ -45,6 +45,7 @@ export function OpeningBalanceSection({
 		openingBalancesResource,
 	);
 	const status = response.data;
+	const [managing, setManaging] = useState(false);
 	const [source, setSource] = useState<OpeningBalanceSource>();
 	const [review, setReview] = useState<OpeningBalanceReview>();
 	const [pending, setPending] = useState<"parse" | "review" | "save">();
@@ -55,6 +56,11 @@ export function OpeningBalanceSection({
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const busy = pending !== undefined || disabled;
+	const actionsDisabled =
+		busy || status === undefined || Boolean(response.error);
+	const hasBalances = (status?.customerCount ?? 0) > 0;
+	const showManagement =
+		managing && !source && !removing && cutoff === undefined;
 
 	async function load(next: OpeningBalanceSource) {
 		setSource(next);
@@ -158,115 +164,195 @@ export function OpeningBalanceSection({
 
 	return (
 		<>
-			<section className="panel data-source-card">
+			<section className="panel data-source-card opening-balance-card">
 				<div className="data-source-icon">
 					<Landmark className="icon-size-22" />
 				</div>
-				<div className="data-source-copy">
-					<h2>Số dư đầu kỳ</h2>
-					{status ? (
-						<p>
-							Ngày chốt <strong>{formatDateOnly(status.date)}</strong> ·{" "}
-							{number.format(status.customerCount)} khách hàng · Dư Nợ{" "}
-							{number.format(status.debitTotal)} đ · Dư Có{" "}
-							{number.format(status.creditTotal)} đ
-							{status.manualCount > 0 &&
-								` · ${number.format(status.manualCount)} khách nhập tay`}
-							{status.fileName && (
-								<>
-									{" "}
-									· <strong>{status.fileName}</strong>
-								</>
-							)}{" "}
-							· {formatTimestamp(status.importedAt)}
-						</p>
-					) : (
-						<p>
-							Chọn báo cáo Tổng hợp công nợ phải thu khách hàng (TK 131) xuất từ
-							MISA (kỳ bắt đầu ngay sau ngày chốt chuyển sổ), hoặc đặt ngày chốt
-							để nhân viên điền số dư từng khách ở màn Công nợ phải thu.
-						</p>
-					)}
+				<div className="data-source-copy opening-balance-summary">
+					<h2>Số dư đầu kỳ</h2>{" "}
+					<p>
+						{response.error ? (
+							"· Không tải được số dư"
+						) : status ? (
+							<>
+								đến <strong>{formatDateOnly(status.date)}</strong> ·{" "}
+								{number.format(status.customerCount)} khách hàng
+							</>
+						) : status === null ? (
+							"· Chưa đặt ngày chốt"
+						) : (
+							"· Đang tải…"
+						)}
+					</p>
 				</div>
 				<input
 					ref={input}
 					className="visually-hidden"
 					type="file"
 					accept=".xlsx"
+					tabIndex={-1}
 					onChange={(event) => void handleFile(event)}
 				/>
 				<div className="misa-book-actions">
-					{(!status || status.customerCount === 0) && (
-						<button
-							className="button secondary"
-							type="button"
-							disabled={busy}
-							onClick={() => {
-								setError("");
-								setCutoff(
-									status?.date ??
-										`${Number(todayLocal().slice(0, 4)) - 1}-12-31`,
-								);
-							}}
-						>
-							<CalendarCheck className="icon-size-16" />
-							{status ? "Đổi ngày chốt" : "Đặt ngày chốt"}
-						</button>
-					)}
-					{status && (
-						<button
-							className="button secondary"
-							type="button"
-							disabled={busy || status.allocatedCustomers > 0}
-							title={
-								status.allocatedCustomers > 0
-									? "Đã có khoản thu phân bổ vào số dư đầu kỳ"
-									: undefined
-							}
-							onClick={() => {
-								setError("");
-								setRemoving(true);
-							}}
-						>
-							<Trash2 className="icon-size-16" /> Xóa số dư
-						</button>
-					)}
 					<button
 						className="button secondary"
 						type="button"
-						disabled={busy}
-						onClick={() => input.current?.click()}
+						aria-haspopup="dialog"
+						onClick={() => setManaging(true)}
 					>
-						<Upload className="icon-size-16" />
-						{pending === "parse"
-							? "Đang đọc file..."
-							: status
-								? "Nhập lại số dư"
-								: "Nhập số dư đầu kỳ"}
+						Quản lý số dư
 					</button>
 				</div>
 			</section>
-			{status && status.excludedSalesRows > 0 && (
-				<Notice tone="info">
-					{number.format(status.excludedSalesRows)} dòng sổ bán hàng hạch toán
-					đến ngày {formatDateOnly(status.date)} không được tính thêm vào công
-					nợ vì đã nằm trong số dư đầu kỳ.
-				</Notice>
-			)}
-			{success && (
-				<Notice tone="success" announce onDismiss={() => setSuccess("")}>
-					{success}
-				</Notice>
-			)}
-			{error && !source && !removing && cutoff === undefined && (
-				<Notice tone="danger" announce>
-					{error}
-				</Notice>
-			)}
-			{response.error && (
-				<Notice tone="danger" announce>
-					{response.error}
-				</Notice>
+			{showManagement && (
+				<Dialog
+					ariaLabelledBy="opening-balance-management"
+					eyebrow="DỮ LIỆU MISA"
+					title="Quản lý số dư đầu kỳ"
+					icon={<Landmark className="icon-size-19" />}
+					className="opening-balance-dialog opening-balance-management"
+					disableClose={pending === "parse"}
+					onClose={() => {
+						setManaging(false);
+						setSuccess("");
+						setError("");
+					}}
+					footer={
+						<>
+							<button
+								className="button secondary"
+								type="button"
+								disabled={actionsDisabled || hasBalances}
+								title={
+									hasBalances
+										? "Chỉ đổi được ngày chốt khi chưa có số dư"
+										: undefined
+								}
+								onClick={() => {
+									setError("");
+									setSuccess("");
+									setCutoff(
+										status?.date ??
+											`${Number(todayLocal().slice(0, 4)) - 1}-12-31`,
+									);
+								}}
+							>
+								<CalendarCheck className="icon-size-16" />
+								{status ? "Đổi ngày chốt" : "Đặt ngày chốt"}
+							</button>
+							{status && (
+								<button
+									className="button secondary"
+									type="button"
+									disabled={actionsDisabled || status.allocatedCustomers > 0}
+									title={
+										status.allocatedCustomers > 0
+											? "Đã có khoản thu phân bổ vào số dư đầu kỳ"
+											: undefined
+									}
+									onClick={() => {
+										setError("");
+										setSuccess("");
+										setRemoving(true);
+									}}
+								>
+									<Trash2 className="icon-size-16" /> Xóa số dư
+								</button>
+							)}
+							<button
+								className="button primary"
+								type="button"
+								disabled={actionsDisabled}
+								onClick={() => input.current?.click()}
+							>
+								<Upload className="icon-size-16" />
+								{pending === "parse"
+									? "Đang đọc file..."
+									: status
+										? "Nhập lại số dư"
+										: "Nhập số dư đầu kỳ"}
+							</button>
+						</>
+					}
+				>
+					<div className="dialog-body opening-balance-body">
+						{success && (
+							<Notice tone="success" announce onDismiss={() => setSuccess("")}>
+								{success}
+							</Notice>
+						)}
+						{error && (
+							<Notice tone="danger" announce>
+								{error}
+							</Notice>
+						)}
+						{response.error && (
+							<Notice tone="danger" announce>
+								{response.error}{" "}
+								<button
+									className="text-button"
+									type="button"
+									onClick={response.refresh}
+								>
+									Thử lại
+								</button>
+							</Notice>
+						)}
+						{status ? (
+							<>
+								<p className="opening-balance-management-context">
+									Ngày chốt <strong>{formatDateOnly(status.date)}</strong> ·{" "}
+									{number.format(status.customerCount)} khách hàng
+									{status.manualCount > 0 &&
+										` · ${number.format(status.manualCount)} khách nhập tay`}
+								</p>
+								<dl className="opening-balance-facts">
+									<div>
+										<dt>Tổng Dư Nợ</dt>
+										<dd>{number.format(status.debitTotal)} đ</dd>
+									</div>
+									<div>
+										<dt>Tổng Dư Có</dt>
+										<dd>{number.format(status.creditTotal)} đ</dd>
+									</div>
+								</dl>
+								<p className="opening-balance-management-context">
+									{status.fileName && (
+										<>
+											<strong>{status.fileName}</strong> ·{" "}
+										</>
+									)}
+									Cập nhật {formatTimestamp(status.importedAt)}
+								</p>
+								{status.excludedSalesRows > 0 && (
+									<Notice tone="info">
+										{number.format(status.excludedSalesRows)} dòng bán hàng đến
+										ngày chốt đã nằm trong số dư đầu kỳ và không được cộng thêm
+										vào công nợ.
+									</Notice>
+								)}
+								{hasBalances && (
+									<p className="opening-balance-management-context">
+										Chỉ đổi được ngày chốt trực tiếp khi chưa có số dư.
+									</p>
+								)}
+								{status.allocatedCustomers > 0 && (
+									<p className="opening-balance-management-context">
+										Số dư đã có khoản thu phân bổ nên chưa thể xóa.
+									</p>
+								)}
+							</>
+						) : status === null ? (
+							<p>
+								Chọn báo cáo Tổng hợp công nợ phải thu khách hàng (TK 131) từ
+								MISA, hoặc đặt ngày chốt để điền số dư từng khách ở màn Công nợ
+								phải thu.
+							</p>
+						) : (
+							!response.error && <p role="status">Đang tải số dư đầu kỳ…</p>
+						)}
+					</div>
+				</Dialog>
 			)}
 			{source && (
 				<OpeningBalanceDialog

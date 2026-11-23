@@ -18,6 +18,11 @@ function salesPreview(body) {
   return { book, duplicateOf: new Map(duplicateOf), customerAddresses: new Map(customerAddresses) };
 }
 
+function salesChange(book, saved, account, action, description) {
+  const importedAt = new Date(Math.max(Date.now(), (Date.parse(saved?.importedAt ?? '') || 0) + 1)).toISOString();
+  return { book: { ...book, importedAt }, audit: activityEntry(account, 'data', action, book.fileName + ' · ' + description) };
+}
+
 function register(router, db, state) {
   const { sales, customers } = state;
   const previewSecret = randomBytes(32);
@@ -50,46 +55,67 @@ function register(router, db, state) {
         total: rows.reduce((sum, row) => sum + (row.paymentTotal ?? 0), 0) } } };
   }
 
-  function previewToken(body, result) {
+  const bookStamps = () => JSON.stringify([db.datasetStamp(SALE), db.datasetStamp(LEDGER)]);
+  function previewToken(body, result, accountId, stamps) {
     return createHmac('sha256', previewSecret).update(JSON.stringify([
-      db.datasetStamp(SALE), db.datasetStamp(LEDGER), body.mode,
+      stamps, accountId, body.mode,
       body.applyChanges === true, body.removeMissing === true, body.book, body.duplicateOf, body.customerAddresses,
       body.mode === 'supplement' ? result.counts : null,
     ])).digest('hex');
   }
 
-  // Giữ danh sách "dòng không còn trong tệp" của vài bản xem trước gần nhất theo mã xem trước,
-  // để chuyển trang hay tìm kiếm không phải gửi lại cả tệp Excel và tính lại kế hoạch nhập.
+  // Giữ một số bản xem trước để xem dòng bị gỡ và lưu theo đúng kế hoạch đã tính.
   const previews = new Map();
   const PREVIEW_TTL = 30 * 60 * 1000;
-  const bookStamps = () => JSON.stringify([db.datasetStamp(SALE), db.datasetStamp(LEDGER)]);
-  router.post('/api/sales-imports/preview', ({ body }) => {
+  function readPreview(token, account) {
+    if (typeof token !== 'string') fail(400, 'Thiếu mã bản xem trước.');
+    const saved = previews.get(token);
+    if (!saved || saved.accountId !== account.id || saved.expires <= Date.now())
+      fail(409, 'Bản xem trước đã hết hạn. Hãy xem lại bản xem trước.');
+    return saved;
+  }
+  const checkStamps = (stamps) => {
+    if (stamps !== bookStamps()) fail(409, 'Sổ vừa thay đổi. Hãy xem lại bản xem trước.');
+  };
+
+  router.post('/api/sales-imports/preview', ({ body, account }) => {
+    const stamps = bookStamps();
     const result = plan(body, sales());
-    const token = previewToken(body, result);
+    checkStamps(stamps);
+    const token = previewToken(body, result, account.id, stamps);
     if (result.missingRows) {
       const now = Date.now();
-      for (const [key, item] of previews) if (item.expires <= now) previews.delete(key);
+      for (const [key, item] of previews) if (item.expires <= now || item.stamps !== stamps) previews.delete(key);
       previews.delete(token);
-      previews.set(token, { rows: result.missingRows, stamps: bookStamps(), expires: now + PREVIEW_TTL });
+      previews.set(token, { accountId: account.id, stamps, expires: now + PREVIEW_TTL,
+        rows: result.missingRows, book: result.counts.hasChanges ? result.book : null,
+        addedCount: result.counts.addedCount });
       while (previews.size > 4) previews.delete(previews.keys().next().value);
     }
     return { ...result.counts, token };
   }, opts(['misa'], large));
-  router.post('/api/sales-imports/missing', ({ body, query }) => {
-    if (typeof body.token !== 'string') fail(400, 'Thiếu mã bản xem trước.');
-    const saved = previews.get(body.token);
-    if (!saved || saved.expires <= Date.now()) fail(409, 'Bản xem trước đã hết hạn. Hãy chọn lại tệp MISA.');
-    if (saved.stamps !== bookStamps()) fail(409, 'Sổ vừa thay đổi. Hãy xem lại bản xem trước.');
+  router.post('/api/sales-imports/missing', ({ body, query, account }) => {
+    const saved = readPreview(body.token, account);
+    checkStamps(saved.stamps);
     const needle = search(query);
     const rows = saved.rows.filter((row) =>
       normalize([row.documentNumber, row.invoiceNumber, row.customerName, row.productName].join(' ')).includes(needle));
     return pageOf(rows, query, 25);
   }, opts(['misa'], small));
+  router.post('/api/sales-imports/confirm', ({ body, account }) => {
+    const saved = readPreview(body.token, account);
+    const book = db.changeSales((current) => {
+      checkStamps(saved.stamps);
+      return saved.book ? salesChange(saved.book, current, account, 'Nhập sổ bán hàng MISA', saved.addedCount + ' dòng') : {};
+    }, { readRows: false });
+    previews.delete(body.token);
+    return { book };
+  }, opts(['misa'], small));
   router.post('/api/sales-imports', ({ body, account }) => {
     let counts;
     const book = db.changeSales((saved, changeDirectory) => {
       const planned = plan(body, saved);
-      if (body.token !== previewToken(body, planned))
+      if (body.token !== previewToken(body, planned, account.id, bookStamps()))
         fail(409, 'Sổ hoặc danh mục vừa thay đổi. Hãy xem lại bản xem trước.');
       counts = planned.counts;
       const supplement = body.mode === 'supplement';
@@ -104,13 +130,11 @@ function register(router, db, state) {
         });
       }
       const changed = supplement ? counts.linkedRows > 0 : counts.hasChanges;
-      const importedAt = new Date(Math.max(Date.now(), (Date.parse(saved?.importedAt ?? '') || 0) + 1)).toISOString();
-      return {
-        book: changed ? { ...planned.book, importedAt } : null,
-        audit: changed || counts.additions?.length ? activityEntry(account, 'data',
-          supplement ? 'Bổ sung khách hàng từ MISA' : 'Nhập sổ bán hàng MISA',
-          planned.book.fileName + ' · ' + (supplement ? counts.additions.length + ' khách hàng' : counts.addedCount + ' dòng')) : undefined,
-      };
+      if (!changed && !counts.additions?.length) return {};
+      const record = salesChange(planned.book, saved, account,
+        supplement ? 'Bổ sung khách hàng từ MISA' : 'Nhập sổ bán hàng MISA',
+        supplement ? counts.additions.length + ' khách hàng' : counts.addedCount + ' dòng');
+      return changed ? record : { audit: record.audit };
     });
     return { book, counts };
   }, opts(['misa'], large));

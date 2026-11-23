@@ -183,7 +183,8 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     ['POST', 'employees', {}], ['PATCH', 'employees/missing', {}], ['DELETE', 'employees/missing', {}],
     ['GET', 'assignments'], ['POST', 'assignments', {}], ['PATCH', 'assignments/missing', {}],
     ['GET', 'sales-book'], ['GET', 'sales-book/status'],
-    ['POST', 'sales-imports/preview', {}], ['POST', 'sales-imports/missing', {}], ['POST', 'sales-imports', {}], ['GET', 'dashboard'],
+    ['POST', 'sales-imports/preview', {}], ['POST', 'sales-imports/missing', {}], ['POST', 'sales-imports/confirm', {}],
+    ['POST', 'sales-imports', {}], ['GET', 'dashboard'],
     ['GET', 'receivables'], ['GET', 'receivables/c/invoices'], ['GET', 'receivables/c/invoices/d'],
     ['GET', 'reports/statements/c'], ['GET', 'receipts'], ['GET', 'receipts/next-number'], ['GET', 'receipts/r'],
     ['GET', 'receipts/r/candidates'], ['GET', 'receipts/r/candidates/matches'], ['GET', 'receipts/r/candidates/i'],
@@ -194,7 +195,8 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   ];
   const noDashboard = new Set(['accounts', 'accounts/missing', 'accounts/missing/status',
     'customers/imports', 'customers/missing', 'employees/missing',
-    'assignments', 'assignments/missing', 'sales-book', 'sales-book/status', 'sales-imports', 'sales-imports/preview', 'sales-imports/missing',
+    'assignments', 'assignments/missing', 'sales-book', 'sales-book/status', 'sales-imports', 'sales-imports/preview',
+    'sales-imports/missing', 'sales-imports/confirm',
     'receivables', 'receivables/c/invoices', 'receivables/c/invoices/d', 'reports/statements/c',
     'receipts', 'receipts/next-number', 'receipts/r', 'receipts/r/candidates', 'receipts/r/candidates/matches',
     'receipts/r/candidates/i', 'receipts/r/allocations', 'receipts/r/reversal', 'allocations/a/reversal', 'business-backup',
@@ -246,7 +248,14 @@ test('four company stores, independent accounts and concurrent writes over LAN',
     ...supplement.book.rows[1], source: undefined,
   }] } };
   const previewNew = await call('POST', 'sales-imports/preview', newLine, misaCookie);
-  assert.equal((await call('POST', 'sales-imports', { ...newLine, token: previewNew.value.token }, misaCookie)).status, 200);
+  const adminPreview = await call('POST', 'sales-imports/preview', newLine, actor);
+  const confirm = (token, cookie) => call('POST', 'sales-imports/confirm', { token }, cookie);
+  assert.equal((await confirm(previewNew.value.token, actor)).status, 409);
+  const confirmations = await Promise.all([
+    confirm(previewNew.value.token, misaCookie), confirm(previewNew.value.token, misaCookie),
+  ]);
+  assert.deepEqual(confirmations.map(({ status }) => status).sort(), [200, 409]);
+  assert.equal((await confirm(adminPreview.value.token, actor)).status, 409);
   const previewSupplement = await call('POST', 'sales-imports/preview', supplement, misaCookie);
   assert.equal(previewSupplement.status, 200);
   assert.equal(previewSupplement.value.additions.length, 1);
@@ -296,8 +305,12 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   const lineInput = { date: '2026-01-02', revision: receiptInfo.revision, bookStamp: receiptInfo.bookStamp,
     lines: [{ invoice: candidates[0].invoice, amount: 50 }] };
   assert.equal((await call('POST', 'receipts/' + receiptId + '/allocations', { ...lineInput, revision: 'stale' }, actor)).status, 409);
+  const replacement = { mode: 'import', applyChanges: true, book: { ...data, rows: [{ ...line, paymentTotal: 900 }] } };
+  const beforeAllocation = await call('POST', 'sales-imports/preview', replacement, misaCookie);
+  assert.equal(beforeAllocation.value.hasChanges, true);
   const allocated = await call('POST', 'receipts/' + receiptId + '/allocations', lineInput, actor);
   assert.equal(allocated.status, 200);
+  assert.equal((await confirm(beforeAllocation.value.token, misaCookie)).status, 409);
   const firstAllocation = await getReceipt();
   const secondAllocation = await call('POST', 'receipts/' + receiptId + '/allocations', {
     ...lineInput, revision: firstAllocation.revision, lines: [{ invoice: candidates[0].invoice, amount: 25 }],
@@ -314,7 +327,6 @@ test('four company stores, independent accounts and concurrent writes over LAN',
   }, actor);
   assert.equal(undoLatest.status, 200);
   assert.deepEqual((await getReceipt()).allocatedInvoices.map(({ amount }) => amount), [50]);
-  const replacement = { mode: 'import', applyChanges: true, book: { ...data, rows: [{ ...line, paymentTotal: 900 }] } };
   const locked = await call('POST', 'sales-imports/preview', replacement, misaCookie);
   assert.equal(locked.value.lockedVouchers, 1);
   assert.equal(locked.value.hasChanges, false);

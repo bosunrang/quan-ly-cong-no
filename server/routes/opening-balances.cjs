@@ -40,11 +40,12 @@ function register(router, db, state) {
       else creditTotal -= amount;
     }
     const rows = sales()?.rows ?? [];
+    const { salesRowInOpeningBalance } = domain;
     return {
       date: balances.date, fileName: balances.fileName, importedAt: balances.importedAt,
       customerCount: balances.entries.length, debitTotal, creditTotal,
       manualCount: balances.entries.filter(({ source }) => source === 'manual').length,
-      excludedSalesRows: rows.filter((row) => domain.salesRowInOpeningBalance(row, balances)).length,
+      excludedSalesRows: rows.filter((row) => salesRowInOpeningBalance(row, balances)).length,
       allocatedCustomers: domain.openingAllocationsByCustomer(ledger()).size,
     };
   }, opts(pages));

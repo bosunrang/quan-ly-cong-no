@@ -319,6 +319,17 @@ export function SalesReceivablesPage({
 					tabIndex={0}
 				>
 					<table aria-label="Hóa đơn theo khách hàng">
+						<colgroup>
+							<col />
+							<col className="receivable-col-employee" />
+							<col className="receivable-col-region" />
+							<col className="receivable-col-value" />
+							<col className="receivable-col-paid" />
+							<col className="receivable-col-balance" />
+							<col className="receivable-col-overdue" />
+							<col className="receivable-col-due-date" />
+							<col className="receivable-col-overdue-days" />
+						</colgroup>
 						<thead>
 							<tr>
 								<th scope="col">Khách hàng</th>
@@ -336,9 +347,7 @@ export function SalesReceivablesPage({
 								<th scope="col" className="receivable-amount-column">
 									Nợ quá hạn
 								</th>
-								<th scope="col" className="receivable-due-date-column">
-									Hạn thanh toán sớm nhất
-								</th>
+								<th scope="col">Hạn thanh toán sớm nhất</th>
 								<th scope="col">Số ngày quá hạn tối đa</th>
 							</tr>
 						</thead>

@@ -1050,9 +1050,10 @@ function openDatabase(databasePath, { readOnly = false, snapshot = true } = {}) 
         return balances;
       });
     },
-    changeSales(work) {
+    changeSales(work, { readRows = true } = {}) {
       return withTransaction(database, () => {
-        const { book, audit } = work(books.readSales(database) ?? null, (apply) => directoryTransaction(database, apply, false));
+        const current = readRows ? books.readSales(database) : books.salesMetadata(database);
+        const { book, audit } = work(current ?? null, (apply) => directoryTransaction(database, apply, false));
         if (book) books.writeSales(database, book, bookStamp(database, books.SALE));
         if (audit) appendActivity(database, audit);
         return books.salesMetadata(database) ?? null;

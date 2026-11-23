@@ -1,5 +1,5 @@
 import { Notice } from "../../shared/ui/Notice";
-import { Database, Search, Upload, Users } from "lucide-react";
+import { Database, Search, Upload } from "lucide-react";
 import {
 	type ChangeEvent,
 	useEffect,
@@ -11,12 +11,10 @@ import {
 	confirmSalesImport,
 	type ImportChoices,
 	previewSalesImport,
-	previewSalesSupplement,
 } from "../../domain/misa/misa.sales-book.repository";
 import type {
 	SalesImportReview,
 	SalesPage,
-	SalesSupplementReview,
 } from "../../domain/reports/view-types";
 import {
 	accountingChanged,
@@ -25,7 +23,6 @@ import {
 	useServerData,
 } from "../../shared/hooks/useServerData";
 import { formatTimestamp } from "../../shared/lib/date";
-import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { PaginationControls } from "../../shared/ui/Pagination/PaginationControls";
 import { MisaSalesImportDialog } from "./MisaSalesImportDialog";
 import { MisaSalesTable } from "./MisaSalesTable";
@@ -40,17 +37,12 @@ const initialSearch = { q: "", page: 1 };
 const searchDelay = 250;
 export function MisaDataPage() {
 	const input = useRef<HTMLInputElement>(null);
-	const supplementInput = useRef<HTMLInputElement>(null);
 	const [preview, setPreview] = useState<MisaSalesImportPreview>();
 	const [review, setReview] = useState<SalesImportReview>();
 	const [importChoices, setImportChoices] = useState<ImportChoices>({});
 	const [pending, setPending] = useState<"parse" | "review" | "save">();
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
-	const [supplement, setSupplement] = useState<{
-		source: MisaSalesImportPreview;
-		plan: SalesSupplementReview;
-	}>();
 	const [query, setQuery] = useState("");
 	const [search, setSearch] = useState(initialSearch);
 	const searchQuery = query.trim();
@@ -89,10 +81,7 @@ export function MisaDataPage() {
 		if (tableViewport.current) tableViewport.current.scrollTop = 0;
 	}, [currentData, resource]);
 
-	async function handleFile(
-		event: ChangeEvent<HTMLInputElement>,
-		addCustomers = false,
-	) {
+	async function handleFile(event: ChangeEvent<HTMLInputElement>) {
 		const file = event.target.files?.[0];
 		event.target.value = "";
 		if (!file || busy) return;
@@ -101,14 +90,10 @@ export function MisaDataPage() {
 		setPending("parse");
 		try {
 			const source = await parseMisaSalesWorkbook(file);
-			if (addCustomers)
-				setSupplement({ source, plan: await previewSalesSupplement(source) });
-			else {
-				const result = await previewSalesImport(source, {});
-				setImportChoices({});
-				setReview(result);
-				setPreview(source);
-			}
+			const result = await previewSalesImport(source, {});
+			setImportChoices({});
+			setReview(result);
+			setPreview(source);
 		} catch (reason) {
 			setError(message(reason));
 		} finally {
@@ -130,42 +115,12 @@ export function MisaDataPage() {
 		}
 	}
 
-	async function confirmSupplement() {
-		if (!supplement || busy) return;
-		setPending("save");
-		setError("");
-		try {
-			await confirmSalesImport(
-				supplement.source,
-				"supplement",
-				supplement.plan.token,
-			);
-			setSuccess(
-				"Đã bổ sung " +
-					number.format(supplement.plan.additions.length) +
-					" khách hàng và đối chiếu " +
-					number.format(supplement.plan.matchedRows) +
-					" dòng theo mã MISA.",
-			);
-			setSupplement(undefined);
-			accountingChanged();
-		} catch (reason) {
-			setError(message(reason));
-			const next = await previewSalesSupplement(supplement.source).catch(
-				() => undefined,
-			);
-			if (next) setSupplement({ ...supplement, plan: next });
-		} finally {
-			setPending(undefined);
-		}
-	}
-
 	async function confirmImport() {
 		if (!preview || !review?.hasChanges || busy) return;
 		setPending("save");
 		setError("");
 		try {
-			await confirmSalesImport(preview, "import", review.token, importChoices);
+			await confirmSalesImport(review.token);
 			setSuccess(
 				"Đã nhập sổ bán hàng: " +
 					number.format(review.addedCount) +
@@ -191,65 +146,50 @@ export function MisaDataPage() {
 
 	return (
 		<div className="page-stack misa-data-page">
-			<section className="panel data-source-card">
-				<div className="data-source-icon">
-					<Database className="icon-size-22" />
-				</div>
-				<div className="data-source-copy">
-					<h2>Sổ chi tiết bán hàng</h2>
-					{book ? (
-						<p>
-							{number.format(data?.rowCount ?? 0)} dòng · Nhập gần nhất{" "}
-							<strong>{book.fileName}</strong> ·{" "}
-							{formatTimestamp(book.importedAt)}
-						</p>
-					) : (
-						<p>Chọn file Excel Sổ chi tiết bán hàng xuất từ MISA.</p>
-					)}
-				</div>
-				<input
-					ref={input}
-					className="visually-hidden"
-					type="file"
-					accept=".xlsx"
-					onChange={handleFile}
-				/>
-				<input
-					ref={supplementInput}
-					className="visually-hidden"
-					type="file"
-					accept=".xlsx"
-					onChange={(event) => void handleFile(event, true)}
-				/>
-				<div className="misa-book-actions">
-					{book && (
+			<div className="misa-sources">
+				<section className="panel data-source-card">
+					<div className="data-source-icon">
+						<Database className="icon-size-22" />
+					</div>
+					<div className="data-source-copy">
+						<h2>Sổ chi tiết bán hàng</h2>
+						{book ? (
+							<p>
+								{number.format(data?.rowCount ?? 0)} dòng · Nhập gần nhất{" "}
+								<strong>{book.fileName}</strong> ·{" "}
+								{formatTimestamp(book.importedAt)}
+							</p>
+						) : (
+							<p>Chọn file Excel Sổ chi tiết bán hàng xuất từ MISA.</p>
+						)}
+					</div>
+					<input
+						ref={input}
+						className="visually-hidden"
+						type="file"
+						accept=".xlsx"
+						onChange={handleFile}
+					/>
+					<div className="misa-book-actions">
 						<button
-							className="button secondary"
+							className="button primary"
 							type="button"
 							disabled={busy}
-							onClick={() => supplementInput.current?.click()}
+							onClick={() => input.current?.click()}
 						>
-							<Users className="icon-size-16" /> Bổ sung khách hàng từ MISA
+							<Upload className="icon-size-16" />
+							{pending === "parse" ? "Đang đọc file..." : "Chọn file MISA"}
 						</button>
-					)}
-					<button
-						className="button primary"
-						type="button"
-						disabled={busy}
-						onClick={() => input.current?.click()}
-					>
-						<Upload className="icon-size-16" />
-						{pending === "parse" ? "Đang đọc file..." : "Chọn file MISA"}
-					</button>
-				</div>
-			</section>
-			<OpeningBalanceSection disabled={busy} />
+					</div>
+				</section>
+				<OpeningBalanceSection disabled={busy} />
+			</div>
 			{success && (
 				<Notice tone="success" announce onDismiss={() => setSuccess("")}>
 					{success}
 				</Notice>
 			)}
-			{error && !preview && !supplement && (
+			{error && !preview && (
 				<Notice tone="danger" announce>
 					{error}
 				</Notice>
@@ -330,64 +270,6 @@ export function MisaDataPage() {
 						setError("");
 					}}
 				/>
-			)}
-			{supplement && (
-				<Dialog
-					ariaLabelledBy="misa-customer-supplement"
-					eyebrow="DANH MỤC KHÁCH HÀNG"
-					title="Bổ sung khách hàng từ MISA"
-					icon={<Users className="icon-size-19" />}
-					disableClose={busy}
-					onClose={() => {
-						setSupplement(undefined);
-						setError("");
-					}}
-					footer={
-						<>
-							<button
-								className="button secondary"
-								type="button"
-								disabled={busy}
-								onClick={() => {
-									setSupplement(undefined);
-									setError("");
-								}}
-							>
-								Hủy
-							</button>
-							<button
-								className="button primary"
-								type="button"
-								disabled={busy}
-								onClick={() => void confirmSupplement()}
-							>
-								{busy ? "Đang lưu..." : "Xác nhận bổ sung và ghép mã"}
-							</button>
-						</>
-					}
-				>
-					<div className="dialog-body">
-						{error && (
-							<Notice tone="danger" announce>
-								{error}
-							</Notice>
-						)}
-						<p>
-							<strong>{number.format(supplement.plan.additions.length)}</strong>{" "}
-							khách hàng mới ·{" "}
-							<strong>{number.format(supplement.plan.matched)}</strong> mã đã có
-							trong danh mục
-						</p>
-						<p>
-							Ghép {number.format(supplement.plan.matchedRows)} dòng bán hàng
-							theo mã MISA. Hồ sơ và phân công hiện có được giữ nguyên.
-						</p>
-						<p>
-							Khu vực của hồ sơ mới lấy từ địa chỉ. Hồ sơ mới ở nhóm Chưa phân
-							loại và chờ phân công nhân viên.
-						</p>
-					</div>
-				</Dialog>
 			)}
 		</div>
 	);

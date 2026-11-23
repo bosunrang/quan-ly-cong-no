@@ -1,5 +1,4 @@
 import type { MisaSalesBook, MisaSalesLine } from "../misa/misa.sales-book";
-import type { planMisaCustomerSupplement } from "../misa/customer-supplement";
 import type {
 	planMisaSalesImport,
 	SalesImportIssue,
@@ -134,10 +133,6 @@ export type SalesImportReview = Omit<
 	};
 	token: string;
 };
-export type SalesSupplementReview = Omit<
-	ReturnType<typeof planMisaCustomerSupplement>,
-	"book"
-> & { token: string };
 export interface ReceiptListRow {
 	receipt: Receipt;
 	employeeId: string;

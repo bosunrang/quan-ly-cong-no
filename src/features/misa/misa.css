@@ -1,8 +1,41 @@
+.misa-sources {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-12);
+}
+
+.misa-sources > .data-source-card {
+	flex: 1 1 var(--layout-460);
+	min-width: 0;
+	flex-wrap: wrap;
+	gap: var(--space-8) var(--space-12);
+	padding-block: var(--space-12);
+}
+
+.misa-sources > .ui-notice {
+	flex: 1 0 100%;
+}
+
+.misa-sources .data-source-copy {
+	flex: 1 1 min(var(--layout-240), calc(100% - var(--layout-44) - var(--space-12)));
+}
+
+.misa-sources .data-source-copy p {
+	display: block;
+	overflow-wrap: anywhere;
+}
+
+.misa-sources .data-source-copy p strong {
+	white-space: normal;
+}
+
 .misa-book-actions {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: var(--space-8);
+	max-width: 100%;
+	margin-inline-start: auto;
 }
 
 .misa-overview {
@@ -789,6 +822,10 @@
 }
 
 @media (max-width: 700px) {
+	.misa-book-actions {
+		width: 100%;
+	}
+
 	.misa-book-actions .button {
 		width: 100%;
 	}
@@ -900,6 +937,31 @@
 
 .opening-balance-dialog {
 	width: min(var(--layout-650), 100%);
+}
+
+.misa-sources > .opening-balance-card {
+	column-gap: var(--space-8);
+	padding-inline: var(--space-12);
+}
+
+.misa-sources .opening-balance-summary {
+	flex-basis: min(var(--layout-180), calc(100% - var(--layout-44) - var(--space-8)));
+}
+
+.opening-balance-summary h2,
+.misa-sources .opening-balance-summary p {
+	display: inline;
+}
+
+.opening-balance-management > footer {
+	flex-wrap: wrap;
+}
+
+.opening-balance-management-context {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--type-body-sm);
+	overflow-wrap: anywhere;
 }
 
 .opening-balance-body {
