@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findReceiptMatches } from "../src/domain/payments/receipt-matches";
+import {
+	findNearReceiptMatches,
+	findReceiptMatches,
+} from "../src/domain/payments/receipt-matches";
 
 const entries = (...amounts: number[]) =>
 	amounts.map((remaining, id) => ({ remaining, id }));
@@ -45,5 +48,36 @@ describe("gợi ý nhóm chứng từ khớp khoản thu", () => {
 			59,
 		);
 		expect(result).toEqual({ matches: [], incomplete: true });
+	});
+});
+
+describe("gợi ý nhóm chứng từ gần khớp", () => {
+	it("ưu tiên nhóm ba hóa đơn dư 2.000 đồng hơn hóa đơn đơn lẻ", () => {
+		const invoices = entries(775_110_000, 29_568_000, 2_520_000, 100_000);
+		const { nearMatches } = findNearReceiptMatches(
+			invoices,
+			807_200_000,
+			(item) => item.remaining,
+		);
+		expect(nearMatches[0]).toEqual({
+			difference: 2_000,
+			lines: invoices
+				.slice(0, 3)
+				.map((item) => ({ item, amount: item.remaining })),
+		});
+	});
+
+	it("chia phần thiếu trong giới hạn có thể phân bổ, bỏ nhóm không đủ số dư theo ngày", () => {
+		const invoices = entries(74, 20, 9);
+		const result = findNearReceiptMatches(invoices, 100, (item) =>
+			item.id === 0 ? 73 : item.remaining,
+		);
+		expect(result.nearMatches[0]?.difference).toBe(-3);
+		expect(result.nearMatches[0]?.lines.map(({ amount }) => amount)).toEqual([
+			73, 20, 7,
+		]);
+		expect(findNearReceiptMatches(invoices, 100, () => 30).nearMatches).toEqual(
+			[],
+		);
 	});
 });

@@ -30,23 +30,35 @@ function allocatedInvoiceDetails(allocations, sources) {
 }
 
 function register(router, db, state) {
-  const { sales, ledger, customers, sourcesFor } = state;
-  function receiptRows(data, query) {
+  const { sales, ledger, customers, employees, sourcesFor } = state;
+  function receiptRows(data, query, directory) {
     const allocated = domain.totalsByReceipt(data);
+    const assignments = new Map(directory.map((customer) =>
+      [customer.id, customer.assignments.find(({ effectiveTo }) => !effectiveTo)]));
+    const employeeNames = new Map(employees().map(({ id, name }) => [id, name]));
+    const people = new Map();
     const needle = search(query);
     const status = query.get('status') || 'active';
-    return data.receipts.map((receipt) => {
+    const employee = query.get('employee');
+    const rows = data.receipts.map((receipt) => {
       const remaining = receipt.reversal ? 0 : receipt.amount - (allocated.get(receipt.id) ?? 0);
       const state = receipt.reversal ? 'reversed' : remaining === 0 ? 'closed' : remaining === receipt.amount ? 'open' : 'partial';
-      return { receipt, remaining, state };
-    }).filter(({ receipt, state, remaining }) =>
+      const assignment = assignments.get(receipt.customerId);
+      const employeeId = assignment?.employeeId ?? '';
+      const employeeName = assignment ? employeeNames.get(employeeId) ?? assignment.employeeName : '';
+      if (employeeId) people.set(employeeId, employeeName);
+      return { receipt, remaining, state, employeeId, employeeName };
+    }).filter(({ receipt, state, remaining, employeeId }) =>
+      (!employee || employee === (employeeId || '?')) &&
       (status === 'active' ? state !== 'reversed' : status === 'open' ? remaining > 0 : status === state) &&
       normalize([receipt.number, receipt.customerName, receipt.customerCode, receipt.reference].join(' ')).includes(needle))
       .sort((a, b) => b.receipt.date.localeCompare(a.receipt.date) || b.receipt.createdAt.localeCompare(a.receipt.createdAt));
+    return { rows, employees: [...people].sort((a, b) => a[1].localeCompare(b[1], 'vi')) };
   }
   router.get('/api/receipts', ({ query, scope }) => {
     const data = scope.ledger(ledger());
-    return { ...pageOf(receiptRows(data, query), query), count: data.receipts.length };
+    const { rows, employees } = receiptRows(data, query, scope.customers(customers()));
+    return { ...pageOf(rows, query), count: data.receipts.length, employees };
   }, opts(['payments']));
   router.get('/api/receipts/next-number', ({ query }) => {
     const date = query.get('date');
@@ -110,13 +122,25 @@ function register(router, db, state) {
     if (!domain.isIsoDate(date) || date < receipt.date || date > today) fail(400, 'Ngày phân bổ không hợp lệ.');
     const remaining = receipt.amount - domain.receiptAllocated(data, receipt.id);
     if (date < today && domain.receiptAvailableOn(data, receipt, date) < remaining)
-      return { unavailable: true, matches: [], incomplete: false };
+      return { unavailable: true, matches: [], nearMatches: [], incomplete: false };
     const lastInvoiceDate = advanceOf(query) ? date : receipt.date;
-    const list = rows.filter((item) => !item.changed && item.remaining > 0 && item.remaining <= remaining &&
-      item.invoice.date <= lastInvoiceDate && (date === today || domain.invoiceAvailableOn(data, item.invoice, date) >= item.remaining))
+    const eligible = rows.filter((item) => !item.changed && item.remaining > 0 && item.invoice.date <= lastInvoiceDate)
       .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.invoice.date.localeCompare(b.invoice.date));
-    const groups = domain.findReceiptMatches(list.map(withoutDocument), remaining);
-    return { ...groups, unavailable: false };
+    const datedBalances = new Map();
+    const available = (item) => {
+      if (date === today) return item.remaining;
+      if (!datedBalances.has(item.invoice.id))
+        datedBalances.set(item.invoice.id, domain.invoiceAvailableOn(data, item.invoice, date));
+      return datedBalances.get(item.invoice.id);
+    };
+    const exact = eligible.filter((item) => item.remaining <= remaining && available(item) >= item.remaining);
+    const groups = domain.findReceiptMatches(exact.map(withoutDocument), remaining);
+    const nearby = domain.findNearReceiptMatches(eligible, remaining, available);
+    const nearMatches = nearby.nearMatches.map(({ difference, lines }) => ({
+      difference,
+      lines: lines.map(({ item, amount }) => ({ ...withoutDocument(item), amount })),
+    }));
+    return { ...groups, nearMatches, incomplete: groups.incomplete || nearby.incomplete, unavailable: false };
   }, opts(['payments']));
   router.get(candidatePath + '/:invoiceId', ({ params, scope }) => {
     const item = candidates(params.id, scope).rows.find(({ invoice }) => invoice.id === params.invoiceId);

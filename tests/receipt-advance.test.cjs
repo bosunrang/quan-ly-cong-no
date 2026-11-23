@@ -55,6 +55,27 @@ test('khoản thu chỉ phân bổ vào chứng từ sau ngày thu khi xác nh�
   assert.ok((await matchesOf('')).every((group) => !group.includes('BH-later')));
   assert.ok((await matchesOf('&advance=1')).some((group) => group.includes('BH-later')));
 
+  // Cùng một số còn nợ: gợi ý đúng chiều dư/thiếu, chỉ gồm chứng từ đủ điều kiện theo ngày thu.
+  for (const [amount, difference] of [[195, -5], [205, 5], [190, null]]) {
+    const id = 'near-' + amount;
+    assert.equal((await call(cookie, 'POST', 'receipts', { id, customerId: 'c-a', customerCode: 'a',
+      date: '2026-01-05', amount, reference: 'BH-later' })).status, 200);
+    const path = 'receipts/' + id + '/candidates/matches?date=' + date;
+    const near = async (suffix) => (await read(path + suffix)).value.nearMatches
+      .map(({ lines, difference }) => [lines[0].invoice.documentNumber, difference]);
+    assert.deepEqual(await near(''), difference === null ? [] : [['BH-early', difference]]);
+    assert.deepEqual(await near('&advance=1'), difference === null ? [] : [['BH-later', difference], ['BH-early', difference]]);
+    assert.equal((await read('receipts/' + id)).value.allocated, 0);
+  }
+
+  assert.equal((await call(cookie, 'POST', 'receipts', { id: 'near-pair', customerId: 'c-a', customerCode: 'a',
+    date: '2026-01-05', amount: 405, reference: '' })).status, 200);
+  const pairPath = 'receipts/near-pair/candidates/matches?date=' + date;
+  assert.deepEqual((await read(pairPath)).value.nearMatches, []);
+  const [pair] = (await read(pairPath + '&advance=1')).value.nearMatches;
+  assert.equal(pair.difference, 5);
+  assert.deepEqual(pair.lines.map(({ invoice, amount }) => [invoice.documentNumber, amount]), [['BH-early', 200], ['BH-later', 200]]);
+
   const later = advance.items.find(({ invoice }) => invoice.documentNumber === 'BH-later').invoice;
   const save = async (extra) => {
     const detail = (await read('receipts/receipt-a1')).value;

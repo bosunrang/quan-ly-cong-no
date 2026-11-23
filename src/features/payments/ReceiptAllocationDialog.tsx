@@ -71,6 +71,7 @@ export function ReceiptAllocationDialog({
 	const [verified, setVerified] = useState(false);
 	const [showMatches, setShowMatches] = useState(false);
 	const [groupIndex, setGroupIndex] = useState(0);
+	const [nearGroupIndex, setNearGroupIndex] = useState(0);
 	const [openedInvoiceId, setOpenedInvoiceId] = useState("");
 	const invoiceScroll = useRef<HTMLElement>(null);
 	const [page, setPage] = useState(1);
@@ -109,6 +110,14 @@ export function ReceiptAllocationDialog({
 		Math.max(0, (matches?.matches.length ?? 0) - 1),
 	);
 	const activeGroup = matches?.matches[matchIndex];
+	const nearMatches = matches?.nearMatches ?? [];
+	const nearIndex = Math.min(
+		nearGroupIndex,
+		Math.max(0, nearMatches.length - 1),
+	);
+	const nearGroup = nearMatches[nearIndex];
+	const nearDifference = (difference: number) =>
+		`${difference > 0 ? "Dư" : "Thiếu"} ${money.format(Math.abs(difference))} đ`;
 	const selected = Object.values(chosen)
 		.filter(({ invoice }) => amounts[invoice.id]?.trim())
 		.map(({ invoice, changed, remaining }) => ({
@@ -134,6 +143,22 @@ export function ReceiptAllocationDialog({
 		total > 0 &&
 		total <= remaining &&
 		validDate;
+
+	function fillAllocation(
+		items: (AllocationCandidate & { amount: number })[],
+		searchText = "",
+	) {
+		setAmounts(
+			Object.fromEntries(
+				items.map(({ invoice, amount }) => [invoice.id, String(amount)]),
+			),
+		);
+		setChosen(Object.fromEntries(items.map((item) => [item.invoice.id, item])));
+		setQuery(searchText);
+		setPage(1);
+		setVerified(false);
+		if (invoiceScroll.current) invoiceScroll.current.scrollTop = 0;
+	}
 
 	function renderLinesButton(
 		invoice: ReceiptInvoice,
@@ -256,6 +281,7 @@ export function ReceiptAllocationDialog({
 								setDate(value);
 								setVerified(false);
 								setGroupIndex(0);
+								setNearGroupIndex(0);
 							}}
 							disabled={busy}
 						/>
@@ -286,7 +312,7 @@ export function ReceiptAllocationDialog({
 						onClick={() => setShowMatches(!showMatches)}
 						disabled={busy || !validDate || remaining <= 0}
 					>
-						{showMatches ? "Ẩn nhóm khớp số tiền" : "Tìm nhóm khớp số tiền"}
+						{showMatches ? "Ẩn gợi ý" : "Gợi ý theo số tiền"}
 					</button>
 				</div>
 				<div className="payment-advance">
@@ -299,6 +325,7 @@ export function ReceiptAllocationDialog({
 								setAdvance(next);
 								setPage(1);
 								setGroupIndex(0);
+								setNearGroupIndex(0);
 								setVerified(false);
 								if (!next) {
 									// Tắt trả trước: bỏ số đã nhập cho chứng từ sau ngày thu.
@@ -350,14 +377,14 @@ export function ReceiptAllocationDialog({
 					<section
 						id="receipt-matches"
 						className="payment-match-results"
-						aria-label="Nhóm chứng từ khớp số tiền"
+						aria-label="Gợi ý phân bổ theo số tiền"
 						aria-live="polite"
 					>
 						{matchResult.loading ? (
-							<p role="status">Đang tìm nhóm chứng từ…</p>
+							<p role="status">Đang tìm chứng từ…</p>
 						) : !matches ? (
 							<Notice tone="info">
-								Chọn ngày phân bổ hợp lệ để tìm nhóm khớp.
+								Chọn ngày phân bổ hợp lệ để xem gợi ý.
 							</Notice>
 						) : matches.unavailable ? (
 							<Notice tone="warning">
@@ -388,32 +415,20 @@ export function ReceiptAllocationDialog({
 											))}
 										</select>
 									)}
-									<strong>{money.format(remaining)} đ</strong>
+									<strong>Khớp đúng {money.format(remaining)} đ</strong>
 									<button
 										className="button secondary"
 										type="button"
 										disabled={busy}
 										aria-label={`${selected.length ? "Thay số đã nhập bằng" : "Điền"} nhóm ${matchIndex + 1}`}
-										onClick={() => {
-											setAmounts(
-												Object.fromEntries(
-													activeGroup.map(({ invoice, remaining }) => [
-														invoice.id,
-														String(remaining),
-													]),
-												),
-											);
-											setChosen(
-												Object.fromEntries(
-													activeGroup.map((item) => [item.invoice.id, item]),
-												),
-											);
-											setQuery("");
-											setPage(1);
-											setVerified(false);
-											if (invoiceScroll.current)
-												invoiceScroll.current.scrollTop = 0;
-										}}
+										onClick={() =>
+											fillAllocation(
+												activeGroup.map((item) => ({
+													...item,
+													amount: item.remaining,
+												})),
+											)
+										}
 									>
 										{selected.length ? "Thay số đã nhập" : "Điền nhóm"}
 									</button>
@@ -453,13 +468,105 @@ export function ReceiptAllocationDialog({
 								</section>
 							</div>
 						) : (
-							<Notice tone="info">
-								{matches.incomplete
-									? "Chưa tìm thấy nhóm khớp trong phạm vi tìm kiếm."
-									: "Chưa có nhóm chứng từ khớp đúng số tiền còn phân bổ."}{" "}
-								Có thể giữ khoản thu ở trạng thái chưa phân bổ trong lúc kiểm
-								tra bảng kê với khách hàng.
-							</Notice>
+							!nearMatches.length && (
+								<Notice tone="info">
+									{matches.incomplete
+										? "Chưa tìm thấy chứng từ phù hợp trong phạm vi tìm kiếm."
+										: "Không có chứng từ khớp đúng hoặc chênh lệch trong 5% số tiền còn phân bổ."}
+								</Notice>
+							)
+						)}
+						{!matchResult.loading && nearGroup && (
+							<div className="panel payment-match-panel">
+								<div className="payment-match-head payment-near-match-head">
+									<strong>
+										Gần khớp · {nearGroup.lines.length} chứng từ
+										<span className="cell-meta">
+											Tổng còn phải thu{" "}
+											{money.format(remaining - nearGroup.difference)} đ
+										{nearMatches.length === 1 &&
+											` · ${nearDifference(nearGroup.difference)}`}
+										</span>
+									</strong>
+									{nearMatches.length > 1 && (
+										<select
+											aria-label="Chọn gợi ý gần khớp"
+											value={nearIndex}
+											disabled={busy}
+											onChange={(event) =>
+												setNearGroupIndex(Number(event.target.value))
+											}
+										>
+											{nearMatches.map(({ difference, lines }, index) => (
+												<option
+													key={JSON.stringify(
+														lines.map(({ invoice }) => invoice.id),
+													)}
+													value={index}
+												>
+													{index + 1}. {lines.length} chứng từ ·{" "}
+													{nearDifference(difference)}
+												</option>
+											))}
+										</select>
+									)}
+									<button
+										className="button secondary"
+										type="button"
+										disabled={busy}
+										aria-label={
+											selected.length
+												? "Thay số đã nhập bằng gợi ý gần khớp"
+												: "Điền gợi ý gần khớp"
+										}
+										onClick={() => {
+											const invoice =
+												nearGroup.lines.length === 1
+													? nearGroup.lines[0].invoice
+													: undefined;
+											fillAllocation(
+												nearGroup.lines,
+												invoice?.documentNumber || invoice?.invoiceNumber,
+											);
+										}}
+									>
+										{selected.length ? "Thay số đã nhập" : "Điền nhóm"}
+									</button>
+								</div>
+								<section
+									className="table-scroll table-compact table-scroll-auto-gutter payment-match-table payment-near-match-table"
+									aria-label="Vùng cuộn nhóm gần khớp"
+									// biome-ignore lint/a11y/noNoninteractiveTabindex: Cho phép cuộn bảng dài bằng bàn phím.
+									tabIndex={0}
+								>
+									<table aria-label="Chứng từ gần khớp số tiền">
+										<thead>
+											<tr>
+												<th scope="col">Chứng từ</th>
+												<th scope="col">Số hóa đơn</th>
+												<th scope="col">Còn phải thu</th>
+												<th scope="col">Số tiền phân bổ</th>
+											</tr>
+										</thead>
+										<tbody>
+											{[...nearGroup.lines]
+												.sort(compareNewestInvoice)
+												.map(({ invoice, remaining, amount }) => (
+													<tr key={invoice.id}>
+														<td>{renderLinesButton(invoice, "document")}</td>
+														<td>
+															{invoice.invoiceNumber
+																? renderLinesButton(invoice, "invoice")
+																: "—"}
+														</td>
+														<td>{money.format(remaining)} đ</td>
+														<td>{money.format(amount)} đ</td>
+													</tr>
+												))}
+										</tbody>
+									</table>
+								</section>
+							</div>
 						)}
 					</section>
 				)}

@@ -50,13 +50,21 @@ const statuses = {
 const errorText = (reason: unknown) =>
 	reason instanceof Error ? reason.message : "Không thể hoàn tất thao tác.";
 
-export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
+export function PaymentsPage({
+	onOpenMisa,
+	showEmployeeFilter = false,
+}: {
+	onOpenMisa?: () => void;
+	showEmployeeFilter?: boolean;
+}) {
 	const directory = useServerData<Customer[]>("customers");
 	const customers = directory.data ?? emptyCustomers;
 	const [query, setQuery] = useState("");
 	// Ô tìm kiếm cập nhật ngay; danh sách lọc lại sau đó để gõ phím không bị khựng.
 	const searchQuery = useDeferredValue(query);
 	const [status, setStatus] = useState("active");
+	const [selectedEmployee, setSelectedEmployee] = useState("");
+	const employee = showEmployeeFilter ? selectedEmployee : undefined;
 	const [selectedId, setSelectedId] = useState("");
 	const [action, setAction] = useState<Action | null>(null);
 	const [error, setError] = useState("");
@@ -65,7 +73,7 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 	const saving = useRef(false);
 	const [page, setPage] = useState(1);
 	const list = useServerData<ReceiptList>(
-		resourceWithQuery("receipts", { page, q: searchQuery, status }),
+		resourceWithQuery("receipts", { page, q: searchQuery, status, employee }),
 	);
 	const selectedData = useServerData<ReceiptDetail>(
 		selectedId ? `receipts/${encodeURIComponent(selectedId)}` : undefined,
@@ -242,6 +250,24 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 						<option value="closed">Đã phân bổ hết</option>
 						<option value="reversed">{statuses.reversed.label}</option>
 					</select>
+					{showEmployeeFilter && (
+						<select
+							aria-label="Lọc theo nhân viên phụ trách"
+							value={selectedEmployee}
+							onChange={(event) => {
+								setSelectedEmployee(event.target.value);
+								pagination.resetPage();
+							}}
+						>
+							<option value="">Tất cả nhân viên</option>
+							{receipts?.employees?.map(([id, name]) => (
+								<option key={id} value={id}>
+									{name}
+								</option>
+							))}
+							<option value="?">Chưa phân công</option>
+						</select>
+					)}
 				</div>
 				<section
 					className="table-scroll table-scroll-auto-gutter payment-receipts-table"
@@ -261,6 +287,9 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 								<th scope="col" className="payment-customer-column">
 									Khách hàng
 								</th>
+								<th scope="col" className="payment-employee-column">
+									Nhân viên phụ trách
+								</th>
 								<th scope="col" className="payment-amount-column">
 									Số tiền thu
 								</th>
@@ -276,58 +305,65 @@ export function PaymentsPage({ onOpenMisa }: { onOpenMisa?: () => void }) {
 							</tr>
 						</thead>
 						<tbody>
-							{pagination.pageItems.map(({ receipt, remaining, state }) => (
-								<tr key={receipt.id}>
-									<td>
-										<button
-											type="button"
-											className="text-button payment-link"
-											aria-haspopup="dialog"
-											onClick={() => setSelectedId(receipt.id)}
-										>
-											{receipt.number}
-										</button>
-									</td>
-									<td className="payment-date-column">
-										{formatDateOnly(receipt.date)}
-									</td>
-									<td>
-										<strong className="table-customer-name">
-											{receipt.customerName}
-										</strong>
-										{receipt.customerCode && (
-											<small className="cell-meta">
-												{receipt.customerCode}
-											</small>
-										)}
-									</td>
-									<td className="payment-amount-column">
-										{money.format(receipt.amount)}
-									</td>
-									<td className="payment-amount-column strong-number">
-										{money.format(remaining)}
-									</td>
-									<td className="payment-status-column">
-										<StatusPill tone={statuses[state].tone}>
-											{statuses[state].label}
-										</StatusPill>
-									</td>
-									<td className="payment-action-column">
-										<button
-											type="button"
-											className="text-button payment-link"
-											aria-label={`Xem chi tiết khoản thu ${receipt.number}`}
-											aria-haspopup="dialog"
-											onClick={() => setSelectedId(receipt.id)}
-										>
-											Xem chi tiết
-										</button>
-									</td>
-								</tr>
-							))}
+							{pagination.pageItems.map(
+								({ receipt, remaining, state, employeeName }) => (
+									<tr key={receipt.id}>
+										<td>
+											<button
+												type="button"
+												className="text-button payment-link"
+												aria-haspopup="dialog"
+												onClick={() => setSelectedId(receipt.id)}
+											>
+												{receipt.number}
+											</button>
+										</td>
+										<td className="payment-date-column">
+											{formatDateOnly(receipt.date)}
+										</td>
+										<td>
+											<strong className="table-customer-name">
+												{receipt.customerName}
+											</strong>
+											{receipt.customerCode && (
+												<small className="cell-meta">
+													{receipt.customerCode}
+												</small>
+											)}
+										</td>
+										<td className="payment-employee-column">
+											{employeeName || (
+												<span className="cell-meta">Chưa phân công</span>
+											)}
+										</td>
+										<td className="payment-amount-column">
+											{money.format(receipt.amount)}
+										</td>
+										<td className="payment-amount-column strong-number">
+											{money.format(remaining)}
+										</td>
+										<td className="payment-status-column">
+											<StatusPill tone={statuses[state].tone}>
+												{statuses[state].label}
+											</StatusPill>
+										</td>
+										<td className="payment-action-column">
+											<button
+												type="button"
+												className="text-button payment-link"
+												aria-label={`Xem chi tiết khoản thu ${receipt.number}`}
+												aria-haspopup="dialog"
+												onClick={() => setSelectedId(receipt.id)}
+											>
+												Xem chi tiết
+											</button>
+										</td>
+									</tr>
+								),
+							)}
 							{!total && (
 								<tr>
-									<td colSpan={7}>
+									<td colSpan={8}>
 										{!receipts
 											? "Đang tải khoản thu…"
 											: receipts.count

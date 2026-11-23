@@ -275,6 +275,7 @@
 	color: var(--status-warning-text);
 }
 
+.receivable-table td > .receivable-overdue,
 .receivable-overdue {
 	color: var(--danger-action);
 	font-weight: 700;

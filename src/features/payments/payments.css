@@ -1,16 +1,19 @@
 .payment-page { display: grid; gap: var(--space-16); }
 .payment-panel { overflow: hidden; }
-.payment-toolbar { display: flex; align-items: end; gap: var(--space-10); padding: var(--space-12); }
+.payment-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: var(--space-10); padding: var(--space-12); }
+.payment-toolbar select { max-width: 100%; }
 .payment-panel > .payment-toolbar { border-bottom: var(--border-width) solid var(--line); }
 .payment-receipts-table { max-block-size: calc(100vh - var(--layout-292)); }
 :is(.payment-receipts-table, .payment-invoice-table) table { min-width: var(--layout-800); table-layout: fixed; }
 :is(.payment-receipts-table, .payment-invoice-table) :is(th, td) { white-space: normal; overflow-wrap: anywhere; }
-.payment-receipts-table .payment-receipt-number-column { width: 13%; }
-.payment-receipts-table .payment-customer-column { width: 26%; }
-.payment-receipts-table th.payment-date-column { width: 11%; }
-.payment-receipts-table th.payment-amount-column { width: 12%; }
-.payment-receipts-table th.payment-status-column { width: 14%; }
-.payment-receipts-table th.payment-action-column { width: 12%; }
+.payment-receipts-table table { min-width: var(--layout-975); }
+.payment-receipts-table .payment-receipt-number-column { width: 12%; }
+.payment-receipts-table .payment-customer-column { width: 24%; }
+.payment-receipts-table th.payment-date-column { width: 10%; }
+.payment-receipts-table .payment-employee-column { width: 13%; text-align: center; }
+.payment-receipts-table th.payment-amount-column { width: 11%; }
+.payment-receipts-table th.payment-status-column { width: 12%; }
+.payment-receipts-table th.payment-action-column { width: 7%; }
 .payment-invoice-table {
 	flex: 0 1 auto;
 	min-block-size: var(--layout-96);
@@ -104,3 +107,6 @@
 .payment-match-head { display: flex; align-items: center; gap: var(--space-10); padding: var(--space-8) var(--space-11); }
 .payment-match-head strong { margin-inline-end: auto; font-variant-numeric: tabular-nums; }
 .payment-match-table { max-block-size: var(--layout-150); border-top: var(--border-width) solid var(--line); }
+.payment-near-match-head { flex-wrap: wrap; }
+.payment-near-match-table { max-block-size: var(--layout-210); }
+.payment-near-match-table table { min-width: var(--layout-650); }

@@ -234,6 +234,12 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   const receipts = (await read('one', 'receipts')).value;
   assert.equal(receipts.count, 1);
   assert.equal(receipts.items[0].receipt.customerId, 'c-one');
+  assert.equal(receipts.items[0].employeeId, 'e-one');
+  assert.equal(receipts.items[0].employeeName, 'one');
+  assert.deepEqual(receipts.employees, [['e-one', 'one']]);
+  const foreignFilter = (await read('one', 'receipts?employee=e-two')).value;
+  assert.equal(foreignFilter.total, 0);
+  assert.deepEqual(foreignFilter.employees, [['e-one', 'one']]);
   assert.equal((await read('one', 'receipts?q=two')).value.total, 0);
   assert.equal((await read('one', 'receipts/receipt-one/candidates')).status, 200);
   const other = (await read('admin', 'receipts/receipt-two')).value;
@@ -248,6 +254,15 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
   assert.equal((await read('admin', 'receipts/receipt-two')).value.revision, revision);
   assert.equal((await write('one', 'POST', 'receipts', { id: 'own-new-receipt', customerId: 'c-one',
     customerCode: 'one', date: '2026-01-02', amount: 1, reference: '' })).status, 200);
+  const employeeReceipts = (await read('admin', 'receipts?employee=e-one&limit=1&page=2')).value;
+  assert.equal(employeeReceipts.total, 2);
+  assert.equal(employeeReceipts.page, 2);
+  assert.equal(employeeReceipts.items.length, 1);
+  assert.equal(employeeReceipts.items[0].receipt.customerId, 'c-one');
+  assert.deepEqual(employeeReceipts.employees, [['e-one', 'one'], ['e-two', 'two']]);
+  assert.equal((await read('admin', 'receipts?employee=e-one&q=two')).value.total, 0);
+  assert.equal((await read('admin', 'receipts?employee=e-one&status=open')).value.total, 2);
+  assert.equal((await read('admin', 'receipts?employee=e-one&status=closed')).value.total, 0);
 
   // Tự nhận rồi bỏ phân công: cả bốn màn hình cập nhật trong cùng phiên.
   const available = (await read('empty', 'assignments')).value.customers.find(({ id }) => id === 'c-unassigned');
@@ -262,6 +277,10 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
     assert.deepEqual(debts.rows.items.map(({ customerId }) => customerId), visible ? [available.id] : []);
     const payments = (await read('empty', 'receipts')).value;
     assert.deepEqual(payments.items.map(({ receipt }) => receipt.customerId), visible ? [available.id] : []);
+    if (visible) assert.deepEqual([payments.items[0].employeeId, payments.items[0].employeeName], ['e-empty', 'empty']);
+    const unassignedReceipts = (await read('admin', 'receipts?employee=%3F')).value;
+    assert.equal(unassignedReceipts.total, visible ? 0 : 1);
+    if (!visible) assert.deepEqual([unassignedReceipts.items[0].employeeId, unassignedReceipts.items[0].employeeName], ['', '']);
     const statement = await read('empty', 'reports/statements/c-unassigned?' + period);
     assert.equal(statement.status, visible ? 200 : 404);
     if (visible) assert.equal(statement.value.customer.id, available.id);
@@ -284,6 +303,10 @@ test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang
     effectiveFrom: '2026-01-03', customers: [{ id: own.id, expected: own.updatedAt }] })).status, 200);
   assert.equal((await read('one', 'dashboard?' + period)).value.remaining, 0);
   assert.equal((await read('one', 'receipts')).value.count, 0);
+  assert.equal((await read('admin', 'receipts?employee=e-one')).value.total, 0);
+  const reassignedReceipts = (await read('admin', 'receipts?employee=e-two')).value;
+  assert.equal(reassignedReceipts.total, 3);
+  assert.ok(reassignedReceipts.items.every(({ employeeId, employeeName }) => employeeId === 'e-two' && employeeName === 'two'));
   assert.equal((await read('two', 'dashboard?' + period)).value.remaining, 300);
   assert.equal((await read('one', 'reports/statements/c-one?' + period)).status, 404);
 

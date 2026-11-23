@@ -134,10 +134,15 @@ export type SalesSupplementReview = Omit<
 > & { token: string };
 export interface ReceiptListRow {
 	receipt: Receipt;
+	employeeId: string;
+	employeeName: string;
 	remaining: number;
 	state: "open" | "partial" | "closed" | "reversed";
 }
-export type ReceiptList = Page<ReceiptListRow> & { count: number };
+export type ReceiptList = Page<ReceiptListRow> & {
+	count: number;
+	employees: [string, string][];
+};
 export type InvoiceProductLine = Pick<
 	MisaSalesLine,
 	| "rowNumber"
@@ -171,4 +176,8 @@ export interface CandidateMatches {
 	incomplete: boolean;
 	unavailable: boolean;
 	matches: AllocationCandidate[][];
+	nearMatches: {
+		difference: number;
+		lines: (AllocationCandidate & { amount: number })[];
+	}[];
 }

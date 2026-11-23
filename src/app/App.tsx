@@ -282,7 +282,12 @@ function App() {
 			);
 		if (activePage === "misa") return <MisaDataPage />;
 		if (activePage === "payments")
-			return <PaymentsPage onOpenMisa={openMisa} />;
+			return (
+				<PaymentsPage
+					onOpenMisa={openMisa}
+					showEmployeeFilter={role === "admin"}
+				/>
+			);
 		if (activePage === "reports")
 			return <ReportsPage settings={settings} onOpenMisa={openMisa} />;
 		if (activePage === "receivables")

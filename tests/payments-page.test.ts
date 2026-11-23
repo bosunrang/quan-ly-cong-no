@@ -19,6 +19,128 @@ vi.mock("../src/shared/api/client", async (importOriginal) => ({
 	api: vi.fn(),
 }));
 
+it("hiện nhân viên phụ trách và lọc toàn bộ khoản thu, về trang đầu khi đổi nhân viên", async () => {
+	vi.stubGlobal("BroadcastChannel", undefined);
+	const rows = Array.from({ length: 40 }, (_, index) => ({
+		receipt: {
+			id: `receipt-${index}`,
+			number: `PT${String(index).padStart(3, "0")}`,
+			date: "2026-06-01",
+			createdAt: "2026-06-01T00:00:00.000Z",
+			customerId: seedCustomers[0].id,
+			customerName: seedCustomers[0].name,
+			customerCode: seedCustomers[0].misaCode,
+			amount: 1000,
+			reference: "",
+		},
+		remaining: 1000,
+		state: "open",
+		employeeId: index === 39 ? "NV-2" : index === 38 ? "" : "NV-1",
+		employeeName: index === 39 ? "Bình" : index === 38 ? "" : "An",
+	}));
+	const requests: URLSearchParams[] = [];
+	vi.mocked(api).mockImplementation(async (_method, resource) => {
+		if (resource === "customers") return seedCustomers as never;
+		if (resource === "sales-book/status") return null as never;
+		const query = new URLSearchParams(resource.split("?")[1]);
+		requests.push(query);
+		const employee = query.get("employee");
+		const filtered = rows.filter(
+			(row) =>
+				(!employee || (row.employeeId || "?") === employee) &&
+				row.receipt.number.includes(query.get("q") ?? "") &&
+				["active", "open"].includes(query.get("status") ?? "active"),
+		);
+		const page = Math.min(
+			Number(query.get("page") ?? 1),
+			Math.max(1, Math.ceil(filtered.length / 20)),
+		);
+		return {
+			items: filtered.slice((page - 1) * 20, page * 20),
+			total: filtered.length,
+			count: rows.length,
+			page,
+			limit: 20,
+			employees: [
+				["NV-1", "An"],
+				["NV-2", "Bình"],
+			],
+		} as never;
+	});
+	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+	const container = document.createElement("div");
+	document.body.append(container);
+	const root = createRoot(container);
+	const select = async (label: string, value: string) => {
+		const field = container.querySelector<HTMLSelectElement>(
+			`select[aria-label="${label}"]`,
+		);
+		if (!field) throw new Error(`Thiếu bộ lọc ${label}`);
+		await act(async () => {
+			field.value = value;
+			field.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+	};
+	try {
+		await act(async () =>
+			root.render(createElement(PaymentsPage, { showEmployeeFilter: true })),
+		);
+		expect(
+			container.querySelector("thead .payment-employee-column")?.textContent,
+		).toBe("Nhân viên phụ trách");
+		expect(
+			container.querySelector("tbody .payment-employee-column")?.textContent,
+		).toBe("An");
+		await select("Trạng thái phân bổ", "open");
+		const search = container.querySelector<HTMLInputElement>(
+			'input[aria-label="Tìm khoản thu"]',
+		);
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(
+				HTMLInputElement.prototype,
+				"value",
+			)?.set?.call(search, "PT");
+			search?.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () =>
+			container
+				.querySelector<HTMLButtonElement>(
+					'button[aria-label="Trang khoản thu sau"]',
+				)
+				?.click(),
+		);
+		expect(requests.at(-1)?.get("page")).toBe("2");
+		await select("Lọc theo nhân viên phụ trách", "NV-2");
+		expect(requests.at(-1)?.get("page")).toBe("1");
+		expect(requests.at(-1)?.get("status")).toBe("open");
+		expect(requests.at(-1)?.get("q")).toBe("PT");
+		expect(
+			container.querySelector("tbody .payment-employee-column")?.textContent,
+		).toBe("Bình");
+		expect(container.querySelector("tbody")?.textContent).toContain("PT039");
+		expect(container.querySelectorAll("tbody tr")).toHaveLength(1);
+		await select("Lọc theo nhân viên phụ trách", "?");
+		expect(
+			container.querySelector("tbody .payment-employee-column")?.textContent,
+		).toBe("Chưa phân công");
+		await select("Lọc theo nhân viên phụ trách", "");
+		expect(container.querySelectorAll("tbody tr")).toHaveLength(20);
+		await act(async () =>
+			root.render(createElement(PaymentsPage, { showEmployeeFilter: false })),
+		);
+		expect(
+			container.querySelector(
+				'select[aria-label="Lọc theo nhân viên phụ trách"]',
+			),
+		).toBeNull();
+		expect(requests.at(-1)?.has("employee")).toBe(false);
+	} finally {
+		await act(async () => root.unmount());
+		container.remove();
+		vi.unstubAllGlobals();
+	}
+});
+
 it("chỉ hiện khoản thu đã hủy khi chọn bộ lọc tương ứng", async () => {
 	const receipt: Receipt = {
 		id: "one",
@@ -299,14 +421,41 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 		changed: false,
 		suggested: invoice.documentNumber === "BH-100",
 	}));
+	const candidate = (documentNumber: string, remaining: number) => ({
+		...rows[0],
+		invoice: {
+			...rows[0].invoice,
+			id: documentNumber,
+			documentNumber,
+			amount: remaining,
+		},
+		remaining,
+	});
+	const [first, second] = [candidate("BH-DU-1", 55), candidate("BH-DU-2", 3)];
+	const short = candidate("BH-THIEU", 103);
+	const nearMatches = [
+		{
+			difference: 2,
+			lines: [first, second, rows[2]].map((item) => ({
+				...item,
+				amount: item.remaining,
+			})),
+		},
+		{ difference: -3, lines: [{ ...short, amount: 100 }] },
+	];
 	vi.mocked(api).mockImplementation(async (_method, resource) => {
 		if (resource.includes("/matches"))
 			return {
 				matches: [rows.slice(1)],
+				nearMatches,
 				unavailable: false,
 				incomplete: false,
 			} as never;
-		return { items: rows, total: rows.length, page: 1, limit: 20 } as never;
+		const query = new URLSearchParams(resource.split("?")[1]).get("q");
+		const items = [...rows, first, second, short].filter(
+			({ invoice }) => !query || invoice.documentNumber === query,
+		);
+		return { items, total: items.length, page: 1, limit: 20 } as never;
 	});
 
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -335,11 +484,19 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 				(button) => button.textContent,
 			);
 		const main = "Chứng từ có thể phân bổ";
-		expect(vouchers(main)).toEqual(["BH-10", "BH-9", "BH-100"]);
+		const allVouchers = [
+			"BH-10",
+			"BH-9",
+			"BH-100",
+			"BH-DU-1",
+			"BH-DU-2",
+			"BH-THIEU",
+		];
+		expect(vouchers(main)).toEqual(allVouchers);
 		expect(container.textContent).toContain("Khớp tham chiếu");
 
 		const findMatches = [...container.querySelectorAll("button")].find(
-			(button) => button.textContent === "Tìm nhóm khớp số tiền",
+			(button) => button.textContent === "Gợi ý theo số tiền",
 		);
 		await act(async () => findMatches?.click());
 		expect(vouchers("Chứng từ trong nhóm gợi ý")).toEqual(["BH-9", "BH-100"]);
@@ -348,13 +505,49 @@ it("giữ chứng từ mới nhất ở đầu khi có tham chiếu và khi đi�
 				.querySelector<HTMLButtonElement>('button[aria-label="Điền nhóm 1"]')
 				?.click();
 		});
-		expect(vouchers(main)).toEqual(["BH-10", "BH-9", "BH-100"]);
-		expect(
+		expect(vouchers(main)).toEqual(allVouchers);
+		const allocationValues = () =>
 			Array.from(
 				container.querySelectorAll<HTMLInputElement>(".payment-amount"),
 				(input) => input.value,
-			),
-		).toEqual(["", "60", "40"]);
+			);
+		expect(allocationValues()).toEqual(["", "60", "40", "", "", ""]);
+		const nearHeading = container.querySelector(".payment-near-match-head");
+		const nearOptions = nearHeading?.querySelector<HTMLSelectElement>(
+			'select[aria-label="Chọn gợi ý gần khớp"]',
+		);
+		if (!nearOptions) throw new Error("Thiếu lựa chọn nhóm gần khớp");
+		expect(nearOptions.selectedOptions[0]?.textContent).toContain("Dư 2 đ");
+		expect(nearHeading?.querySelector(".status-pill")).toBeNull();
+		expect(vouchers("Chứng từ gần khớp số tiền")).toHaveLength(3);
+		const confirmation = container.querySelector<HTMLButtonElement>(
+			'button[type="submit"]',
+		);
+		await act(async () =>
+			container
+				.querySelector<HTMLInputElement>("footer .payment-verify input")
+				?.click(),
+		);
+		expect(confirmation?.disabled).toBe(false);
+		const fillNearGroup = () =>
+			act(async () =>
+				nearHeading
+					?.querySelector<HTMLButtonElement>(
+						'button[aria-label="Thay số đã nhập bằng gợi ý gần khớp"]',
+					)
+					?.click(),
+			);
+		await fillNearGroup();
+		expect(allocationValues()).toEqual(["", "", "40", "55", "3", ""]);
+		expect(confirmation?.disabled).toBe(true);
+		await act(async () => {
+			nearOptions.value = "1";
+			nearOptions.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(nearOptions.selectedOptions[0]?.textContent).toContain("Thiếu 3 đ");
+		await fillNearGroup();
+		expect(vouchers(main)).toEqual(["BH-THIEU"]);
+		expect(allocationValues()).toEqual(["100"]);
 	} finally {
 		await act(async () => root.unmount());
 		container.remove();
