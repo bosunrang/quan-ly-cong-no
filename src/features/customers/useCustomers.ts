@@ -44,10 +44,17 @@ export function useCustomers() {
 			return true;
 		},
 		async importCustomers(drafts: CustomerImportDraft[]) {
-			const records = await importCustomerRecords(
+			const imported = await importCustomerRecords(
 				drafts.map(customerImportFields),
 			);
-			updateList((list) => [...records, ...list]);
+			setData(
+				(current) =>
+					current && {
+						customers: [...imported.customers, ...current.customers],
+						employees: imported.employees,
+					},
+			);
+			accountingChanged();
 		},
 		async deleteCustomer(target: Customer) {
 			await removeCustomer(target);

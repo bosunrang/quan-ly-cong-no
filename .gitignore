@@ -10,3 +10,6 @@ Thumbs.db
 .claude/
 
 /server/generated/
+
+# Local spreadsheet deliverables and working files
+/outputs/

@@ -106,11 +106,15 @@ describe("Tài khoản qua máy chủ, kể cả desktop", () => {
 		).rejects.toThrow();
 		await authenticateAccount("admin", password);
 		await changeAccountStatus(session, viewer.id, true);
-		await expect(authenticateAccount(draft.username, temporary)).rejects.toThrow(
-			"chưa liên kết",
-		);
+		await expect(
+			authenticateAccount(draft.username, temporary),
+		).rejects.toThrow("chưa liên kết");
 		await api("POST", "employees", {
-			code: "VIEW", name: "Tra cứu thử", phone: "", email: "", status: "active",
+			code: "VIEW",
+			name: "Tra cứu thử",
+			phone: "",
+			email: "",
+			status: "active",
 			linkedAccountId: viewer.id,
 		});
 		const pending = await authenticateAccount(draft.username, temporary);
@@ -150,6 +154,105 @@ describe("Tài khoản qua máy chủ, kể cả desktop", () => {
 		expect(
 			canOpenPage({ role: "viewer", pages: ["reports"] }, "payments"),
 		).toBe(false);
+	}, 15_000);
+	it("nút chìa khóa chỉ đổi mật khẩu và giữ nguyên thông tin, quyền người dùng", async () => {
+		const admin = await administrator();
+		const session = accountSession(admin);
+		const viewer = await saveAccount(session, draft);
+		vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+		const container = document.createElement("div");
+		document.body.append(container);
+		const root = createRoot(container);
+		try {
+			await act(async () =>
+				root.render(
+					createElement(AccountsPage, {
+						accounts: readAccounts(),
+						session,
+						onSignIn: vi.fn(),
+						pageOptions: navItems.map((item) => ({
+							...item,
+							description: pageMeta[item.id].subtitle,
+						})),
+					}),
+				),
+			);
+			expect(
+				container.querySelector(`[aria-label="Đổi mật khẩu ${admin.name}"]`),
+			).not.toBeNull();
+			expect(
+				container.querySelector(`[aria-label="Khóa tài khoản ${admin.name}"]`),
+			).toBeNull();
+			const lock = container.querySelector<HTMLButtonElement>(
+				`[aria-label="Khóa tài khoản ${viewer.name}"]`,
+			);
+			expect(lock).not.toBeNull();
+			await act(async () => lock?.click());
+			expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+				"Khóa tài khoản",
+			);
+			await act(async () =>
+				container
+					.querySelector<HTMLButtonElement>('[role="dialog"] .button.secondary')
+					?.click(),
+			);
+			await act(async () =>
+				container
+					.querySelector<HTMLButtonElement>(
+						`[aria-label="Đổi mật khẩu ${viewer.name}"]`,
+					)
+					?.click(),
+			);
+			const form = container.querySelector<HTMLFormElement>(
+				'form[role="dialog"]',
+			);
+			if (!form) throw new Error("Thiếu hộp đổi mật khẩu");
+			expect(form.textContent).toContain("Đổi mật khẩu Tra cứu thử");
+			expect(form.querySelectorAll("input")).toHaveLength(2);
+			expect(form.querySelector("select, fieldset")).toBeNull();
+			const newPassword = "new-test-password-789";
+			await act(async () => {
+				for (const field of form.querySelectorAll<HTMLInputElement>(
+					'input[type="password"]',
+				)) {
+					Object.getOwnPropertyDescriptor(
+						HTMLInputElement.prototype,
+						"value",
+					)?.set?.call(field, newPassword);
+					field.dispatchEvent(new Event("input", { bubbles: true }));
+				}
+			});
+			await act(async () => {
+				form.dispatchEvent(
+					new Event("submit", { bubbles: true, cancelable: true }),
+				);
+				await vi.waitFor(() =>
+					expect(
+						readAccounts().find(({ id }) => id === viewer.id)?.sessionVersion,
+					).not.toBe(viewer.sessionVersion),
+				);
+			});
+			expect(container.querySelector('form[role="dialog"]')).toBeNull();
+			const updated = readAccounts().find(({ id }) => id === viewer.id);
+			expect(updated).toMatchObject({
+				name: viewer.name,
+				username: viewer.username,
+				role: viewer.role,
+				pages: viewer.pages,
+				active: true,
+				mustChangePassword: true,
+			});
+			await expect(
+				authenticateAccount(viewer.username, temporary),
+			).rejects.toThrow("không đúng");
+			// Mật khẩu mới đã được chấp nhận; tài khoản thử chưa được liên kết nhân viên.
+			await expect(
+				authenticateAccount(viewer.username, newPassword),
+			).rejects.toThrow("chưa liên kết");
+		} finally {
+			await act(async () => root.unmount());
+			container.remove();
+		}
 	}, 15_000);
 	it("chỉnh thẻ và xác nhận xóa tài khoản qua HTTP", async () => {
 		const admin = await administrator();

@@ -124,7 +124,15 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: var(--space-8);
+	gap: var(--space-4);
+}
+
+.access-table:not(.activity-table) :is(th, td):last-child {
+	width: var(--layout-188);
+}
+
+.access-row-actions .row-action.is-warning {
+	background-color: var(--status-warning-bg);
 }
 
 .access-row-actions > .button {

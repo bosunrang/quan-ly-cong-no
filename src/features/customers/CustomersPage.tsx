@@ -64,6 +64,7 @@ export function CustomersPage({
 	const [deleteCustomerId, setDeleteCustomerId] = useState<string>();
 	const [importPreview, setImportPreview] = useState<CustomerImportPreview>();
 	const [importLoading, setImportLoading] = useState(false);
+	const [exportLoading, setExportLoading] = useState(false);
 	const { notice, showNotice, dismissNotice } = useTransientNotice(2600);
 
 	const searchableCustomers = useMemo(
@@ -158,6 +159,23 @@ export function CustomersPage({
 				: "Không thể kiểm tra sổ đối soát trước khi lưu.";
 		}
 	};
+	const handleExport = async () => {
+		if (exportLoading || !filteredCustomers.length) return;
+		setExportLoading(true);
+		try {
+			await exportCustomers(filteredCustomers, salesEmployees);
+		} catch (error) {
+			showNotice(
+				error instanceof Error
+					? error.message
+					: "Không thể xuất danh mục Excel.",
+				undefined,
+				"danger",
+			);
+		} finally {
+			setExportLoading(false);
+		}
+	};
 	const handleImportFile = async (
 		event: React.ChangeEvent<HTMLInputElement>,
 	) => {
@@ -166,7 +184,12 @@ export function CustomersPage({
 		if (!file) return;
 		setImportLoading(true);
 		try {
-			setImportPreview(await parseCustomerWorkbook(file, customers));
+			setImportPreview(
+				await parseCustomerWorkbook(file, customers, {
+					employees: salesEmployees,
+					canImportAssignments: showEmployeeFilter,
+				}),
+			);
 		} catch (error) {
 			showNotice(
 				error instanceof Error
@@ -211,9 +234,16 @@ export function CustomersPage({
 					<button
 						className="button secondary"
 						type="button"
-						onClick={() => exportCustomers(filteredCustomers)}
+						disabled={exportLoading || filteredCustomers.length === 0}
+						title="Xuất danh mục ra Excel (.xlsx)"
+						onClick={() => void handleExport()}
 					>
-						<Download className="icon-size-16" /> Xuất danh mục
+						{exportLoading ? (
+							<LoaderCircle className="spin icon-size-16" />
+						) : (
+							<Download className="icon-size-16" />
+						)}{" "}
+						{exportLoading ? "Đang xuất…" : "Xuất danh mục"}
 					</button>
 					<button
 						className="button secondary"

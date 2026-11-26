@@ -1,4 +1,7 @@
 import {
+	KeyRound,
+	LockKeyhole,
+	LockKeyholeOpen,
 	Pencil,
 	SlidersHorizontal,
 	Trash2,
@@ -13,6 +16,18 @@ const icons = {
 	delete: Trash2,
 	unassign: UserMinus,
 	deactivate: UserX,
+	password: KeyRound,
+	lock: LockKeyhole,
+	unlock: LockKeyholeOpen,
+};
+
+const tones: Partial<Record<keyof typeof icons, string>> = {
+	delete: "is-danger",
+	password: "is-info",
+	unlock: "is-success",
+	unassign: "is-warning",
+	deactivate: "is-warning",
+	lock: "is-warning",
 };
 
 interface Props
@@ -29,12 +44,7 @@ export function RowActionButton({
 	...props
 }: Props) {
 	const Icon = icons[action];
-	const tone =
-		action === "delete"
-			? "is-danger"
-			: action === "unassign" || action === "deactivate"
-				? "is-warning"
-				: "";
+	const tone = tones[action];
 	return (
 		<button
 			{...props}

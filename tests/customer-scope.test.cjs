@@ -8,6 +8,91 @@ const { initializeAdministrator } = require('../server/access.cjs');
 const { startDevelopmentServer } = require('../server/development.cjs');
 const { SALE } = require('../server/books.cjs');
 
+test('nhập danh mục giữ thời hạn, trạng thái và nhân viên sau khi mở lại SQLite', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'cong-no-import-terms-'));
+  const file = join(directory, 'cong-no.sqlite');
+  const db = openDatabase(file);
+  const password = 'import-terms-password-123';
+  await initializeAdministrator(db, password);
+  const [admin] = db.readDataset('cong-no.accounts.v1').data;
+  const editor = { ...admin, id: 'import-editor', username: 'import-editor', role: 'editor', pages: ['customers'], mustChangePassword: false };
+  db.writeAccounts([admin], [{ ...admin, mustChangePassword: false }, editor]);
+  const localEmployee = { id: 'local-employee', code: '0007', name: 'Nhân viên đã có', phone: '', email: '',
+    status: 'active', createdAt: '2026-01-01T00:00:00.000Z', linkedAccountId: editor.id };
+  db.writeDataset(DATASET_KEYS.employees, 2, [localEmployee]);
+  db.close();
+  let backend = await startDevelopmentServer(directory);
+  t.after(async () => {
+    if (backend) await backend.stop();
+    await rm(directory, { recursive: true, force: true });
+  });
+  async function call(method, resource, payload, cookie = '') {
+    const response = await fetch(backend.target + '/api/' + resource, {
+      method,
+      headers: { 'x-cong-no-lan': '1', cookie, ...(payload ? { 'content-type': 'application/json' } : {}) },
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    return { status: response.status, ...(await response.json()), cookie: response.headers.get('set-cookie')?.split(';')[0] };
+  }
+  const login = await call('POST', 'session', { username: 'admin', password });
+  assert.equal(login.status, 200);
+  const customers = [
+    { misaCode: '0001', status: 'paused', paymentTermDays: 90, employeeCode: '0007', employeeName: 'Nhân viên đã có', assignmentFrom: '2026-10-01' },
+    { misaCode: '0002', status: 'active', paymentTermDays: 0, employeeCode: 'NV-NEW', employeeName: 'Nhân viên mới', assignmentFrom: '2026-10-02' },
+    { misaCode: '0003', status: 'active' },
+    { misaCode: '0004', status: 'active', employeeCode: 'NV-NEW', employeeName: 'Nhân viên mới' },
+    { misaCode: '0005', status: 'active', employeeName: 'Chỉ có tên' },
+    { misaCode: '0006', status: 'active', employeeName: 'Chỉ có tên' },
+  ].map((item) => ({ name: 'Khách ' + item.misaCode, group: 'unknown', taxCode: '',
+    address: 'Hà Nội', province: 'Hà Nội', ...item }));
+  const denied = await call('POST', 'session', { username: editor.username, password });
+  assert.equal(denied.status, 200);
+  assert.equal((await call('POST', 'customers/imports', { customers: [customers[0]] }, denied.cookie)).status, 403);
+  const rollback = await call('POST', 'customers/imports', { customers: [
+    { ...customers[0], misaCode: 'ROLLBACK-1', employeeCode: 'TEMP', employeeName: 'Không được lưu' },
+    { ...customers[0], misaCode: 'ROLLBACK-2', employeeName: 'Sai tên' },
+  ] }, login.cookie);
+  assert.equal(rollback.status, 409);
+  assert.deepEqual((await call('GET', 'customers', undefined, login.cookie)).value, []);
+  assert.equal((await call('GET', 'employees', undefined, login.cookie)).value.length, 1);
+  const invalidDate = await call('POST', 'customers/imports', {
+    customers: [{ ...customers[0], assignmentFrom: '2026-02-31' }],
+  }, login.cookie);
+  assert.equal(invalidDate.status, 400);
+  const imported = await call('POST', 'customers/imports', { customers, includeEmployees: true }, login.cookie);
+  assert.equal(imported.status, 200);
+  assert.equal(imported.value.customers.length, 6);
+  assert.equal(imported.value.employees.length, 3);
+  assert.equal(imported.value.customers[0].assignments[0].employeeId, localEmployee.id);
+  assert.equal(imported.value.customers[0].assignments[0].effectiveFrom, '2026-10-01');
+  assert.equal(imported.value.customers[1].assignments[0].employeeId, imported.value.customers[3].assignments[0].employeeId);
+  assert.equal(imported.value.customers[4].assignments[0].employeeId, imported.value.customers[5].assignments[0].employeeId);
+  assert.ok(imported.value.employees.filter(({ id }) => id !== localEmployee.id).every((e) => !e.linkedAccountId));
+  await backend.stop();
+  backend = undefined;
+  const restored = openDatabase(file);
+  try {
+    const saved = restored.readDataset(DATASET_KEYS.customers).data;
+    assert.equal(saved.length, 6);
+    const employees = restored.readDataset(DATASET_KEYS.employees).data;
+    assert.equal(employees.length, 3);
+    for (const expected of customers) {
+      const actual = saved.find(({ misaCode }) => misaCode === expected.misaCode);
+      assert.equal(actual.status, expected.status);
+      assert.equal(actual.paymentTermDays, expected.paymentTermDays);
+      if (expected.employeeName) {
+        const assignment = actual.assignments[0];
+        assert.equal(assignment.employeeName, expected.employeeName);
+        assert.ok(employees.some(({ id }) => id === assignment.employeeId));
+        assert.equal(assignment.effectiveTo, null);
+        if (expected.assignmentFrom) assert.equal(assignment.effectiveFrom, expected.assignmentFrom);
+      } else assert.deepEqual(actual.assignments, []);
+    }
+  } finally {
+    restored.close();
+  }
+});
+
 test('nhân viên phải liên kết và chỉ đọc, đối soát khách đang được phân công qua HTTP', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'cong-no-scope-'));
   const db = openDatabase(join(directory, 'cong-no.sqlite'));

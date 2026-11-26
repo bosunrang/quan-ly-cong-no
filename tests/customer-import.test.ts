@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SalesEmployee } from "../src/domain/employees/employee.model";
 import {
 	parseCustomerRows,
 	parseCustomerWorkbook,
@@ -13,6 +14,21 @@ const headers = [
 	"Địa chỉ",
 	"Tỉnh/Thành phố",
 ];
+
+const employees: SalesEmployee[] = [
+	{ id: "target-1", code: "0007", name: "Nguyễn Văn An", status: "active" },
+	{ id: "target-2", code: "NV-02", name: "Trùng Tên", status: "active" },
+	{ id: "target-3", code: "NV-03", name: "Trùng Tên", status: "active" },
+	{ id: "target-4", code: "NV-04", name: "Đã nghỉ", status: "inactive" },
+].map(
+	(employee) =>
+		({
+			...employee,
+			phone: "",
+			email: "",
+			createdAt: "2026-01-01T00:00:00.000Z",
+		}) as SalesEmployee,
+);
 
 describe("customer import", () => {
 	it("xem trước dòng hợp lệ, suy ra tỉnh và phát hiện mã trùng trong file", () => {
@@ -140,5 +156,165 @@ describe("customer import", () => {
 		expect(() =>
 			parseCustomerRows("customers.xlsx", [["Mã khách hàng"]], []),
 		).toThrow("cần đủ 4 cột");
+	});
+
+	it("file cũ thiếu hai cột vẫn mặc định hoạt động và chưa thiết lập thời hạn", () => {
+		const preview = parseCustomerRows(
+			"old.xlsx",
+			[headers, ["OLD", "Khách hàng cũ", "", "Hà Nội", "Hà Nội"]],
+			[],
+		);
+		expect(preview.readyCount).toBe(1);
+		expect(preview.rows[0].draft.status).toBe("active");
+		expect(preview.rows[0].draft).not.toHaveProperty("paymentTermDays");
+	});
+
+	it("giữ thời hạn và trạng thái với số, chữ số và ô trống", () => {
+		const preview = parseCustomerRows(
+			"terms.xlsx",
+			[
+				[...headers, "Thời hạn công nợ (ngày)", "Trạng thái"],
+				["A", "Khách A", "", "Hà Nội", "Hà Nội", 90, "Tạm ngưng"],
+				["B", "Khách B", "", "Hà Nội", "Hà Nội", "0", "Đang hoạt động"],
+				["C", "Khách C", "", "Hà Nội", "Hà Nội", null, ""],
+			],
+			[],
+		);
+		expect(preview.readyCount).toBe(3);
+		expect(preview.rows[0].draft).toMatchObject({
+			paymentTermDays: 90,
+			status: "paused",
+		});
+		expect(preview.rows[1].draft).toMatchObject({
+			paymentTermDays: 0,
+			status: "active",
+		});
+		expect(preview.rows[2].draft.status).toBe("active");
+		expect(preview.rows[2].draft).not.toHaveProperty("paymentTermDays");
+	});
+
+	it.each([-1, 1.5, "abc", "30 ngày", "9007199254740992", true])(
+		"báo lỗi thời hạn không hợp lệ: %s",
+		(value) => {
+			const preview = parseCustomerRows(
+				"invalid.xlsx",
+				[
+					[...headers, "Thời hạn công nợ (ngày)"],
+					["A", "Khách A", "", "Hà Nội", "Hà Nội", value],
+				],
+				[],
+			);
+			expect(preview.invalidCount).toBe(1);
+			expect(preview.rows[0].message).toContain("số nguyên không âm");
+		},
+	);
+
+	it("báo lỗi trạng thái lạ thay vì tự chuyển sang đang hoạt động", () => {
+		const preview = parseCustomerRows(
+			"invalid.xlsx",
+			[
+				[...headers, "Trạng thái"],
+				["A", "Khách A", "", "Hà Nội", "Hà Nội", "Không rõ"],
+			],
+			[],
+		);
+		expect(preview.invalidCount).toBe(1);
+		expect(preview.rows[0].message).toContain("Trạng thái");
+	});
+
+	it("ghép nhân viên theo mã, tên duy nhất và xem trước nhân viên cần tạo mới", () => {
+		const preview = parseCustomerRows(
+			"employees.xlsx",
+			[
+				[
+					...headers,
+					"Mã nhân viên phụ trách",
+					"Nhân viên phụ trách",
+					"Ngày bắt đầu phụ trách",
+				],
+				[
+					"A",
+					"Khách A",
+					"",
+					"Hà Nội",
+					"Hà Nội",
+					"0007",
+					"Nguyễn Văn An",
+					"01/10/2026",
+				],
+				["B", "Khách B", "", "Hà Nội", "Hà Nội", "", " Nguyễn   Văn An ", ""],
+				[
+					"C",
+					"Khách C",
+					"",
+					"Hà Nội",
+					"Hà Nội",
+					"NV-NEW",
+					"Người mới",
+					"2026-10-02",
+				],
+				["D", "Khách D", "", "Hà Nội", "Hà Nội", "NV-NEW", "Người mới", ""],
+				["E", "Khách E", "", "Hà Nội", "Hà Nội", "NV-02", "Trùng Tên", ""],
+			],
+			[],
+			{ employees },
+		);
+		expect(preview.readyCount).toBe(5);
+		expect(preview.rows[0].draft).toMatchObject({
+			employeeCode: "0007",
+			employeeName: "Nguyễn Văn An",
+			assignmentFrom: "2026-10-01",
+		});
+		expect(preview.rows[0].draft).not.toHaveProperty("employeeId");
+		expect(preview.rows[1].employeeMessage).toContain("0007");
+		expect(preview.rows[2].employeeMessage).toContain("Sẽ tạo nhân viên");
+		expect(preview.rows[3].employeeMessage).toContain("NV-NEW");
+		expect(preview.rows[3].employeeMessage).not.toContain("Sẽ tạo");
+	});
+
+	it.each([
+		["", "Trùng Tên", "", "bị trùng"],
+		["0007", "Tên người khác", "", "thuộc tên khác"],
+		["MA-KHAC", "Nguyễn Văn An", "", "đã có mã khác"],
+		["NV-04", "Đã nghỉ", "", "ngừng hoạt động"],
+		["KHONG-CO", "", "", "Cần tên nhân viên"],
+		["0007", "Nguyễn Văn An", "31/02/2026", "Ngày bắt đầu"],
+		["", "", "2026-10-01", "thiếu nhân viên"],
+	])(
+		"báo lỗi nhân viên hoặc ngày phân công: %s %s %s",
+		(code, name, date, message) => {
+			const preview = parseCustomerRows(
+				"invalid.xlsx",
+				[
+					[
+						...headers,
+						"Mã nhân viên phụ trách",
+						"Nhân viên phụ trách",
+						"Ngày bắt đầu phụ trách",
+					],
+					["A", "Khách A", "", "Hà Nội", "Hà Nội", code, name, date],
+				],
+				[],
+				{ employees },
+			);
+			expect(preview.invalidCount).toBe(1);
+			expect(preview.rows[0].message).toContain(message);
+		},
+	);
+
+	it("báo mâu thuẫn nhân viên ngay trong cùng file và chặn nhập phân công ngoài quyền quản trị", () => {
+		const sheet: SheetData = [
+			[...headers, "Mã nhân viên phụ trách", "Nhân viên phụ trách"],
+			["A", "Khách A", "", "Hà Nội", "Hà Nội", "NV-NEW", "Tên A"],
+			["B", "Khách B", "", "Hà Nội", "Hà Nội", "NV-NEW", "Tên B"],
+		];
+		const preview = parseCustomerRows("conflict.xlsx", sheet, []);
+		expect(preview.readyCount).toBe(1);
+		expect(preview.invalidCount).toBe(1);
+		const restricted = parseCustomerRows("restricted.xlsx", sheet, [], {
+			canImportAssignments: false,
+		});
+		expect(restricted.readyCount).toBe(0);
+		expect(restricted.rows[0].message).toContain("quản trị viên");
 	});
 });

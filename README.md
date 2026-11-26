@@ -231,6 +231,22 @@ Các quy tắc trên cùng cấu hình sandbox, CSP và giới hạn điều hư
 
 Trong **Dữ liệu MISA**, chọn file Excel **Sổ chi tiết bán hàng**, kiểm tra các dòng xem trước rồi xác nhận nhập. App hiển thị 10 cột từ file và cho phép tìm theo chứng từ, hóa đơn, tên khách hàng hoặc tên hàng. Có thể nhập từng kỳ vì app bổ sung dữ liệu vào sổ hiện có, bỏ qua dòng trùng và đánh dấu các dòng xung đột với bản đã lưu.
 
+## Chuyển danh mục khách hàng giữa các công ty
+
+Trong **Khách hàng**, chọn **Xuất danh mục** để tải file `.xlsx` của danh sách đang lọc.
+Chuyển sang công ty nhận, chọn **Nhập Excel** và kiểm tra bản xem trước trước khi xác nhận.
+File giữ mã MISA, tên, địa chỉ, tỉnh/thành, MST, phân loại Nhà nước/Tư nhân, thời hạn công nợ
+(kể cả 0 ngày), trạng thái và nhân viên phụ trách cùng ngày bắt đầu phụ trách.
+
+Quản trị viên có thể nhập kèm phân công. App ghép nhân viên theo mã; file cũ chỉ có tên thì
+ghép khi tên đầy đủ là duy nhất. Mã/tên mâu thuẫn, tên trùng hoặc nhân viên đã ngừng hoạt động
+sẽ được báo để kiểm tra. Nhân viên chưa có được tạo trong cùng giao dịch nhập, chưa liên kết
+tài khoản đăng nhập. Các ID và tài khoản đăng nhập của công ty nguồn không được sao chép.
+
+Khách hàng đã có mã MISA tại công ty nhận được bỏ qua. File cũ thiếu thời hạn hoặc trạng thái
+vẫn nhập được: chưa thiết lập thời hạn, mặc định đang hoạt động. Nếu không có ngày bắt đầu
+phụ trách, app dùng ngày nhập danh mục.
+
 ## Thời hạn công nợ theo khách hàng
 
 Danh mục khách hàng và file xuất danh mục hiển thị **Thời hạn công nợ**. Mở hồ sơ khách hàng → **Chỉnh sửa hồ sơ** để nhập số ngày; nhập 0 để đến hạn ngay hoặc để trống nếu chưa có thời hạn.

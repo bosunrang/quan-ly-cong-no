@@ -10,4 +10,5 @@ export * from "../src/domain/payments/receivable-aging";
 export * from "../src/domain/payments/receipt-matches";
 export { normalizeVietnamese } from "../src/domain/customers/customer.province";
 export { customerTaxCodes } from "../src/domain/customers/customer.tax-code";
+export { resolveCustomerImportEmployee } from "../src/domain/customers/customer-import-employee";
 export { isIsoDate, todayLocal } from "../src/shared/lib/date";

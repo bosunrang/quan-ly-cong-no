@@ -1,4 +1,5 @@
 import { isIsoDate, isIsoTimestamp } from "../../shared/lib/date";
+import type { ImportedCustomerEmployee } from "./customer-import-employee";
 
 export type CustomerGroup = "state" | "private" | "unknown";
 export type CustomerStatus = "active" | "paused";
@@ -39,14 +40,18 @@ export interface CustomerDraft {
 	paymentTermDays?: number | null;
 }
 
-export interface CustomerImportDraft {
+export interface CustomerImportDraft extends ImportedCustomerEmployee {
 	misaCode: string;
 	name: string;
 	group: CustomerGroup;
 	taxCode?: string;
 	province: string;
 	address: string;
+	status?: CustomerStatus;
+	paymentTermDays?: number;
 }
+
+export type CustomerImportRecord = CustomerDraft & ImportedCustomerEmployee;
 
 export const customerStatusLabels: Record<CustomerStatus, string> = {
 	active: "Đang hoạt động",

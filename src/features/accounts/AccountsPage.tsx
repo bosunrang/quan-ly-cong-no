@@ -1,4 +1,5 @@
 import {
+	KeyRound,
 	LockKeyhole,
 	type LucideIcon,
 	ShieldCheck,
@@ -55,6 +56,7 @@ export function AccountsPage({
 	onSignIn: (account: AccountProfile) => void;
 }) {
 	const [editor, setEditor] = useState<AccountProfile | "create">();
+	const [passwordOnly, setPasswordOnly] = useState(false);
 	const [confirmation, setConfirmation] = useState<{
 		account: AccountProfile;
 		kind: AccountAction;
@@ -131,7 +133,8 @@ export function AccountsPage({
 					<h2 id="account-heading">Tài khoản người dùng</h2>
 					<p>
 						Tài khoản {roleLabels.editor} và {roleLabels.viewer} cần được liên
-						kết với nhân viên tại mục Nhân viên &amp; khu vực trước khi đăng nhập.
+						kết với nhân viên tại mục Nhân viên &amp; khu vực trước khi đăng
+						nhập.
 					</p>
 				</div>
 				<button
@@ -139,6 +142,7 @@ export function AccountsPage({
 					type="button"
 					onClick={() => {
 						setError("");
+						setPasswordOnly(false);
 						setEditor("create");
 					}}
 				>
@@ -198,19 +202,30 @@ export function AccountsPage({
 												<RowActionButton
 													action="edit"
 													label={`Sửa ${account.name}`}
+													disabled={busy}
 													onClick={() => {
 														setError("");
+														setPasswordOnly(false);
+														setEditor(account);
+													}}
+												/>
+												<RowActionButton
+													action="password"
+													label={`Đổi mật khẩu ${account.name}`}
+													disabled={busy}
+													onClick={() => {
+														setError("");
+														setPasswordOnly(true);
 														setEditor(account);
 													}}
 												/>
 												{account.id !== session?.id && (
-													<button
-														className="button secondary"
-														type="button"
+													<RowActionButton
+														action={account.active ? "lock" : "unlock"}
+														label={`${account.active ? "Khóa" : "Mở khóa"} tài khoản ${account.name}`}
+														disabled={busy}
 														onClick={() => openConfirmation(account, "status")}
-													>
-														{account.active ? "Khóa" : "Mở khóa"}
-													</button>
+													/>
 												)}
 												{session &&
 													account.id !== session.id &&
@@ -218,7 +233,10 @@ export function AccountsPage({
 														<RowActionButton
 															action="delete"
 															label={`Xóa tài khoản ${account.name}`}
-															onClick={() => openConfirmation(account, "delete")}
+															disabled={busy}
+															onClick={() =>
+																openConfirmation(account, "delete")
+															}
 														/>
 													)}
 											</div>
@@ -245,7 +263,9 @@ export function AccountsPage({
 			}
 			{editor && (
 				<AccountEditor
+					key={`${typeof editor === "string" ? editor : editor.id}-${passwordOnly}`}
 					account={typeof editor === "string" ? undefined : editor}
+					passwordOnly={passwordOnly}
 					pageOptions={pageOptions}
 					self={typeof editor !== "string" && editor.id === session?.id}
 					busy={busy}
@@ -311,6 +331,7 @@ export function AccountsPage({
 
 function AccountEditor({
 	account,
+	passwordOnly,
 	pageOptions,
 	self,
 	busy,
@@ -319,6 +340,7 @@ function AccountEditor({
 	onClose,
 }: {
 	account?: AccountProfile;
+	passwordOnly: boolean;
 	pageOptions: PageOption[];
 	self: boolean;
 	busy: boolean;
@@ -343,16 +365,34 @@ function AccountEditor({
 	const allowedPages = grantablePagesForRole(draft.role);
 	const passwordLabel = account
 		? self
-			? "Mật khẩu mới (nếu đổi)"
-			: "Mật khẩu tạm thời (nếu đặt lại)"
+			? passwordOnly
+				? "Mật khẩu mới"
+				: "Mật khẩu mới (nếu đổi)"
+			: passwordOnly
+				? "Mật khẩu tạm thời mới"
+				: "Mật khẩu tạm thời (nếu đặt lại)"
 		: "Mật khẩu tạm thời";
 	return (
 		<Dialog
 			ariaLabelledBy="account-editor-title"
 			eyebrow="NGƯỜI DÙNG"
-			title={account ? "Sửa tài khoản" : "Thêm người dùng"}
-			icon={<ShieldCheck className="icon-size-19" aria-hidden="true" />}
-			className="account-access-dialog"
+			title={
+				passwordOnly
+					? `Đổi mật khẩu ${account?.name}`
+					: account
+						? "Sửa tài khoản"
+						: "Thêm người dùng"
+			}
+			icon={
+				passwordOnly ? (
+					<KeyRound className="icon-size-19" aria-hidden="true" />
+				) : (
+					<ShieldCheck className="icon-size-19" aria-hidden="true" />
+				)
+			}
+			className={
+				passwordOnly ? "account-password-dialog" : "account-access-dialog"
+			}
 			disableClose={busy}
 			onClose={onClose}
 			onSubmit={(event) => {
@@ -375,7 +415,11 @@ function AccountEditor({
 						Hủy
 					</button>
 					<button className="button primary" type="submit" disabled={busy}>
-						{busy ? "Đang lưu…" : "Lưu tài khoản"}
+						{busy
+							? "Đang lưu…"
+							: passwordOnly
+								? "Lưu mật khẩu"
+								: "Lưu tài khoản"}
 					</button>
 				</>
 			}
@@ -387,58 +431,62 @@ function AccountEditor({
 					</Notice>
 				)}
 				<div className="dialog-grid account-fields">
-					<label>
-						Họ và tên
-						<input
-							value={draft.name}
-							autoComplete="off"
-							required
-							maxLength={100}
-							disabled={busy}
-							onChange={(event) =>
-								setDraft({ ...draft, name: event.target.value })
-							}
-						/>
-					</label>
-					<label>
-						Tên đăng nhập
-						<input
-							value={draft.username}
-							autoComplete="off"
-							required
-							maxLength={40}
-							disabled={busy}
-							onChange={(event) =>
-								setDraft({ ...draft, username: event.target.value })
-							}
-						/>
-					</label>
-					<label>
-						Vai trò
-						<select
-							value={draft.role}
-							disabled={self || busy}
-							onChange={(event) => {
-								const role = event.target.value as AccountRole;
-								setDraft({
-									...draft,
-									role,
-									pages:
-										role === "admin"
-											? draft.pages
-											: draft.pages.filter((page) =>
-													grantablePagesForRole(role).includes(page),
-												),
-								});
-							}}
-						>
-							{roleOptions.map((role) => (
-								<option key={role} value={role}>
-									{roleLabels[role]}
-								</option>
-							))}
-						</select>
-					</label>
+					{!passwordOnly && (
+						<>
+							<label>
+								Họ và tên
+								<input
+									value={draft.name}
+									autoComplete="off"
+									required
+									maxLength={100}
+									disabled={busy}
+									onChange={(event) =>
+										setDraft({ ...draft, name: event.target.value })
+									}
+								/>
+							</label>
+							<label>
+								Tên đăng nhập
+								<input
+									value={draft.username}
+									autoComplete="off"
+									required
+									maxLength={40}
+									disabled={busy}
+									onChange={(event) =>
+										setDraft({ ...draft, username: event.target.value })
+									}
+								/>
+							</label>
+							<label>
+								Vai trò
+								<select
+									value={draft.role}
+									disabled={self || busy}
+									onChange={(event) => {
+										const role = event.target.value as AccountRole;
+										setDraft({
+											...draft,
+											role,
+											pages:
+												role === "admin"
+													? draft.pages
+													: draft.pages.filter((page) =>
+															grantablePagesForRole(role).includes(page),
+														),
+										});
+									}}
+								>
+									{roleOptions.map((role) => (
+										<option key={role} value={role}>
+											{roleLabels[role]}
+										</option>
+									))}
+								</select>
+							</label>
+						</>
+					)}
 					<label>
 						{passwordLabel}
 						<input
@@ -447,7 +495,7 @@ function AccountEditor({
 							autoComplete="new-password"
 							minLength={MIN_PASSWORD_LENGTH}
 							maxLength={MAX_PASSWORD_LENGTH}
-							required={!account}
+							required={!account || passwordOnly}
 							disabled={busy}
 							onChange={(event) =>
 								setDraft({ ...draft, password: event.target.value })
@@ -477,48 +525,49 @@ function AccountEditor({
 						thời.
 					</p>
 				)}
-				{draft.role === "admin" ? (
-					<Notice tone="info">
-						Tài khoản quản trị có quyền truy cập toàn bộ các thẻ.
-					</Notice>
-				) : (
-					<fieldset className="account-page-picker" disabled={busy}>
-						<legend>Thẻ được truy cập</legend>
-						<p>Chọn các thẻ người dùng được phép mở.</p>
-						<div className="account-page-options">
-							{pageOptions
-								.filter(({ id }) => allowedPages.includes(id))
-								.map(({ id, label, description, icon: Icon }) => (
-									<label
-										key={id}
-										className={`choice-card account-page-option${draft.pages.includes(id) ? " is-selected" : ""}`}
-									>
-										<input
-											type="checkbox"
-											checked={draft.pages.includes(id)}
-											aria-labelledby={`account-page-${id}`}
-											onChange={(event) => {
-												const checked = event.target.checked;
-												setDraft((current) => ({
-													...current,
-													pages: checked
-														? [...current.pages, id]
-														: current.pages.filter((page) => page !== id),
-												}));
-											}}
-										/>
-										<span className="account-page-icon">
-											<Icon className="icon-size-18" aria-hidden="true" />
-										</span>
-										<span className="account-page-copy">
-											<strong id={`account-page-${id}`}>{label}</strong>
-											<small>{description}</small>
-										</span>
-									</label>
-								))}
-						</div>
-					</fieldset>
-				)}
+				{!passwordOnly &&
+					(draft.role === "admin" ? (
+						<Notice tone="info">
+							Tài khoản quản trị có quyền truy cập toàn bộ các thẻ.
+						</Notice>
+					) : (
+						<fieldset className="account-page-picker" disabled={busy}>
+							<legend>Thẻ được truy cập</legend>
+							<p>Chọn các thẻ người dùng được phép mở.</p>
+							<div className="account-page-options">
+								{pageOptions
+									.filter(({ id }) => allowedPages.includes(id))
+									.map(({ id, label, description, icon: Icon }) => (
+										<label
+											key={id}
+											className={`choice-card account-page-option${draft.pages.includes(id) ? " is-selected" : ""}`}
+										>
+											<input
+												type="checkbox"
+												checked={draft.pages.includes(id)}
+												aria-labelledby={`account-page-${id}`}
+												onChange={(event) => {
+													const checked = event.target.checked;
+													setDraft((current) => ({
+														...current,
+														pages: checked
+															? [...current.pages, id]
+															: current.pages.filter((page) => page !== id),
+													}));
+												}}
+											/>
+											<span className="account-page-icon">
+												<Icon className="icon-size-18" aria-hidden="true" />
+											</span>
+											<span className="account-page-copy">
+												<strong id={`account-page-${id}`}>{label}</strong>
+												<small>{description}</small>
+											</span>
+										</label>
+									))}
+							</div>
+						</fieldset>
+					))}
 			</div>
 		</Dialog>
 	);

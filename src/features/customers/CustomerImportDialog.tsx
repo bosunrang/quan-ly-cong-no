@@ -9,6 +9,7 @@ import {
 import { useState } from "react";
 import { Dialog } from "../../shared/ui/Dialog/Dialog";
 import { StatusPill } from "../../shared/ui/StatusPill";
+import { customerStatusLabels } from "../../domain/customers/customer.model";
 import type {
 	CustomerImportPreview,
 	CustomerImportStatus,
@@ -115,7 +116,9 @@ export function CustomerImportDialog({
 					</button>
 				</div>
 				<Notice tone="info">
-					Các dòng hợp lệ được thêm vào danh mục. Mã MISA đã có sẽ được bỏ qua.
+					Các dòng hợp lệ được thêm vào danh mục. Mã MISA đã có sẽ được bỏ qua.{" "}
+					Nhân viên chưa có sẽ được tạo cùng danh mục và chưa liên kết tài khoản
+					đăng nhập.
 				</Notice>
 				<div className="import-preview-table-wrap">
 					<table className="import-preview-table customer-import-preview-table">
@@ -138,6 +141,14 @@ export function CustomerImportDialog({
 											{row.draft.address || "Chưa có địa chỉ"}
 										</span>
 										{row.draft.taxCode && <span>MST {row.draft.taxCode}</span>}
+										{row.employeeMessage && <span>{row.employeeMessage}</span>}
+										<span>
+											Thời hạn công nợ:{" "}
+											{row.draft.paymentTermDays === undefined
+												? "Chưa thiết lập"
+												: `${row.draft.paymentTermDays} ngày`}{" "}
+											· {customerStatusLabels[row.draft.status ?? "active"]}
+										</span>
 									</td>
 									<td>{row.draft.province || "Chưa xác định"}</td>
 									<td>

@@ -2,6 +2,7 @@ import type {
 	Customer,
 	CustomerDraft,
 	CustomerImportDraft,
+	CustomerImportRecord,
 } from "./customer.model";
 import { createId } from "../../shared/lib/identity";
 
@@ -48,7 +49,10 @@ export function createCustomerFromImport(draft: CustomerImportDraft): Customer {
 		taxCode: draft.taxCode?.trim() ?? "",
 		province: draft.province.trim(),
 		address: draft.address.trim(),
-		status: "active",
+		status: draft.status ?? "active",
+		...(draft.paymentTermDays === undefined
+			? {}
+			: { paymentTermDays: draft.paymentTermDays }),
 		assignments: [],
 		createdAt: now,
 		updatedAt: now,
@@ -78,6 +82,10 @@ export function updateCustomerFromDraft(
 
 export function customerImportFields(
 	draft: CustomerImportDraft,
-): CustomerDraft {
-	return { ...draft, taxCode: draft.taxCode?.trim() ?? "", status: "active" };
+): CustomerImportRecord {
+	return {
+		...draft,
+		taxCode: draft.taxCode?.trim() ?? "",
+		status: draft.status ?? "active",
+	};
 }

@@ -1,5 +1,10 @@
 import { api } from "../../shared/api/client";
-import type { Customer, CustomerDraft } from "./customer.model";
+import type {
+	Customer,
+	CustomerDraft,
+	CustomerImportRecord,
+} from "./customer.model";
+import type { SalesEmployee } from "../employees/employee.model";
 
 export function readCustomers() {
 	return api<Customer[]>("GET", "customers");
@@ -20,6 +25,10 @@ export function removeCustomer(customer: Customer) {
 		{ expected: customer.updatedAt },
 	);
 }
-export function importCustomerRecords(customers: CustomerDraft[]) {
-	return api<Customer[]>("POST", "customers/imports", { customers });
+export function importCustomerRecords(customers: CustomerImportRecord[]) {
+	return api<{ customers: Customer[]; employees: SalesEmployee[] }>(
+		"POST",
+		"customers/imports",
+		{ customers, includeEmployees: true },
+	);
 }

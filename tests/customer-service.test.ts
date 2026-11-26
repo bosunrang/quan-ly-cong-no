@@ -12,7 +12,7 @@ import {
 	updateCustomerFromDraft,
 } from "../src/domain/customers/customer.service";
 
-const baseDraft: CustomerDraft = {
+const baseDraft = {
 	misaCode: " KH-001 ",
 	name: " Khách hàng A ",
 	group: "state",
@@ -20,7 +20,7 @@ const baseDraft: CustomerDraft = {
 	province: "Hà Nội",
 	address: " Số 1 ",
 	status: "active",
-};
+} satisfies CustomerDraft;
 
 const existing: Customer = {
 	id: "CUS-001",
